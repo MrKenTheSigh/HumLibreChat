@@ -37,6 +37,100 @@ export type ConversationUpdater = (
   conversation: s.TConversation,
 ) => ConversationData;
 
+export type AdminUsersListParams = {
+  cursor?: string;
+  limit?: number;
+  search?: string;
+  role?: string;
+  provider?: string;
+  emailVerified?: boolean;
+};
+
+export type AdminUserSummary = {
+  id: string;
+  name: string | null;
+  username: string | null;
+  email: string;
+  role: string | null;
+  provider: string;
+  emailVerified: boolean;
+  twoFactorEnabled: boolean;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+export type AdminUsersListResponse = {
+  users: AdminUserSummary[];
+  nextCursor: string | null;
+};
+
+export type AdminUserDetail = AdminUserSummary & {
+  termsAccepted: boolean;
+  favoritesCount: number;
+  plugins: string[];
+  personalization: {
+    memories: boolean;
+  };
+  balance: {
+    tokenCredits: number;
+    updatedAt: string | null;
+  };
+};
+
+export type AdminBalanceUpdateRequest = {
+  userId: string;
+  amount: number;
+};
+
+export type AdminBalanceUpdateResponse = {
+  userId: string;
+  tokenCredits: number;
+  updatedAt: string | null;
+};
+
+export type AdminConversationListParams = {
+  cursor?: string;
+  limit?: number;
+  search?: string;
+  userId?: string;
+  endpoint?: string;
+  model?: string;
+  createdAfter?: string;
+  createdBefore?: string;
+};
+
+export type AdminConversationItem = {
+  conversationId: string;
+  userId: string;
+  userEmail: string | null;
+  title: string | null;
+  endpoint: string | null;
+  model: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+export type AdminConversationListResponse = {
+  conversations: AdminConversationItem[];
+  nextCursor: string | null;
+};
+
+export type AdminConversationMessage = {
+  messageId: string;
+  parentMessageId: string | null;
+  isCreatedByUser: boolean;
+  sender: string | null;
+  text: string | null;
+  content: unknown[];
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+export type AdminConversationMessagesResponse = {
+  conversation: AdminConversationItem;
+  messages: AdminConversationMessage[];
+};
+
 /* Messages */
 export type MessagesListParams = {
   cursor?: string | null;

@@ -123,6 +123,42 @@ export function getUserBalance(): Promise<t.TBalanceResponse> {
   return request.get(endpoints.balance());
 }
 
+export function getAdminUsers(params: q.AdminUsersListParams): Promise<q.AdminUsersListResponse> {
+  return request.get(endpoints.adminUsers(params));
+}
+
+export function getAdminUser(userId: string): Promise<q.AdminUserDetail> {
+  return request.get(endpoints.adminUser(userId));
+}
+
+export function addAdminUserBalance(
+  payload: q.AdminBalanceUpdateRequest,
+): Promise<q.AdminBalanceUpdateResponse> {
+  return request.post(endpoints.adminUserBalanceAdd(payload.userId), { amount: payload.amount });
+}
+
+export function setAdminUserBalance(
+  payload: q.AdminBalanceUpdateRequest,
+): Promise<q.AdminBalanceUpdateResponse> {
+  return request.post(endpoints.adminUserBalanceSet(payload.userId), { amount: payload.amount });
+}
+
+export function getAdminConversations(
+  params: q.AdminConversationListParams,
+): Promise<q.AdminConversationListResponse> {
+  return request.get(endpoints.adminConversations(params));
+}
+
+export function getAdminConversation(conversationId: string): Promise<q.AdminConversationItem> {
+  return request.get(endpoints.adminConversation(conversationId));
+}
+
+export function getAdminConversationMessages(
+  conversationId: string,
+): Promise<q.AdminConversationMessagesResponse> {
+  return request.get(endpoints.adminConversationMessages(conversationId));
+}
+
 export const updateTokenCount = (text: string) => {
   return request.post(endpoints.tokenizer(), { arg: text });
 };

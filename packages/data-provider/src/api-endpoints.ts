@@ -44,6 +44,32 @@ export const user = () => `${BASE_URL}/api/user`;
 
 export const balance = () => `${BASE_URL}/api/balance`;
 
+const adminRoot = `${BASE_URL}/api/admin`;
+const adminUsersRoot = `${adminRoot}/users`;
+const adminConversationsRoot = `${adminRoot}/conversations`;
+
+export const adminUsers = (params: q.AdminUsersListParams) => {
+  return `${adminUsersRoot}${buildQuery(params)}`;
+};
+
+export const adminUser = (userId: string) => `${adminUsersRoot}/${encodeURIComponent(userId)}`;
+
+export const adminUserBalanceAdd = (userId: string) =>
+  `${adminUsersRoot}/${encodeURIComponent(userId)}/balance/add`;
+
+export const adminUserBalanceSet = (userId: string) =>
+  `${adminUsersRoot}/${encodeURIComponent(userId)}/balance/set`;
+
+export const adminConversations = (params: q.AdminConversationListParams) => {
+  return `${adminConversationsRoot}${buildQuery(params)}`;
+};
+
+export const adminConversation = (conversationId: string) =>
+  `${adminConversationsRoot}/${encodeURIComponent(conversationId)}`;
+
+export const adminConversationMessages = (conversationId: string) =>
+  `${adminConversationsRoot}/${encodeURIComponent(conversationId)}/messages`;
+
 export const userPlugins = () => `${BASE_URL}/api/user/plugins`;
 
 export const deleteUser = () => `${BASE_URL}/api/user/delete`;

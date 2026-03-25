@@ -5,6 +5,13 @@ import {
   CreatePromptForm,
   EmptyPromptPreview,
 } from '~/components/Prompts';
+import {
+  AdminConversationDetail,
+  AdminConversationsPage,
+  AdminUserDetail,
+  AdminUsersPage,
+  AdminView,
+} from '~/components/Admin';
 import DashboardRoute from './Layouts/Dashboard';
 
 const dashboardRoutes = {
@@ -54,6 +61,32 @@ const dashboardRoutes = {
       ],
     },
     */
+    {
+      path: 'admin',
+      element: <AdminView />,
+      children: [
+        {
+          index: true,
+          element: <Navigate to="/d/admin/users" replace={true} />,
+        },
+        {
+          path: 'users',
+          element: <AdminUsersPage />,
+        },
+        {
+          path: 'users/:userId',
+          element: <AdminUserDetail />,
+        },
+        {
+          path: 'conversations',
+          element: <AdminConversationsPage />,
+        },
+        {
+          path: 'conversations/:conversationId',
+          element: <AdminConversationDetail />,
+        },
+      ],
+    },
     {
       path: 'prompts/*',
       element: <PromptsView />,

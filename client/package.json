@@ -6,9 +6,9 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "data-provider": "cd .. && npm run build:data-provider",
-    "build:file": "cross-env NODE_ENV=production vite build --debug > vite-output.log 2>&1",
-    "build": "cross-env NODE_ENV=production vite build && node ./scripts/post-build.cjs",
-    "build:ci": "cross-env NODE_ENV=development vite build --mode ci",
+    "build:file": "cross-env NODE_ENV=production node ./scripts/run-vite-build.cjs --debug > vite-output.log 2>&1",
+    "build": "cross-env NODE_ENV=production node ./scripts/run-vite-build.cjs && node ./scripts/post-build.cjs",
+    "build:ci": "cross-env NODE_ENV=development node ./scripts/run-vite-build.cjs --mode ci",
     "dev": "cross-env NODE_ENV=development vite",
     "preview-prod": "cross-env NODE_ENV=development vite preview",
     "test": "cross-env NODE_ENV=development jest --watch",
