@@ -33,18 +33,25 @@ import {
   buildDefaultConvo,
   logger,
 } from '~/utils';
-import { useDeleteFilesMutation, useGetEndpointsQuery, useGetStartupConfig } from '~/data-provider';
+import {
+  useDeleteFilesMutation,
+  useGetEndpointsQuery,
+  useGetStartupConfig,
+  useGetUserEntitlementsQuery,
+} from '~/data-provider';
 import useAssistantListMap from './Assistants/useAssistantListMap';
 import { useResetChatBadges } from './useChatBadges';
 import { useApplyModelSpecEffects } from './Agents';
 import { usePauseGlobalAudio } from './Audio';
 import { useHasAccess } from '~/hooks';
+import { getAllowedEndpointSelection } from './Endpoint/entitlements';
 import store from '~/store';
 
 const useNewConvo = (index = 0) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { data: startupConfig } = useGetStartupConfig();
+  const { data: entitlements } = useGetUserEntitlementsQuery();
   const applyModelSpecEffects = useApplyModelSpecEffects();
   const clearAllConversations = store.useClearConvoState();
   const defaultPreset = useRecoilValue(store.defaultPreset);
@@ -149,6 +156,28 @@ const useNewConvo = (index = 0) => {
             }) as EModelEndpoint;
           }
 
+          const availableEndpoints = Object.keys(endpointsConfig ?? {}).filter((ep) => {
+            if (
+              isAgentsEndpoint(ep as EModelEndpoint) &&
+              !hasAgentAccess &&
+              !isExistingAgentConvo
+            ) {
+              return false;
+            }
+
+            return !!endpointsConfig?.[ep];
+          });
+          const allowedSelection = getAllowedEndpointSelection({
+            preferredEndpoint: defaultEndpoint,
+            endpoints: availableEndpoints,
+            modelsConfig,
+            entitlements,
+          });
+
+          if (allowedSelection != null) {
+            defaultEndpoint = allowedSelection.endpoint as EModelEndpoint;
+          }
+
           const endpointType = getEndpointField(endpointsConfig, defaultEndpoint, 'type');
           if (!conversation.endpointType && endpointType) {
             conversation.endpointType = endpointType;
@@ -191,7 +220,9 @@ const useNewConvo = (index = 0) => {
             conversation.assistant_id = undefined;
           }
 
-          const models = modelsConfig?.[defaultEndpoint] ?? [];
+          const models = allowedSelection?.endpoint === defaultEndpoint
+            ? allowedSelection.models
+            : modelsConfig?.[defaultEndpoint] ?? [];
           const defaultParamsEndpoint = getDefaultParamsEndpoint(endpointsConfig, defaultEndpoint);
           conversation = buildDefaultConvo({
             conversation,
@@ -252,7 +283,7 @@ const useNewConvo = (index = 0) => {
           state: disableFocus ? {} : { focusChat: true },
         });
       },
-    [endpointsConfig, defaultPreset, assistantsListMap, modelsQuery.data, hasAgentAccess],
+    [endpointsConfig, defaultPreset, assistantsListMap, modelsQuery.data, hasAgentAccess, entitlements],
   );
 
   const newConversation = useCallback(

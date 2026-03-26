@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { ViolationTypes, ErrorTypes } from 'librechat-data-provider';
 import type { Agent, TModelsConfig } from 'librechat-data-provider';
 import type { Request, Response } from 'express';
+import { isPairAllowed, resolveUserEntitlements } from '~/admin/access';
 
 /** Avatar schema shared between create and update */
 export const agentAvatarSchema = z.object({
@@ -120,6 +121,20 @@ interface ValidateAgentModelResult {
   };
 }
 
+type RequestUser = {
+  _id?: { toString(): string } | string;
+  id?: string;
+  role?: string;
+};
+
+function getRequestUserId(user?: RequestUser): string {
+  if (user?._id != null) {
+    return user._id.toString();
+  }
+
+  return typeof user?.id === 'string' ? user.id : '';
+}
+
 /**
  * Validates an agent's model against the available models configuration.
  * This is a non-middleware version of validateModel that can be used
@@ -165,7 +180,32 @@ export async function validateAgentModel(
   const validModel = !!availableModels.find((availableModel) => availableModel === model);
 
   if (validModel) {
-    return { isValid: true };
+    const user = req.user as RequestUser | undefined;
+    const userId = getRequestUserId(user);
+    if (!userId) {
+      return {
+        isValid: false,
+        error: {
+          message: `{ "type": "${ErrorTypes.AUTH_FAILED}" }`,
+        },
+      };
+    }
+
+    const entitlements = await resolveUserEntitlements({
+      userId,
+      role: user?.role,
+    });
+
+    if (isPairAllowed(entitlements, endpoint, model)) {
+      return { isValid: true };
+    }
+
+    return {
+      isValid: false,
+      error: {
+        message: `{ "type": "PLAN_MODEL_FORBIDDEN", "info": "${endpoint}|${model}" }`,
+      },
+    };
   }
 
   const { ILLEGAL_MODEL_REQ_SCORE: score = 1 } = process.env ?? {};

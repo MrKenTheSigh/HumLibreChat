@@ -44,6 +44,100 @@ export const useGetAdminUserQuery = (
   );
 };
 
+export const useGetAdminChannelInventoryQuery = (
+  config?: UseQueryOptions<t.AdminChannelInventoryResponse>,
+): QueryObserverResult<t.AdminChannelInventoryResponse> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+
+  return useQuery<t.AdminChannelInventoryResponse>(
+    [QueryKeys.adminChannelInventory],
+    () => dataService.getAdminChannelInventory(),
+    {
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      refetchOnMount: true,
+      ...config,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled,
+    },
+  );
+};
+
+export const useGetAdminChannelsQuery = (
+  config?: UseQueryOptions<t.AdminChannelsListResponse>,
+): QueryObserverResult<t.AdminChannelsListResponse> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+
+  return useQuery<t.AdminChannelsListResponse>(
+    [QueryKeys.adminChannels],
+    () => dataService.getAdminChannels(),
+    {
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      refetchOnMount: true,
+      ...config,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled,
+    },
+  );
+};
+
+export const useGetAdminChannelQuery = (
+  channelId: string,
+  config?: UseQueryOptions<t.AdminChannel>,
+): QueryObserverResult<t.AdminChannel> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+
+  return useQuery<t.AdminChannel>(
+    [QueryKeys.adminChannel, channelId],
+    () => dataService.getAdminChannel(channelId),
+    {
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      refetchOnMount: true,
+      retry: false,
+      ...config,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled && channelId.length > 0,
+    },
+  );
+};
+
+export const useGetAdminPlansQuery = (
+  config?: UseQueryOptions<t.AdminPlansListResponse>,
+): QueryObserverResult<t.AdminPlansListResponse> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+
+  return useQuery<t.AdminPlansListResponse>(
+    [QueryKeys.adminPlans],
+    () => dataService.getAdminPlans(),
+    {
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      refetchOnMount: true,
+      ...config,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled,
+    },
+  );
+};
+
+export const useGetAdminPlanQuery = (
+  planId: string,
+  config?: UseQueryOptions<t.AdminPlan>,
+): QueryObserverResult<t.AdminPlan> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+
+  return useQuery<t.AdminPlan>(
+    [QueryKeys.adminPlan, planId],
+    () => dataService.getAdminPlan(planId),
+    {
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      refetchOnMount: true,
+      retry: false,
+      ...config,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled && planId.length > 0,
+    },
+  );
+};
+
 export const useGetAdminConversationsQuery = (
   params: t.AdminConversationListParams,
   config?: UseQueryOptions<t.AdminConversationListResponse>,

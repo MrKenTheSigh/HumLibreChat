@@ -1,9 +1,22 @@
 const mockGetAdminUsers = jest.fn((_req, res) =>
   res.status(200).json({ users: [], nextCursor: null }),
 );
+const mockCreateAdminUser = jest.fn((_req, res) =>
+  res.status(201).json({ id: 'user-2', email: 'new@example.com' }),
+);
 const mockGetAdminUser = jest.fn((_req, res) => res.status(200).json({ id: 'user-1' }));
 const mockAddAdminUserBalance = jest.fn((_req, res) =>
   res.status(200).json({ userId: 'user-1', tokenCredits: 100, updatedAt: null }),
+);
+const mockAssignAdminUserPlan = jest.fn((_req, res) =>
+  res.status(200).json({
+    userId: 'user-1',
+    plan: { id: 'plan-1', name: 'Pro', slug: 'pro' },
+    assignedAt: '2026-03-26T03:00:00.000Z',
+  }),
+);
+const mockClearAdminUserPlan = jest.fn((_req, res) =>
+  res.status(200).json({ userId: 'user-1', plan: null, assignedAt: null }),
 );
 const mockSetAdminUserBalance = jest.fn((_req, res) =>
   res.status(200).json({ userId: 'user-1', tokenCredits: 50, updatedAt: null }),
@@ -22,9 +35,12 @@ jest.mock(
         error_code: 'ADMIN_REQUIRED',
       });
     },
+    createAdminUser: (...args) => mockCreateAdminUser(...args),
     getAdminUsers: (...args) => mockGetAdminUsers(...args),
     getAdminUser: (...args) => mockGetAdminUser(...args),
     addAdminUserBalance: (...args) => mockAddAdminUserBalance(...args),
+    assignAdminUserPlan: (...args) => mockAssignAdminUserPlan(...args),
+    clearAdminUserPlan: (...args) => mockClearAdminUserPlan(...args),
     setAdminUserBalance: (...args) => mockSetAdminUserBalance(...args),
   }),
   { virtual: true },
@@ -41,6 +57,7 @@ jest.mock('~/server/middleware', () => ({
       error_code: 'AUTHENTICATION_REQUIRED',
     });
   },
+  configMiddleware: (_req, _res, next) => next(),
 }));
 
 describe('Admin Users Routes', () => {
@@ -112,7 +129,13 @@ describe('Admin Users Routes', () => {
     expect(mockGetAdminUsers).toHaveBeenCalledTimes(1);
   });
 
-  it('passes through to detail and balance handlers for admins', async () => {
+  it('passes through to create, detail, balance, and plan handlers for admins', async () => {
+    await executeRoute({
+      method: 'POST',
+      url: '/',
+      headers: { 'x-auth': 'true', 'x-admin': 'true' },
+      body: { email: 'new@example.com' },
+    });
     await executeRoute({
       method: 'GET',
       url: '/user-1',
@@ -130,9 +153,23 @@ describe('Admin Users Routes', () => {
       headers: { 'x-auth': 'true', 'x-admin': 'true' },
       body: { amount: 10 },
     });
+    await executeRoute({
+      method: 'POST',
+      url: '/user-1/plan',
+      headers: { 'x-auth': 'true', 'x-admin': 'true' },
+      body: { planId: 'plan-1' },
+    });
+    await executeRoute({
+      method: 'DELETE',
+      url: '/user-1/plan',
+      headers: { 'x-auth': 'true', 'x-admin': 'true' },
+    });
 
+    expect(mockCreateAdminUser).toHaveBeenCalledTimes(1);
     expect(mockGetAdminUser).toHaveBeenCalledTimes(1);
     expect(mockAddAdminUserBalance).toHaveBeenCalledTimes(1);
     expect(mockSetAdminUserBalance).toHaveBeenCalledTimes(1);
+    expect(mockAssignAdminUserPlan).toHaveBeenCalledTimes(1);
+    expect(mockClearAdminUserPlan).toHaveBeenCalledTimes(1);
   });
 });

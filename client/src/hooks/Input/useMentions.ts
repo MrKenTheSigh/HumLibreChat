@@ -15,10 +15,16 @@ import type { MentionOption } from '~/common';
 import {
   useGetPresetsQuery,
   useGetEndpointsQuery,
+  useGetUserEntitlementsQuery,
   useListAgentsQuery,
   useGetStartupConfig,
 } from '~/data-provider';
 import useAssistantListMap from '~/hooks/Assistants/useAssistantListMap';
+import {
+  filterEndpointModels,
+  filterModelSpecs,
+  isEndpointVisible,
+} from '~/hooks/Endpoint/entitlements';
 import { useAgentsMapContext } from '~/Providers/AgentsMapContext';
 import { mapEndpoints, getPresetTitle } from '~/utils';
 import { EndpointIcon } from '~/components/Endpoints';
@@ -67,6 +73,7 @@ export default function useMentions({
   const { data: presets } = useGetPresetsQuery();
   const { data: modelsConfig } = useGetModelsQuery();
   const { data: startupConfig } = useGetStartupConfig();
+  const { data: entitlements } = useGetUserEntitlementsQuery();
   const { data: endpointsConfig } = useGetEndpointsQuery();
   const { data: endpoints = [] } = useGetEndpointsQuery({
     select: mapEndpoints,
@@ -134,27 +141,26 @@ export default function useMentions({
   const modelSpecs = useMemo(() => {
     const specs = startupConfig?.modelSpecs?.list ?? [];
     if (!agentsMap) {
-      return specs;
+      return filterModelSpecs(specs, entitlements);
     }
 
-    /**
-     * Filter modelSpecs to only include agents the user has access to.
-     * Use agentsMap which already contains permission-filtered agents (consistent with other components).
-     */
-    return specs.filter((spec) => {
+    const visibleSpecs = specs.filter((spec) => {
       if (spec.preset?.endpoint === EModelEndpoint.agents && spec.preset?.agent_id) {
         return spec.preset.agent_id in agentsMap;
       }
-      /** Keep non-agent modelSpecs */
       return true;
     });
-  }, [startupConfig, agentsMap]);
+
+    return filterModelSpecs(visibleSpecs, entitlements);
+  }, [startupConfig, agentsMap, entitlements]);
 
   const options: MentionOption[] = useMemo(() => {
     let validEndpoints = endpoints;
     if (!includeAssistants) {
       validEndpoints = endpoints.filter((endpoint) => !isAssistantsEndpoint(endpoint));
     }
+
+    validEndpoints = validEndpoints.filter((endpoint) => isEndpointVisible(endpoint, entitlements));
 
     const modelOptions = validEndpoints.flatMap((endpoint) => {
       if (isAssistantsEndpoint(endpoint) || isAgentsEndpoint(endpoint)) {
@@ -165,7 +171,11 @@ export default function useMentions({
         return [];
       }
 
-      const models = (modelsConfig?.[endpoint] ?? []).map((model) => ({
+      const models = filterEndpointModels(
+        endpoint,
+        modelsConfig?.[endpoint] ?? [],
+        entitlements,
+      ).map((model) => ({
         value: endpoint,
         label: model,
         type: 'model' as const,
@@ -247,6 +257,7 @@ export default function useMentions({
     modelsConfig,
     endpointsConfig,
     assistantListMap,
+    entitlements,
     includeAssistants,
     interfaceConfig.presets,
     interfaceConfig.modelSelect,

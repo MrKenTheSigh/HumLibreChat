@@ -8,7 +8,8 @@ import type {
   TPreset,
 } from 'librechat-data-provider';
 import { getDefaultEndpoint, buildDefaultConvo } from '~/utils';
-import { useGetEndpointsQuery } from '~/data-provider';
+import { useGetEndpointsQuery, useGetUserEntitlementsQuery } from '~/data-provider';
+import { getAllowedEndpointSelection } from '~/hooks/Endpoint/entitlements';
 
 type TDefaultConvo = {
   conversation: Partial<TConversation>;
@@ -22,15 +23,23 @@ const exceptions = new Set(['spec', 'iconURL']);
 const useDefaultConvo = () => {
   const { data: endpointsConfig = {} as TEndpointsConfig } = useGetEndpointsQuery();
   const { data: modelsConfig = {} as TModelsConfig } = useGetModelsQuery();
+  const { data: entitlements } = useGetUserEntitlementsQuery();
 
   const getDefaultConversation = useCallback(
     ({ conversation: _convo, preset, cleanInput, cleanOutput }: TDefaultConvo) => {
-      const endpoint = getDefaultEndpoint({
+      const selectedEndpoint = getDefaultEndpoint({
         convoSetup: preset as TPreset,
         endpointsConfig,
       });
+      const endpointSelection = getAllowedEndpointSelection({
+        preferredEndpoint: selectedEndpoint,
+        endpoints: Object.keys(endpointsConfig ?? {}).filter((endpoint) => !!endpointsConfig[endpoint]),
+        modelsConfig,
+        entitlements,
+      });
+      const endpoint = endpointSelection?.endpoint ?? selectedEndpoint;
 
-      const models = modelsConfig[endpoint ?? ''] || [];
+      const models = endpointSelection?.models ?? modelsConfig[endpoint ?? ''] ?? [];
       const conversation = { ..._convo };
       if (cleanInput === true) {
         for (const key in conversation) {
@@ -70,7 +79,7 @@ const useDefaultConvo = () => {
 
       return defaultConvo;
     },
-    [endpointsConfig, modelsConfig],
+    [endpointsConfig, entitlements, modelsConfig],
   );
 
   return getDefaultConversation;

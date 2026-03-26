@@ -1,4 +1,6 @@
 export { default as actionSchema } from './action';
+export { default as adminChannelSchema } from './adminChannel';
+export { default as adminPlanSchema } from './adminPlan';
 export { default as agentSchema } from './agent';
 export { default as agentApiKeySchema } from './agentApiKey';
 export { default as agentCategorySchema } from './agentCategory';

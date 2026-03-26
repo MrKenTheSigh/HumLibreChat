@@ -10,6 +10,7 @@ import { createAgentCategoryModel } from './agentCategory';
 import { createMCPServerModel } from './mcpServer';
 import { createRoleModel } from './role';
 import { createActionModel } from './action';
+import { createAdminChannelModel } from './adminChannel';
 import { createAssistantModel } from './assistant';
 import { createFileModel } from './file';
 import { createBannerModel } from './banner';
@@ -25,6 +26,7 @@ import { createSharedLinkModel } from './sharedLink';
 import { createToolCallModel } from './toolCall';
 import { createMemoryModel } from './memory';
 import { createAccessRoleModel } from './accessRole';
+import { createAdminPlanModel } from './adminPlan';
 import { createAclEntryModel } from './aclEntry';
 import { createGroupModel } from './group';
 
@@ -45,6 +47,7 @@ export function createModels(mongoose: typeof import('mongoose')) {
     MCPServer: createMCPServerModel(mongoose),
     Role: createRoleModel(mongoose),
     Action: createActionModel(mongoose),
+    AdminChannel: createAdminChannelModel(mongoose),
     Assistant: createAssistantModel(mongoose),
     File: createFileModel(mongoose),
     Banner: createBannerModel(mongoose),
@@ -52,6 +55,7 @@ export function createModels(mongoose: typeof import('mongoose')) {
     Key: createKeyModel(mongoose),
     PluginAuth: createPluginAuthModel(mongoose),
     Transaction: createTransactionModel(mongoose),
+    AdminPlan: createAdminPlanModel(mongoose),
     Preset: createPresetModel(mongoose),
     Prompt: createPromptModel(mongoose),
     PromptGroup: createPromptGroupModel(mongoose),

@@ -2,6 +2,9 @@ const accessPermissions = require('./accessPermissions');
 const assistants = require('./assistants');
 const categories = require('./categories');
 const adminAuth = require('./admin/auth');
+const adminChannelInventory = require('./admin/channelInventory');
+const adminChannels = require('./admin/channels');
+const adminPlans = require('./admin/plans');
 const adminUsers = require('./admin/users');
 const adminConversations = require('./admin/conversations');
 const endpoints = require('./endpoints');
@@ -33,6 +36,9 @@ module.exports = {
   mcp,
   auth,
   adminAuth,
+  adminChannelInventory,
+  adminChannels,
+  adminPlans,
   adminUsers,
   adminConversations,
   keys,

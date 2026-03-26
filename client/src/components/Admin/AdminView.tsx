@@ -1,5 +1,5 @@
 import { Link, NavLink, Navigate, Outlet } from 'react-router-dom';
-import { ArrowLeft, MessagesSquare, Shield, Users } from 'lucide-react';
+import { ArrowLeft, Blocks, Layers3, MessagesSquare, Shield, Users } from 'lucide-react';
 import { SystemRoles } from 'librechat-data-provider';
 import { useAuthContext, useLocalize } from '~/hooks';
 import { cn } from '~/utils';
@@ -49,6 +49,14 @@ export default function AdminView() {
           <NavLink to="/d/admin/users" className={navItemClassName}>
             <Users className="h-4 w-4" aria-hidden="true" />
             {localize('com_ui_admin_users')}
+          </NavLink>
+          <NavLink to="/d/admin/plans" className={navItemClassName}>
+            <Layers3 className="h-4 w-4" aria-hidden="true" />
+            {localize('com_ui_admin_plans')}
+          </NavLink>
+          <NavLink to="/d/admin/channels" className={navItemClassName}>
+            <Blocks className="h-4 w-4" aria-hidden="true" />
+            {localize('com_ui_admin_channels')}
           </NavLink>
           <NavLink to="/d/admin/conversations" className={navItemClassName}>
             <MessagesSquare className="h-4 w-4" aria-hidden="true" />

@@ -15,6 +15,8 @@ export * from './agentApiKey';
 export * from './agentCategory';
 export * from './role';
 export * from './action';
+export * from './adminChannel';
+export * from './adminPlan';
 export * from './assistant';
 export * from './file';
 export * from './share';

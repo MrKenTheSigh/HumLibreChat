@@ -6,6 +6,7 @@ import {
   EModelEndpoint,
   PermissionTypes,
   getEndpointField,
+  isAssistantsEndpoint,
 } from 'librechat-data-provider';
 import type {
   TEndpointsConfig,
@@ -15,10 +16,11 @@ import type {
   Agent,
 } from 'librechat-data-provider';
 import type { Endpoint } from '~/common';
-import { useGetEndpointsQuery } from '~/data-provider';
+import { useGetEndpointsQuery, useGetUserEntitlementsQuery } from '~/data-provider';
 import { mapEndpoints, getIconKey } from '~/utils';
 import { useHasAccess } from '~/hooks';
 import { icons } from './Icons';
+import { createEntitlementLookup, filterEndpointModels } from './entitlements';
 
 export const useEndpoints = ({
   agents,
@@ -33,10 +35,15 @@ export const useEndpoints = ({
 }) => {
   const modelsQuery = useGetModelsQuery();
   const { data: endpoints = [] } = useGetEndpointsQuery({ select: mapEndpoints });
+  const { data: entitlements } = useGetUserEntitlementsQuery();
   const interfaceConfig = startupConfig?.interface ?? {};
   const includedEndpoints = useMemo(
     () => new Set(startupConfig?.modelSpecs?.addedEndpoints ?? []),
     [startupConfig?.modelSpecs?.addedEndpoints],
+  );
+  const entitlementLookup = useMemo(
+    () => createEntitlementLookup(entitlements),
+    [entitlements],
   );
 
   const hasAgentAccess = useHasAccess({
@@ -63,6 +70,12 @@ export const useEndpoints = ({
       if (endpoints[i] === EModelEndpoint.agents && !hasAgentAccess) {
         continue;
       }
+      if (
+        entitlementLookup.isRestricted === true &&
+        entitlementLookup.allowedEndpoints.has(endpoints[i]) !== true
+      ) {
+        continue;
+      }
       if (includedEndpoints.size > 0 && !includedEndpoints.has(endpoints[i])) {
         continue;
       }
@@ -70,7 +83,14 @@ export const useEndpoints = ({
     }
 
     return result;
-  }, [endpoints, hasAgentAccess, includedEndpoints, interfaceConfig.modelSelect]);
+  }, [
+    endpoints,
+    entitlementLookup.allowedEndpoints,
+    entitlementLookup.isRestricted,
+    hasAgentAccess,
+    includedEndpoints,
+    interfaceConfig.modelSelect,
+  ]);
 
   const endpointRequiresUserKey = useCallback(
     (ep: string) => {
@@ -85,12 +105,13 @@ export const useEndpoints = ({
       const iconKey = getIconKey({ endpoint: ep, endpointsConfig, endpointType });
       const Icon = icons[iconKey];
       const endpointIconURL = getEndpointField(endpointsConfig, ep, 'iconURL');
+      const availableModels = filterEndpointModels(ep, modelsQuery.data?.[ep] ?? [], entitlements);
       const hasModels =
         (ep === EModelEndpoint.agents && (agents?.length ?? 0) > 0) ||
         (ep === EModelEndpoint.assistants && assistants?.length > 0) ||
         (ep !== EModelEndpoint.assistants &&
           ep !== EModelEndpoint.agents &&
-          (modelsQuery.data?.[ep]?.length ?? 0) > 0);
+          availableModels.length > 0);
 
       // Base result object with formatted default icon
       const result: Endpoint = {
@@ -168,17 +189,24 @@ export const useEndpoints = ({
       else if (
         ep !== EModelEndpoint.agents &&
         ep !== EModelEndpoint.assistants &&
-        (modelsQuery.data?.[ep]?.length ?? 0) > 0
+        availableModels.length > 0
       ) {
-        result.models = modelsQuery.data?.[ep]?.map((model) => ({
+        result.models = availableModels.map((model) => ({
           name: model,
           isGlobal: false,
         }));
       }
 
       return result;
-    });
-  }, [filteredEndpoints, endpointsConfig, modelsQuery.data, agents, assistants, azureAssistants]);
+    }).filter((endpoint) => endpoint.hasModels || isAssistantsEndpoint(endpoint.value));
+  }, [
+    agents,
+    assistants,
+    azureAssistants,
+    endpointsConfig,
+    filteredEndpoints,
+    modelsQuery.data,
+  ]);
 
   return {
     mappedEndpoints,

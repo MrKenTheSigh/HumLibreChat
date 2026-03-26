@@ -2,18 +2,30 @@ import mongoose from 'mongoose';
 import type { Request, Response } from 'express';
 
 const mockUserFind = jest.fn();
+const mockUserFindOne = jest.fn();
 const mockUserFindById = jest.fn();
+const mockUserFindByIdAndUpdate = jest.fn();
 const mockBalanceFindOne = jest.fn();
 const mockBalanceFindOneAndUpdate = jest.fn();
+const mockAdminPlanFindById = jest.fn();
 const mockTransactionCreate = jest.fn();
+const mockCreateUser = jest.fn();
 const mockUpdateBalance = jest.fn();
 const mockLoggerError = jest.fn();
+const mockGetBalanceConfig = jest.fn();
 
 jest.mock('@librechat/data-schemas', () => ({
   createModels: jest.fn(() => ({
     User: {
+      db: {
+        model: jest.fn(() => ({
+          findById: mockAdminPlanFindById,
+        })),
+      },
       find: mockUserFind,
+      findOne: mockUserFindOne,
       findById: mockUserFindById,
+      findByIdAndUpdate: mockUserFindByIdAndUpdate,
     },
     Balance: {
       findOne: mockBalanceFindOne,
@@ -24,6 +36,7 @@ jest.mock('@librechat/data-schemas', () => ({
     },
   })),
   createMethods: jest.fn(() => ({
+    createUser: mockCreateUser,
     updateBalance: mockUpdateBalance,
   })),
   logger: {
@@ -31,8 +44,19 @@ jest.mock('@librechat/data-schemas', () => ({
   },
 }));
 
-const { addAdminUserBalance, getAdminUser, getAdminUsers, setAdminUserBalance } =
-  require('./users');
+jest.mock('~/app/config', () => ({
+  getBalanceConfig: (...args: unknown[]) => mockGetBalanceConfig(...args),
+}));
+
+const {
+  createAdminUser,
+  addAdminUserBalance,
+  assignAdminUserPlan,
+  clearAdminUserPlan,
+  getAdminUser,
+  getAdminUsers,
+  setAdminUserBalance,
+} = require('./users');
 
 type MockResponse = Response & {
   status: jest.Mock;
@@ -64,6 +88,7 @@ function createSelectLeanQuery<T>(value: T) {
 describe('admin users handlers', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetBalanceConfig.mockReturnValue(null);
   });
 
   describe('getAdminUsers', () => {
@@ -135,6 +160,102 @@ describe('admin users handlers', () => {
     });
   });
 
+  describe('createAdminUser', () => {
+    it('creates a local user and returns a sanitized summary', async () => {
+      const createdId = new mongoose.Types.ObjectId();
+      mockUserFindOne.mockReturnValue(createSelectLeanQuery(null));
+      mockCreateUser.mockResolvedValue({
+        _id: createdId,
+        name: 'New User',
+        username: 'new-user',
+        email: 'new@example.com',
+        role: 'USER',
+        provider: 'local',
+        emailVerified: true,
+        twoFactorEnabled: false,
+        createdAt: new Date('2026-03-26T08:00:00.000Z'),
+        updatedAt: new Date('2026-03-26T08:00:00.000Z'),
+      });
+
+      const req = {
+        body: {
+          name: 'New User',
+          username: 'new-user',
+          email: 'new@example.com',
+          password: 'Password123',
+          role: 'USER',
+          emailVerified: true,
+        },
+        config: {
+          balance: {
+            enabled: true,
+            startBalance: 20000,
+          },
+        },
+      } as unknown as Request;
+      const res = createMockResponse();
+
+      await createAdminUser(req, res);
+
+      expect(mockUserFindOne).toHaveBeenCalledWith({
+        $or: [{ email: 'new@example.com' }, { username: 'new-user' }],
+      });
+      expect(mockGetBalanceConfig).toHaveBeenCalledWith(req.config);
+      expect(mockCreateUser).toHaveBeenCalledWith(
+        expect.objectContaining({
+          provider: 'local',
+          email: 'new@example.com',
+          username: 'new-user',
+          name: 'New User',
+          role: 'USER',
+          emailVerified: true,
+          password: expect.any(String),
+        }),
+        null,
+        true,
+        true,
+      );
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(res.json).toHaveBeenCalledWith({
+        id: createdId.toString(),
+        name: 'New User',
+        username: 'new-user',
+        email: 'new@example.com',
+        role: 'USER',
+        provider: 'local',
+        emailVerified: true,
+        twoFactorEnabled: false,
+        createdAt: '2026-03-26T08:00:00.000Z',
+        updatedAt: '2026-03-26T08:00:00.000Z',
+      });
+    });
+
+    it('returns 409 when email or username already exists', async () => {
+      mockUserFindOne.mockReturnValue(
+        createSelectLeanQuery({
+          _id: new mongoose.Types.ObjectId(),
+        }),
+      );
+      const req = {
+        body: {
+          name: 'Existing User',
+          username: 'existing',
+          email: 'existing@example.com',
+          password: 'Password123',
+        },
+      } as unknown as Request;
+      const res = createMockResponse();
+
+      await createAdminUser(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(409);
+      expect(res.json).toHaveBeenCalledWith({
+        message: 'A user with that email or username already exists',
+      });
+      expect(mockCreateUser).not.toHaveBeenCalled();
+    });
+  });
+
   describe('getAdminUser', () => {
     it('returns a sanitized user detail payload', async () => {
       const userId = new mongoose.Types.ObjectId();
@@ -150,6 +271,8 @@ describe('admin users handlers', () => {
           twoFactorEnabled: true,
           termsAccepted: true,
           favorites: [{ model: 'gpt-4o' }, { endpoint: 'azureOpenAI' }],
+          adminPlanId: new mongoose.Types.ObjectId(),
+          adminPlanAssignedAt: new Date('2026-03-25T02:00:00.000Z'),
           personalization: { memories: false },
           plugins: ['web'],
           password: 'should-not-leak',
@@ -161,6 +284,13 @@ describe('admin users handlers', () => {
       mockBalanceFindOne.mockReturnValue(
         createSelectLeanQuery({
           tokenCredits: 12345,
+        }),
+      );
+      mockAdminPlanFindById.mockReturnValue(
+        createSelectLeanQuery({
+          _id: new mongoose.Types.ObjectId(),
+          name: 'Pro',
+          slug: 'pro',
         }),
       );
 
@@ -181,6 +311,12 @@ describe('admin users handlers', () => {
         favoritesCount: 2,
         plugins: ['web'],
         personalization: { memories: false },
+        plan: {
+          id: expect.any(String),
+          name: 'Pro',
+          slug: 'pro',
+        },
+        planAssignedAt: '2026-03-25T02:00:00.000Z',
         balance: { tokenCredits: 12345, updatedAt: null },
       });
       expect(payload.password).toBeUndefined();
@@ -319,6 +455,115 @@ describe('admin users handlers', () => {
         userId: userId.toString(),
         tokenCredits: 500,
         updatedAt: null,
+      });
+    });
+  });
+
+  describe('assignAdminUserPlan', () => {
+    it('assigns a valid plan to a user', async () => {
+      const userId = new mongoose.Types.ObjectId();
+      const planId = new mongoose.Types.ObjectId();
+      mockUserFindById.mockReturnValue(
+        createSelectLeanQuery({
+          _id: userId,
+          email: 'user@example.com',
+        }),
+      );
+      mockAdminPlanFindById.mockReturnValue(
+        createSelectLeanQuery({
+          _id: planId,
+          name: 'Pro',
+          slug: 'pro',
+        }),
+      );
+      mockUserFindByIdAndUpdate.mockReturnValue(
+        createSelectLeanQuery({
+          _id: userId,
+          adminPlanAssignedAt: new Date('2026-03-26T03:00:00.000Z'),
+        }),
+      );
+
+      const req = {
+        params: {
+          userId: userId.toString(),
+        },
+        body: {
+          planId: planId.toString(),
+        },
+      } as unknown as Request;
+      const res = createMockResponse();
+
+      await assignAdminUserPlan(req, res);
+
+      expect(mockUserFindByIdAndUpdate).toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({
+        userId: userId.toString(),
+        plan: {
+          id: planId.toString(),
+          name: 'Pro',
+          slug: 'pro',
+        },
+        assignedAt: '2026-03-26T03:00:00.000Z',
+      });
+    });
+
+    it('returns 404 for unknown plans', async () => {
+      const userId = new mongoose.Types.ObjectId();
+      mockUserFindById.mockReturnValue(
+        createSelectLeanQuery({
+          _id: userId,
+          email: 'user@example.com',
+        }),
+      );
+      mockAdminPlanFindById.mockReturnValue(createSelectLeanQuery(null));
+
+      const req = {
+        params: {
+          userId: userId.toString(),
+        },
+        body: {
+          planId: new mongoose.Types.ObjectId().toString(),
+        },
+      } as unknown as Request;
+      const res = createMockResponse();
+
+      await assignAdminUserPlan(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.json).toHaveBeenCalledWith({ message: 'Plan not found' });
+    });
+  });
+
+  describe('clearAdminUserPlan', () => {
+    it('clears the assigned plan from a user', async () => {
+      const userId = new mongoose.Types.ObjectId();
+      mockUserFindById.mockReturnValue(
+        createSelectLeanQuery({
+          _id: userId,
+          email: 'user@example.com',
+        }),
+      );
+      mockUserFindByIdAndUpdate.mockReturnValue(
+        createSelectLeanQuery({
+          _id: userId,
+        }),
+      );
+
+      const req = {
+        params: {
+          userId: userId.toString(),
+        },
+      } as unknown as Request;
+      const res = createMockResponse();
+
+      await clearAdminUserPlan(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({
+        userId: userId.toString(),
+        plan: null,
+        assignedAt: null,
       });
     });
   });

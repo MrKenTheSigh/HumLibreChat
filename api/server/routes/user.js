@@ -1,4 +1,5 @@
 const express = require('express');
+const { getUserEntitlements } = require('@librechat/api');
 const {
   updateUserPluginsController,
   resendVerificationController,
@@ -21,6 +22,7 @@ const router = express.Router();
 
 router.use('/settings', settings);
 router.get('/', requireJwtAuth, getUserController);
+router.get('/entitlements', requireJwtAuth, getUserEntitlements);
 router.get('/terms', requireJwtAuth, getTermsStatusController);
 router.post('/terms/accept', requireJwtAuth, acceptTermsController);
 router.post('/plugins', requireJwtAuth, updateUserPluginsController);

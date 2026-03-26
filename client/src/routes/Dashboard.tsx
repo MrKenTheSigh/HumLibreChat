@@ -6,8 +6,12 @@ import {
   EmptyPromptPreview,
 } from '~/components/Prompts';
 import {
+  AdminChannelForm,
+  AdminChannelsPage,
   AdminConversationDetail,
   AdminConversationsPage,
+  AdminPlanForm,
+  AdminPlansPage,
   AdminUserDetail,
   AdminUsersPage,
   AdminView,
@@ -76,6 +80,30 @@ const dashboardRoutes = {
         {
           path: 'users/:userId',
           element: <AdminUserDetail />,
+        },
+        {
+          path: 'channels',
+          element: <AdminChannelsPage />,
+        },
+        {
+          path: 'channels/new',
+          element: <AdminChannelForm />,
+        },
+        {
+          path: 'channels/:channelId',
+          element: <AdminChannelForm />,
+        },
+        {
+          path: 'plans',
+          element: <AdminPlansPage />,
+        },
+        {
+          path: 'plans/new',
+          element: <AdminPlanForm />,
+        },
+        {
+          path: 'plans/:planId',
+          element: <AdminPlanForm />,
         },
         {
           path: 'conversations',

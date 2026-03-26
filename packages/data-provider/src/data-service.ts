@@ -119,12 +119,22 @@ export function getUser(): Promise<t.TUser> {
   return request.get(endpoints.user());
 }
 
+export function getUserEntitlements(): Promise<q.UserEntitlementsResponse> {
+  return request.get(endpoints.userEntitlements());
+}
+
 export function getUserBalance(): Promise<t.TBalanceResponse> {
   return request.get(endpoints.balance());
 }
 
 export function getAdminUsers(params: q.AdminUsersListParams): Promise<q.AdminUsersListResponse> {
   return request.get(endpoints.adminUsers(params));
+}
+
+export function createAdminUser(
+  payload: q.AdminUserCreateRequest,
+): Promise<q.AdminUserCreateResponse> {
+  return request.post(endpoints.createAdminUser(), payload);
 }
 
 export function getAdminUser(userId: string): Promise<q.AdminUserDetail> {
@@ -141,6 +151,62 @@ export function setAdminUserBalance(
   payload: q.AdminBalanceUpdateRequest,
 ): Promise<q.AdminBalanceUpdateResponse> {
   return request.post(endpoints.adminUserBalanceSet(payload.userId), { amount: payload.amount });
+}
+
+export function assignAdminUserPlan(
+  payload: q.AdminUserPlanAssignmentRequest,
+): Promise<q.AdminUserPlanAssignmentResponse> {
+  return request.post(endpoints.adminUserPlan(payload.userId), { planId: payload.planId });
+}
+
+export function clearAdminUserPlan(userId: string): Promise<q.AdminUserPlanAssignmentResponse> {
+  return request.delete(endpoints.adminUserPlan(userId));
+}
+
+export function getAdminChannelInventory(): Promise<q.AdminChannelInventoryResponse> {
+  return request.get(endpoints.adminChannelInventory());
+}
+
+export function getAdminChannels(): Promise<q.AdminChannelsListResponse> {
+  return request.get(endpoints.adminChannels());
+}
+
+export function getAdminChannel(channelId: string): Promise<q.AdminChannel> {
+  return request.get(endpoints.adminChannel(channelId));
+}
+
+export function createAdminChannel(payload: q.AdminChannelUpsertRequest): Promise<q.AdminChannel> {
+  return request.post(endpoints.adminChannels(), payload);
+}
+
+export function updateAdminChannel(payload: q.AdminChannelUpdateRequest): Promise<q.AdminChannel> {
+  const { channelId, ...body } = payload;
+  return request.patch(endpoints.adminChannel(channelId), body);
+}
+
+export function deleteAdminChannel(channelId: string): Promise<q.AdminChannelDeleteResponse> {
+  return request.delete(endpoints.adminChannel(channelId));
+}
+
+export function getAdminPlans(): Promise<q.AdminPlansListResponse> {
+  return request.get(endpoints.adminPlans());
+}
+
+export function getAdminPlan(planId: string): Promise<q.AdminPlan> {
+  return request.get(endpoints.adminPlan(planId));
+}
+
+export function createAdminPlan(payload: q.AdminPlanUpsertRequest): Promise<q.AdminPlan> {
+  return request.post(endpoints.adminPlans(), payload);
+}
+
+export function updateAdminPlan(payload: q.AdminPlanUpdateRequest): Promise<q.AdminPlan> {
+  const { planId, ...body } = payload;
+  return request.patch(endpoints.adminPlan(planId), body);
+}
+
+export function deleteAdminPlan(planId: string): Promise<q.AdminPlanDeleteResponse> {
+  return request.delete(endpoints.adminPlan(planId));
 }
 
 export function getAdminConversations(

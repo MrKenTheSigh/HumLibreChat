@@ -2,7 +2,9 @@ import mongoose from 'mongoose';
 import { z } from 'zod';
 import { createModels, createMethods, logger } from '@librechat/data-schemas';
 import type { Request, Response } from 'express';
-import type { IUser, IBalance } from '@librechat/data-schemas';
+import { SystemRoles } from 'librechat-data-provider';
+import type { AppConfig, IUser, IBalance } from '@librechat/data-schemas';
+import { getBalanceConfig } from '~/app/config';
 import {
   buildCreatedAtCursorFilter,
   buildPagedResult,
@@ -14,7 +16,70 @@ import {
 } from './utils';
 
 const { User, Balance, Transaction } = createModels(mongoose);
-const { updateBalance } = createMethods(mongoose);
+const { createUser, updateBalance } = createMethods(mongoose);
+
+const MIN_PASSWORD_LENGTH = parseInt(process.env.MIN_PASSWORD_LENGTH ?? '', 10) || 8;
+const allowedCharactersRegex = new RegExp(
+  '^[' +
+    'a-zA-Z0-9_.@#$%&*()' +
+    '\\p{Script=Latin}' +
+    '\\p{Script=Common}' +
+    '\\p{Script=Cyrillic}' +
+    '\\p{Script=Devanagari}' +
+    '\\p{Script=Han}' +
+    '\\p{Script=Arabic}' +
+    '\\p{Script=Hiragana}' +
+    '\\p{Script=Katakana}' +
+    '\\p{Script=Hangul}' +
+    ']+$',
+  'u',
+);
+const injectionPatternsRegex = /('|--|\$ne|\$gt|\$lt|\$or|\{|\}|\*|;|<|>|\/|=)/i;
+
+type BcryptModule = {
+  genSaltSync: (rounds?: number) => string;
+  hashSync: (value: string, salt: string) => string;
+};
+
+const bcrypt = require('bcryptjs') as BcryptModule;
+
+const usernameSchema = z
+  .string()
+  .min(2, 'Username must be at least 2 characters')
+  .max(80, 'Username must be less than 80 characters')
+  .refine((value) => allowedCharactersRegex.test(value), {
+    message: 'Invalid characters in username',
+  })
+  .refine((value) => !injectionPatternsRegex.test(value), {
+    message: 'Potential injection attack detected',
+  });
+
+const adminCreateUserSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(3, 'Name must be at least 3 characters')
+    .max(80, 'Name must be less than 80 characters'),
+  username: z
+    .union([z.literal(''), usernameSchema])
+    .transform((value) => (value === '' ? null : value))
+    .optional()
+    .nullable(),
+  email: z.string().trim().email('Email must be a valid email address'),
+  password: z
+    .string()
+    .min(MIN_PASSWORD_LENGTH, `Password must be at least ${MIN_PASSWORD_LENGTH} characters`)
+    .max(128, 'Password must be less than 128 characters')
+    .refine((value) => value.trim().length > 0, {
+      message: 'Password cannot be only spaces',
+    }),
+  emailVerified: z.boolean().optional().default(true),
+  role: z.nativeEnum(SystemRoles).optional().default(SystemRoles.USER),
+});
+
+const adminUserPlanAssignSchema = z.object({
+  planId: z.string().trim().min(1, 'planId is required'),
+});
 
 const adminBalanceAddSchema = z.object({
   amount: z
@@ -48,6 +113,8 @@ type AdminUserListItem = {
 type AdminUserDetailRecord = AdminUserListItem & {
   termsAccepted?: boolean;
   plugins?: string[];
+  adminPlanId?: mongoose.Types.ObjectId | null;
+  adminPlanAssignedAt?: Date | null;
   personalization?: {
     memories?: boolean;
   };
@@ -61,6 +128,25 @@ type AdminUserDetailRecord = AdminUserListItem & {
 type AdminBalanceRecord = {
   tokenCredits: number;
 };
+
+type AdminPlanSummaryRecord = {
+  _id: mongoose.Types.ObjectId;
+  name: string;
+  slug: string;
+};
+
+type AppAwareRequest = Request & {
+  config?: AppConfig;
+};
+
+function normalizeUsername(email: string, username: string | null | undefined): string {
+  const normalized = username?.trim().toLowerCase();
+  if (normalized != null && normalized.length > 0) {
+    return normalized;
+  }
+
+  return email.split('@')[0].trim().toLowerCase();
+}
 
 function sanitizeUserListItem(user: AdminUserListItem) {
   return {
@@ -77,7 +163,11 @@ function sanitizeUserListItem(user: AdminUserListItem) {
   };
 }
 
-function sanitizeUserDetail(user: AdminUserDetailRecord, balance: IBalance | null) {
+function sanitizeUserDetail(
+  user: AdminUserDetailRecord,
+  balance: IBalance | null,
+  plan: AdminPlanSummaryRecord | null,
+) {
   const base = sanitizeUserListItem(user);
   return {
     ...base,
@@ -87,6 +177,14 @@ function sanitizeUserDetail(user: AdminUserDetailRecord, balance: IBalance | nul
     personalization: {
       memories: user.personalization?.memories ?? true,
     },
+    plan: plan
+      ? {
+          id: plan._id.toString(),
+          name: plan.name,
+          slug: plan.slug,
+        }
+      : null,
+    planAssignedAt: user.adminPlanAssignedAt?.toISOString() ?? null,
     balance: {
       tokenCredits: balance?.tokenCredits ?? 0,
       updatedAt: null,
@@ -170,7 +268,7 @@ export async function getAdminUsers(req: Request, res: Response) {
       .limit(limit + 1)
       .lean<AdminUserListItem[]>();
 
-    const { items, nextCursor } = buildPagedResult(users, limit);
+    const { items, nextCursor } = buildPagedResult<AdminUserListItem>(users, limit);
 
     return res.status(200).json({
       users: items.map(sanitizeUserListItem),
@@ -181,12 +279,49 @@ export async function getAdminUsers(req: Request, res: Response) {
   }
 }
 
+export async function createAdminUser(req: Request, res: Response) {
+  try {
+    const body = adminCreateUserSchema.parse(req.body);
+    const email = body.email.trim().toLowerCase();
+    const username = normalizeUsername(email, body.username);
+    const existingUserQuery = [{ email }, { username }];
+    const existingUser = await User.findOne({ $or: existingUserQuery })
+      .select('_id')
+      .lean<IUser | null>();
+
+    if (existingUser) {
+      throw createStatusError(409, 'A user with that email or username already exists');
+    }
+
+    const salt = bcrypt.genSaltSync(10);
+    const createdUser = await createUser(
+      {
+        provider: 'local',
+        email,
+        username,
+        name: body.name.trim(),
+        avatar: null,
+        role: body.role,
+        emailVerified: body.emailVerified,
+        password: bcrypt.hashSync(body.password, salt),
+      },
+      getBalanceConfig((req as AppAwareRequest).config),
+      true,
+      true,
+    );
+
+    return res.status(201).json(sanitizeUserListItem(createdUser as AdminUserListItem));
+  } catch (error) {
+    return handleAdminError(error, res, '[createAdminUser]');
+  }
+}
+
 export async function getAdminUser(req: Request, res: Response) {
   try {
     const userId = parseObjectId(req.params.userId, 'userId');
     const user = await User.findById(userId)
       .select(
-        '_id name username email role provider emailVerified twoFactorEnabled termsAccepted personalization plugins favorites createdAt updatedAt',
+        '_id name username email role provider emailVerified twoFactorEnabled termsAccepted personalization plugins favorites adminPlanId adminPlanAssignedAt createdAt updatedAt',
       )
       .lean<AdminUserDetailRecord | null>();
 
@@ -194,8 +329,20 @@ export async function getAdminUser(req: Request, res: Response) {
       throw createStatusError(404, 'User not found');
     }
 
-    const balance = (await Balance.findOne({ user: userId }).lean()) as IBalance | null;
-    return res.status(200).json(sanitizeUserDetail(user, balance));
+    const [balance, plan] = await Promise.all([
+      Balance.findOne({ user: userId }).lean(),
+      user.adminPlanId
+        ? User.db
+            .model('AdminPlan')
+            .findById(user.adminPlanId)
+            .select('_id name slug')
+            .lean<AdminPlanSummaryRecord | null>()
+        : Promise.resolve(null),
+    ]);
+
+    return res
+      .status(200)
+      .json(sanitizeUserDetail(user, balance as IBalance | null, plan));
   } catch (error) {
     return handleAdminError(error, res, '[getAdminUser]');
   }
@@ -210,6 +357,41 @@ async function getExistingUserOrThrow(
     throw createStatusError(404, 'User not found');
   }
   return { userId };
+}
+
+async function getExistingPlanOrThrow(
+  planIdParam: string,
+): Promise<{ planId: mongoose.Types.ObjectId; plan: AdminPlanSummaryRecord }> {
+  const planId = parseObjectId(planIdParam, 'planId');
+  const plan = await User.db
+    .model('AdminPlan')
+    .findById(planId)
+    .select('_id name slug')
+    .lean<AdminPlanSummaryRecord | null>();
+
+  if (!plan) {
+    throw createStatusError(404, 'Plan not found');
+  }
+
+  return { planId, plan };
+}
+
+function sanitizePlanAssignment(
+  userId: mongoose.Types.ObjectId,
+  plan: AdminPlanSummaryRecord | null,
+  assignedAt: Date | null,
+) {
+  return {
+    userId: userId.toString(),
+    plan: plan
+      ? {
+          id: plan._id.toString(),
+          name: plan.name,
+          slug: plan.slug,
+        }
+      : null,
+    assignedAt: assignedAt?.toISOString() ?? null,
+  };
 }
 
 async function createAdminBalanceTransaction(
@@ -280,5 +462,63 @@ export async function setAdminUserBalance(req: Request, res: Response) {
     });
   } catch (error) {
     return handleAdminError(error, res, '[setAdminUserBalance]');
+  }
+}
+
+export async function assignAdminUserPlan(req: Request, res: Response) {
+  try {
+    const { planId: planIdParam } = adminUserPlanAssignSchema.parse(req.body);
+    const { userId } = await getExistingUserOrThrow(req.params.userId);
+    const { planId, plan } = await getExistingPlanOrThrow(planIdParam);
+    const assignedAt = new Date();
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      {
+        $set: {
+          adminPlanId: planId,
+          adminPlanAssignedAt: assignedAt,
+        },
+      },
+      { new: true },
+    )
+      .select('_id adminPlanAssignedAt')
+      .lean<{ _id: mongoose.Types.ObjectId; adminPlanAssignedAt?: Date | null } | null>();
+
+    if (!updatedUser) {
+      throw createStatusError(404, 'User not found');
+    }
+
+    return res
+      .status(200)
+      .json(sanitizePlanAssignment(userId, plan, updatedUser.adminPlanAssignedAt ?? assignedAt));
+  } catch (error) {
+    return handleAdminError(error, res, '[assignAdminUserPlan]');
+  }
+}
+
+export async function clearAdminUserPlan(req: Request, res: Response) {
+  try {
+    const { userId } = await getExistingUserOrThrow(req.params.userId);
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      {
+        $set: {
+          adminPlanId: null,
+          adminPlanAssignedAt: null,
+        },
+      },
+      { new: true },
+    )
+      .select('_id')
+      .lean<{ _id: mongoose.Types.ObjectId } | null>();
+
+    if (!updatedUser) {
+      throw createStatusError(404, 'User not found');
+    }
+
+    return res.status(200).json(sanitizePlanAssignment(userId, null, null));
+  } catch (error) {
+    return handleAdminError(error, res, '[clearAdminUserPlan]');
   }
 }

@@ -11,7 +11,8 @@ import {
   useLocalize,
 } from '~/hooks';
 import { useAgentsMapContext, useAssistantsMapContext, useLiveAnnouncer } from '~/Providers';
-import { useGetEndpointsQuery, useListAgentsQuery } from '~/data-provider';
+import { useGetEndpointsQuery, useGetUserEntitlementsQuery, useListAgentsQuery } from '~/data-provider';
+import { filterModelSpecs } from '~/hooks/Endpoint/entitlements';
 import { useModelSelectorChatContext } from './ModelSelectorChatContext';
 import useSelectMention from '~/hooks/Input/useSelectMention';
 import { filterItems } from './utils';
@@ -58,6 +59,7 @@ export function ModelSelectorProvider({ children, startupConfig }: ModelSelector
   const agentsMap = useAgentsMapContext();
   const assistantsMap = useAssistantsMapContext();
   const { data: endpointsConfig } = useGetEndpointsQuery();
+  const { data: entitlements } = useGetUserEntitlementsQuery();
   const { endpoint, model, spec, agent_id, assistant_id, getConversation, newConversation } =
     useModelSelectorChatContext();
   const localize = useLocalize();
@@ -72,14 +74,15 @@ export function ModelSelectorProvider({ children, startupConfig }: ModelSelector
      * Filter modelSpecs to only include agents the user has access to.
      * Use agentsMap which already contains permission-filtered agents (consistent with other components).
      */
-    return specs.filter((spec) => {
+    const visibleSpecs = specs.filter((spec) => {
       if (spec.preset?.endpoint === EModelEndpoint.agents && spec.preset?.agent_id) {
         return spec.preset.agent_id in agentsMap;
       }
-      /** Keep non-agent modelSpecs */
       return true;
     });
-  }, [startupConfig, agentsMap]);
+
+    return filterModelSpecs(visibleSpecs, entitlements);
+  }, [startupConfig, agentsMap, entitlements]);
 
   const permissionLevel = useAgentDefaultPermissionLevel();
   const { data: agents = null } = useListAgentsQuery(

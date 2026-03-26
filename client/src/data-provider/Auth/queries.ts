@@ -19,6 +19,25 @@ export const useGetUserQuery = (
   });
 };
 
+export const useGetUserEntitlementsQuery = (
+  config?: UseQueryOptions<t.UserEntitlementsResponse>,
+): QueryObserverResult<t.UserEntitlementsResponse> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+
+  return useQuery<t.UserEntitlementsResponse>(
+    [QueryKeys.userEntitlements],
+    () => dataService.getUserEntitlements(),
+    {
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      refetchOnMount: false,
+      retry: false,
+      ...config,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled,
+    },
+  );
+};
+
 export interface UseGraphTokenQueryOptions {
   scopes?: string;
   enabled?: boolean;

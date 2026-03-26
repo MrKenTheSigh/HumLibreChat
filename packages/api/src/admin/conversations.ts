@@ -72,7 +72,12 @@ async function loadUserEmailMap(userIds: string[]) {
     .select('_id email')
     .lean<AdminUserEmailRecord[]>();
 
-  return new Map(users.map((user) => [user._id.toString(), user.email]));
+  return new Map<string, string>(
+    users.map((user: AdminUserEmailRecord): [string, string] => [
+      user._id.toString(),
+      user.email,
+    ]),
+  );
 }
 
 function sanitizeConversation(
@@ -152,7 +157,7 @@ export async function getAdminConversations(req: Request, res: Response) {
         .limit(200)
         .lean<AdminUserIdRecord[]>();
 
-      const matchingUserIds = matchingUsers.map((user) => user._id);
+      const matchingUserIds = matchingUsers.map((user: AdminUserIdRecord) => user._id);
       filters.push({
         $or: [
           { title: regex },
@@ -172,7 +177,7 @@ export async function getAdminConversations(req: Request, res: Response) {
       .limit(limit + 1)
       .lean<AdminConversationListItem[]>();
 
-    const { items, nextCursor } = buildPagedResult(conversations, limit);
+    const { items, nextCursor } = buildPagedResult<AdminConversationListItem>(conversations, limit);
     const userEmailMap = await loadUserEmailMap(
       Array.from(new Set(items.map((conversation) => String(conversation.user ?? '')))).filter(
         Boolean,

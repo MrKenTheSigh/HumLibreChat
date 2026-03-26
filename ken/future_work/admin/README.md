@@ -7,7 +7,8 @@ This directory is the entry point for the HumLibreChat admin backoffice planning
 - `phase-1/`: admin foundation, users, balance actions, and conversation audit
 - `phase-2/`: plans and channel overlay on top of existing endpoint/model config
 - `phase-3/`: access enforcement and user entitlements
-- `phase-4/`: usage reporting based on existing transaction data
+- `phase-4/`: plan-linked balance provisioning and credit policy
+- `phase-5/`: usage reporting based on existing transaction data
 
 ## Locked Decisions
 
@@ -16,6 +17,28 @@ This directory is the entry point for the HumLibreChat admin backoffice planning
 - Keep quota/billing on HumLibreChat's existing global `Balance.tokenCredits`.
 - Build the admin backoffice inside the existing `client` app.
 - Prefer `SystemRoles.ADMIN` as the first access gate. Do not introduce a second large RBAC system in the first pass.
+
+## Current Readiness
+
+Phase 3 is complete. The project is ready to start Phase 4.
+
+What is already in place:
+
+- Phase 1 admin console for users, balances, and conversation audit
+- Phase 2 admin entities for `AdminPlan`, `AdminChannel`, and user plan assignment
+- admin UI flows for plans, channels, and assignment
+- channel inventory validation tied to current HumLibreChat config
+- runtime plan enforcement on backend model validation
+- authenticated user entitlements API
+- frontend filtering for endpoint, model, model spec, and mention choices
+
+What is intentionally not wired yet:
+
+- plan assignment does not yet change `Balance.tokenCredits`
+- plan assignment does not yet provision credits
+- usage reporting is still deferred
+
+That makes balance provisioning the correct next phase.
 
 ## Target Outcomes
 
@@ -27,6 +50,7 @@ The target is to add an admin-only area that can do the following:
 4. Define admin-managed channels without changing the underlying provider architecture.
 5. Search and inspect all conversations and messages.
 6. View usage from existing transaction data.
+7. Apply plan-based credit provisioning without replacing HumLibreChat's balance model.
 
 ## Architecture Direction
 
@@ -85,6 +109,7 @@ Key rule:
 
 - `startingCredits` is a helper for provisioning, not a new quota engine.
 - Actual remaining usage still comes from `Balance.tokenCredits`.
+- The provisioning lifecycle for `startingCredits` is deferred to Phase 4.
 
 ### 3. User Extension
 
@@ -346,7 +371,52 @@ Then filter UI selection lists in the existing endpoint/model selectors instead 
 
 This is safer than replacing current chat setup UI.
 
-## Phase 4: Usage Reporting
+## Phase 4: Plan Balance Provisioning
+
+This phase connects `AdminPlan.startingCredits` to HumLibreChat's existing `Balance.tokenCredits` model without turning plans into a second quota engine.
+
+### Goals
+
+- define when `startingCredits` should apply
+- keep `Balance.tokenCredits` as the only runtime balance source
+- avoid overwriting manually adjusted balances by surprise
+- expose the policy clearly in admin UI and APIs
+
+### Recommended Policy Direction
+
+- Do not change balance automatically on every plan assignment.
+- Only seed balance automatically when the user has no balance record yet.
+- Add an explicit admin action to apply plan starting credits when manual provisioning is intended.
+- Do not silently reduce balance when a plan is removed or downgraded.
+
+### Backend
+
+Add narrow plan-aware provisioning helpers in `packages/api/src/admin/`.
+
+Suggested endpoints:
+
+- `POST /api/admin/users/:userId/plan/apply-starting-credits`
+- optional `POST /api/admin/users/:userId/plan/reseed-balance`
+
+Implementation should reuse the existing balance service rather than inventing a second credit store.
+
+### Frontend
+
+Extend the existing admin user detail and plan views to show:
+
+- whether the current user has a balance record
+- whether plan starting credits have been applied
+- a guarded button for explicit application when needed
+
+### Exit Condition
+
+This phase is complete when:
+
+- the balance policy is explicit and documented in code and UI
+- admins can provision plan starting credits intentionally
+- automatic provisioning only happens in the narrowly approved scenario
+
+## Phase 5: Usage Reporting
 
 This phase exposes admin reporting using current transaction data.
 
@@ -415,6 +485,7 @@ Do not add that complexity before confirming the first reporting screen is block
 - `src/admin/plans.ts`
 - `src/admin/channels.ts`
 - `src/admin/access.ts`
+- `src/admin/provisioning.ts`
 - `src/admin/usage.ts`
 
 ### `api/server/routes/admin`
@@ -424,6 +495,7 @@ Do not add that complexity before confirming the first reporting screen is block
 - `conversations.js`
 - `plans.js`
 - `channels.js`
+- `provisioning.js`
 - `usage.js`
 
 ### `client`
@@ -481,12 +553,14 @@ Do not add that complexity before confirming the first reporting screen is block
 3. Plan and channel CRUD.
 4. Backend access enforcement.
 5. Frontend filtering based on entitlements.
-6. Usage dashboard.
+6. Plan-linked balance provisioning.
+7. Usage dashboard.
 
 ## Why This Order
 
 - It gives usable admin value early.
 - It avoids touching the model execution path until the admin data model is stable.
+- It keeps credit policy work separate from access enforcement so the runtime path stays simpler.
 - It keeps the first merge sets small and testable.
 
 ## Testing Plan

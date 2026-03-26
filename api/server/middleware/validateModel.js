@@ -1,7 +1,9 @@
-const { handleError } = require('@librechat/api');
+const { handleError, resolveUserEntitlements, isPairAllowed } = require('@librechat/api');
 const { ViolationTypes } = require('librechat-data-provider');
 const { getModelsConfig } = require('~/server/controllers/ModelController');
 const { logViolation } = require('~/cache');
+
+const PLAN_MODEL_FORBIDDEN = 'PLAN_MODEL_FORBIDDEN';
 /**
  * Validates the model of the request.
  *
@@ -30,7 +32,29 @@ const validateModel = async (req, res, next) => {
   let validModel = !!availableModels.find((availableModel) => availableModel === model);
 
   if (validModel) {
-    return next();
+    try {
+      const entitlements = await resolveUserEntitlements({
+        userId: req.user.id,
+        role: req.user.role,
+      });
+
+      if (isPairAllowed(entitlements, endpoint, model)) {
+        return next();
+      }
+
+      return res.status(403).json({
+        message: 'Model is not allowed for the current plan',
+        error_code: PLAN_MODEL_FORBIDDEN,
+      });
+    } catch (error) {
+      const statusCode =
+        error instanceof Error && 'statusCode' in error && typeof error.statusCode === 'number'
+          ? error.statusCode
+          : 500;
+      const message =
+        error instanceof Error ? error.message : 'Failed to resolve model access rules';
+      return res.status(statusCode).json({ message });
+    }
   }
 
   const { ILLEGAL_MODEL_REQ_SCORE: score = 1 } = process.env ?? {};

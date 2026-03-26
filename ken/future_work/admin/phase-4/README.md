@@ -2,23 +2,35 @@
 
 ## Phase Description
 
-Phase 4 adds reporting and operational visibility for administrators.
+Phase 4 connects `AdminPlan.startingCredits` to HumLibreChat's existing balance system.
 
-This phase should start with HumLibreChat's existing transaction data instead of introducing a second usage ledger immediately.
+This phase is intentionally separate from Phase 3:
+
+- Phase 3 decides access
+- Phase 4 decides provisioning policy
+
+Keeping them separate avoids mixing runtime authorization with credit mutation in the same rollout.
 
 ## Planned Outcomes
 
-- usage summary API
-- transaction listing API for admins
-- usage dashboard in the client
-- filtering by user, endpoint, model, and date range
+- document and implement the balance provisioning policy for plans
+- apply plan starting credits only in explicitly approved scenarios
+- expose plan/balance provisioning state in admin user detail
+- add one narrow admin action for intentional application of starting credits
 
-## Data Strategy
+## Policy Baseline
 
-- start from `Transaction`
-- add summary helpers in backend services if needed
-- defer new collections until reporting proves blocked by current data shape
+- `Balance.tokenCredits` remains the only runtime balance source
+- `startingCredits` is a provisioning helper, not a second ledger
+- assigning a plan should not automatically overwrite an existing non-empty balance
+- clearing or changing a plan should not silently reduce balance
+
+## Suggested Slice Order
+
+1. policy and backend provisioning helper
+2. admin endpoint for explicit application
+3. admin UI state and action wiring
 
 ## Exit Condition
 
-This phase is complete when an admin can inspect recent spend and usage patterns from the UI without needing CLI scripts or direct database access.
+This phase is complete when an admin can understand and control plan-based provisioning without needing database access or manual scripts, and when the behavior is narrow enough that it cannot accidentally wipe an existing balance.

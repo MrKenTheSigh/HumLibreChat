@@ -64,6 +64,17 @@ export type AdminUsersListResponse = {
   nextCursor: string | null;
 };
 
+export type AdminUserCreateRequest = {
+  name: string;
+  username?: string | null;
+  email: string;
+  password: string;
+  emailVerified?: boolean;
+  role?: 'ADMIN' | 'USER';
+};
+
+export type AdminUserCreateResponse = AdminUserSummary;
+
 export type AdminUserDetail = AdminUserSummary & {
   termsAccepted: boolean;
   favoritesCount: number;
@@ -71,6 +82,12 @@ export type AdminUserDetail = AdminUserSummary & {
   personalization: {
     memories: boolean;
   };
+  plan: {
+    id: string;
+    name: string;
+    slug: string;
+  } | null;
+  planAssignedAt: string | null;
   balance: {
     tokenCredits: number;
     updatedAt: string | null;
@@ -86,6 +103,150 @@ export type AdminBalanceUpdateResponse = {
   userId: string;
   tokenCredits: number;
   updatedAt: string | null;
+};
+
+export type AdminUserPlanAssignmentRequest = {
+  userId: string;
+  planId: string;
+};
+
+export type AdminUserPlanAssignmentResponse = {
+  userId: string;
+  plan: {
+    id: string;
+    name: string;
+    slug: string;
+  } | null;
+  assignedAt: string | null;
+};
+
+export type AdminChannelInventoryItem = {
+  endpoint: string;
+  model: string;
+  label: string;
+  defaultParameters: null;
+};
+
+export type AdminChannelInventoryResponse = {
+  inventory: AdminChannelInventoryItem[];
+};
+
+export type AdminChannelEntry = {
+  endpoint: string;
+  model: string;
+  label: string;
+  enabled: boolean;
+  defaultParameters: null;
+};
+
+export type AdminChannel = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  enabled: boolean;
+  sortOrder: number;
+  icon: string;
+  entries: AdminChannelEntry[];
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+export type AdminChannelsListResponse = {
+  channels: AdminChannel[];
+};
+
+export type AdminChannelUpsertRequest = {
+  name: string;
+  slug: string;
+  description: string;
+  enabled: boolean;
+  sortOrder: number;
+  icon: string;
+  entries: AdminChannelEntry[];
+};
+
+export type AdminChannelUpdateRequest = AdminChannelUpsertRequest & {
+  channelId: string;
+};
+
+export type AdminChannelDeleteResponse = {
+  id: string;
+  deleted: true;
+};
+
+export type AdminPlan = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  enabled: boolean;
+  isDefault: boolean;
+  sortOrder: number;
+  channelIds: string[];
+  notes: string;
+  startingCredits: number | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+export type AdminPlansListResponse = {
+  plans: AdminPlan[];
+};
+
+export type AdminPlanUpsertRequest = {
+  name: string;
+  slug: string;
+  description: string;
+  enabled: boolean;
+  isDefault: boolean;
+  sortOrder: number;
+  channelIds: string[];
+  notes: string;
+  startingCredits: number | null;
+};
+
+export type AdminPlanUpdateRequest = AdminPlanUpsertRequest & {
+  planId: string;
+};
+
+export type AdminPlanDeleteResponse = {
+  id: string;
+  deleted: true;
+};
+
+export type UserEntitlementScope =
+  | 'admin_bypass'
+  | 'assigned_plan'
+  | 'default_plan'
+  | 'unrestricted'
+  | 'invalid_plan';
+
+export type UserEntitlementPlan = {
+  id: string;
+  name: string;
+  slug: string;
+};
+
+export type UserEntitlementChannel = {
+  id: string;
+  name: string;
+  slug: string;
+};
+
+export type UserEntitlementPair = {
+  endpoint: string;
+  model: string;
+  channelId: string;
+  channelSlug: string;
+};
+
+export type UserEntitlementsResponse = {
+  scope: UserEntitlementScope;
+  isRestricted: boolean;
+  plan: UserEntitlementPlan | null;
+  allowedChannels: UserEntitlementChannel[];
+  allowedPairs: UserEntitlementPair[];
 };
 
 export type AdminConversationListParams = {

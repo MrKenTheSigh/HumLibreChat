@@ -1,5 +1,9 @@
 export { default as AdminLayout } from './AdminLayout';
 export { default as AdminView } from './AdminView';
+export { default as AdminChannelForm } from './Channels/AdminChannelForm';
+export { default as AdminChannelsPage } from './Channels/AdminChannelsPage';
+export { default as AdminPlanForm } from './Plans/AdminPlanForm';
+export { default as AdminPlansPage } from './Plans/AdminPlansPage';
 export { default as AdminUsersPage } from './Users/AdminUsersPage';
 export { default as AdminUserDetail } from './Users/AdminUserDetail';
 export { default as AdminConversationsPage } from './Conversations/AdminConversationsPage';

@@ -41,16 +41,22 @@ const buildQuery = (params: Record<string, unknown>): string => {
 
 export const health = () => `${BASE_URL}/health`;
 export const user = () => `${BASE_URL}/api/user`;
+export const userEntitlements = () => `${BASE_URL}/api/user/entitlements`;
 
 export const balance = () => `${BASE_URL}/api/balance`;
 
 const adminRoot = `${BASE_URL}/api/admin`;
 const adminUsersRoot = `${adminRoot}/users`;
 const adminConversationsRoot = `${adminRoot}/conversations`;
+const adminChannelInventoryRoot = `${adminRoot}/channel-inventory`;
+const adminChannelsRoot = `${adminRoot}/channels`;
+const adminPlansRoot = `${adminRoot}/plans`;
 
 export const adminUsers = (params: q.AdminUsersListParams) => {
   return `${adminUsersRoot}${buildQuery(params)}`;
 };
+
+export const createAdminUser = () => adminUsersRoot;
 
 export const adminUser = (userId: string) => `${adminUsersRoot}/${encodeURIComponent(userId)}`;
 
@@ -59,6 +65,20 @@ export const adminUserBalanceAdd = (userId: string) =>
 
 export const adminUserBalanceSet = (userId: string) =>
   `${adminUsersRoot}/${encodeURIComponent(userId)}/balance/set`;
+
+export const adminUserPlan = (userId: string) =>
+  `${adminUsersRoot}/${encodeURIComponent(userId)}/plan`;
+
+export const adminChannelInventory = () => adminChannelInventoryRoot;
+
+export const adminChannels = () => adminChannelsRoot;
+
+export const adminChannel = (channelId: string) =>
+  `${adminChannelsRoot}/${encodeURIComponent(channelId)}`;
+
+export const adminPlans = () => adminPlansRoot;
+
+export const adminPlan = (planId: string) => `${adminPlansRoot}/${encodeURIComponent(planId)}`;
 
 export const adminConversations = (params: q.AdminConversationListParams) => {
   return `${adminConversationsRoot}${buildQuery(params)}`;

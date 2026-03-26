@@ -1,6 +1,12 @@
 const { logger } = require('@librechat/data-schemas');
 const { CacheKeys } = require('librechat-data-provider');
-const { loadDefaultModels, loadConfigModels } = require('~/server/services/Config');
+const { filterModelsConfigToUsableEntries } = require('@librechat/api');
+const {
+  loadDefaultModels,
+  loadConfigModels,
+  getAppConfig,
+  getEndpointsConfig,
+} = require('~/server/services/Config');
 const { getLogStores } = require('~/cache');
 
 /**
@@ -30,8 +36,14 @@ async function loadModels(req) {
   }
   const defaultModelsConfig = await loadDefaultModels(req);
   const customModelsConfig = await loadConfigModels(req);
+  const appConfig = req.config ?? (await getAppConfig({ role: req.user?.role }));
+  const endpointsConfig = await getEndpointsConfig(req);
 
-  const modelConfig = { ...defaultModelsConfig, ...customModelsConfig };
+  const modelConfig = filterModelsConfigToUsableEntries(
+    endpointsConfig,
+    { ...defaultModelsConfig, ...customModelsConfig },
+    appConfig,
+  );
 
   await cache.set(CacheKeys.MODELS_CONFIG, modelConfig);
   return modelConfig;

@@ -1,6 +1,8 @@
 import { useGetModelsQuery } from 'librechat-data-provider/react-query';
 import type { TConversation } from 'librechat-data-provider';
 import type { TSetOption } from '~/common';
+import { useGetUserEntitlementsQuery } from '~/data-provider';
+import { filterEndpointModels } from '~/hooks/Endpoint/entitlements';
 import { multiChatOptions } from './options';
 
 type TGoogleProps = {
@@ -23,13 +25,14 @@ export default function ModelSelect({
   showAbove = true,
 }: TSelectProps) {
   const modelsQuery = useGetModelsQuery();
+  const { data: entitlements } = useGetUserEntitlementsQuery();
 
   if (!conversation?.endpoint) {
     return null;
   }
 
   const { endpoint: _endpoint, endpointType } = conversation;
-  const models = modelsQuery.data?.[_endpoint] ?? [];
+  const models = filterEndpointModels(_endpoint, modelsQuery.data?.[_endpoint] ?? [], entitlements);
   const endpoint = endpointType ?? _endpoint;
 
   const OptionComponent = multiChatOptions[endpoint];

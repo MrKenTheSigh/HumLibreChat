@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useLocalize } from '~/hooks';
 import { useGetAdminUsersQuery } from '~/data-provider/Admin';
 import AdminLayout from '../AdminLayout';
+import AdminCreateUserCard from './AdminCreateUserCard';
 
 const providerOptions = [
   'all',
@@ -23,6 +24,7 @@ export default function AdminUsersPage() {
   const [role, setRole] = useState('all');
   const [provider, setProvider] = useState('all');
   const [emailVerified, setEmailVerified] = useState('');
+  const [showCreateForm, setShowCreateForm] = useState(false);
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const [cursorHistory, setCursorHistory] = useState<string[]>([]);
   const deferredSearch = useDeferredValue(search);
@@ -48,6 +50,28 @@ export default function AdminUsersPage() {
       description={localize('com_ui_admin_users_description')}
     >
       <div className="flex h-full flex-col gap-4">
+        <div className="flex items-center justify-end">
+          <button
+            type="button"
+            onClick={() => setShowCreateForm((current) => !current)}
+            className="rounded-xl border border-border-medium px-4 py-2 text-sm text-text-primary"
+          >
+            {showCreateForm
+              ? localize('com_ui_admin_hide_create_user')
+              : localize('com_ui_admin_create_user')}
+          </button>
+        </div>
+
+        {showCreateForm && (
+          <AdminCreateUserCard
+            onCreated={(userId) => {
+              setShowCreateForm(false);
+              navigate(`/d/admin/users/${userId}`);
+            }}
+            onCancel={() => setShowCreateForm(false)}
+          />
+        )}
+
         <div className="grid gap-3 md:grid-cols-4">
           <input
             type="search"

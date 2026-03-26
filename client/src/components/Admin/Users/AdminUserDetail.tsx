@@ -4,6 +4,7 @@ import { useGetAdminUserQuery } from '~/data-provider/Admin';
 import { useLocalize } from '~/hooks';
 import AdminLayout from '../AdminLayout';
 import AdminUserBalanceCard from './AdminUserBalanceCard';
+import AdminUserPlanCard from './AdminUserPlanCard';
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
@@ -105,6 +106,12 @@ export default function AdminUserDetail() {
             </p>
           </section>
         )}
+
+        <AdminUserPlanCard
+          userId={user.id}
+          currentPlan={user.plan}
+          assignedAt={user.planAssignedAt}
+        />
 
         <section className="rounded-2xl border border-border-medium bg-surface-primary p-4">
           <h2 className="mb-3 text-sm font-medium text-text-primary">

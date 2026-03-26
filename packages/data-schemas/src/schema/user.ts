@@ -161,6 +161,15 @@ const userSchema = new Schema<IUser>(
       ],
       default: [],
     },
+    adminPlanId: {
+      type: Schema.Types.ObjectId,
+      ref: 'AdminPlan',
+      default: null,
+    },
+    adminPlanAssignedAt: {
+      type: Date,
+      default: null,
+    },
     /** Field for external source identification (for consistency with TPrincipal schema) */
     idOnTheSource: {
       type: String,
