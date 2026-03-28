@@ -51,6 +51,7 @@ const adminConversationsRoot = `${adminRoot}/conversations`;
 const adminChannelInventoryRoot = `${adminRoot}/channel-inventory`;
 const adminChannelsRoot = `${adminRoot}/channels`;
 const adminPlansRoot = `${adminRoot}/plans`;
+const adminUsageRoot = `${adminRoot}/usage`;
 
 export const adminUsers = (params: q.AdminUsersListParams) => {
   return `${adminUsersRoot}${buildQuery(params)}`;
@@ -68,6 +69,9 @@ export const adminUserBalanceSet = (userId: string) =>
 
 export const adminUserPlan = (userId: string) =>
   `${adminUsersRoot}/${encodeURIComponent(userId)}/plan`;
+
+export const adminUserApplyStartingCredits = (userId: string) =>
+  `${adminUsersRoot}/${encodeURIComponent(userId)}/plan/apply-starting-credits`;
 
 export const adminChannelInventory = () => adminChannelInventoryRoot;
 
@@ -89,6 +93,12 @@ export const adminConversation = (conversationId: string) =>
 
 export const adminConversationMessages = (conversationId: string) =>
   `${adminConversationsRoot}/${encodeURIComponent(conversationId)}/messages`;
+
+export const adminTransactions = (params: q.AdminTransactionsListParams) =>
+  `${adminUsageRoot}/transactions${buildQuery(params)}`;
+
+export const adminUsageSummary = (params: q.AdminTransactionsListParams) =>
+  `${adminUsageRoot}/summary${buildQuery(params)}`;
 
 export const userPlugins = () => `${BASE_URL}/api/user/plugins`;
 

@@ -3,16 +3,23 @@ const { logger } = require('@librechat/data-schemas');
 const { loadServiceKey, isUserProvided } = require('@librechat/api');
 const { config } = require('./EndpointService');
 
-async function loadAsyncEndpoints() {
+function hasManagedGoogleConfig(appConfig) {
+  const googleConfig = appConfig?.endpoints?.google;
+  return typeof googleConfig?.apiKey === 'string' && googleConfig.apiKey.trim() !== '';
+}
+
+async function loadAsyncEndpoints(appConfig) {
   let serviceKey, googleUserProvides;
   const { googleKey } = config;
+  const managedGoogleConfigured = hasManagedGoogleConfig(appConfig);
 
   /** Check if GOOGLE_KEY is provided at all(including 'user_provided') */
-  const isGoogleKeyProvided = googleKey && googleKey.trim() !== '';
+  const isGoogleKeyProvided =
+    managedGoogleConfigured || (typeof googleKey === 'string' && googleKey.trim() !== '');
 
   if (isGoogleKeyProvided) {
     /** If GOOGLE_KEY is provided, check if it's user_provided */
-    googleUserProvides = isUserProvided(googleKey);
+    googleUserProvides = managedGoogleConfigured ? false : isUserProvided(googleKey);
   } else {
     /** Only attempt to load service key if GOOGLE_KEY is not provided */
     const serviceKeyPath =

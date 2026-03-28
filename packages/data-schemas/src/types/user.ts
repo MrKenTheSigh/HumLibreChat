@@ -47,6 +47,13 @@ export interface IUser extends Document {
   }>;
   adminPlanId?: Types.ObjectId | string | null;
   adminPlanAssignedAt?: Date | null;
+  adminPlanStartingCreditsAppliedAt?: Date | null;
+  adminPlanStartingCreditsAppliedPlanId?: Types.ObjectId | string | null;
+  adminPlanStartingCreditsAppliedAmount?: number | null;
+  adminPlanStartingCreditsAppliedSource?:
+    | 'plan_assignment_auto_seed'
+    | 'admin_manual_apply'
+    | null;
   createdAt?: Date;
   updatedAt?: Date;
   /** Field for external source identification (for consistency with TPrincipal schema) */

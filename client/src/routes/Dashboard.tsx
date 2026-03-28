@@ -12,6 +12,7 @@ import {
   AdminConversationsPage,
   AdminPlanForm,
   AdminPlansPage,
+  AdminUsagePage,
   AdminUserDetail,
   AdminUsersPage,
   AdminView,
@@ -112,6 +113,10 @@ const dashboardRoutes = {
         {
           path: 'conversations/:conversationId',
           element: <AdminConversationDetail />,
+        },
+        {
+          path: 'usage',
+          element: <AdminUsagePage />,
         },
       ],
     },

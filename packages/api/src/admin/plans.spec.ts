@@ -98,6 +98,13 @@ describe('admin plans handlers', () => {
             isDefault: true,
             sortOrder: 10,
             channelIds: ['channel-1'],
+            modelEntitlements: [
+              {
+                channelId: 'channel-1',
+                endpoint: 'azureOpenAI',
+                model: 'gpt-4o-mini',
+              },
+            ],
             notes: 'Manual assignment only',
             startingCredits: 20000,
             createdAt: new Date('2026-03-26T00:00:00.000Z'),
@@ -123,6 +130,13 @@ describe('admin plans handlers', () => {
             isDefault: true,
             sortOrder: 10,
             channelIds: ['channel-1'],
+            modelEntitlements: [
+              {
+                channelId: 'channel-1',
+                endpoint: 'azureOpenAI',
+                model: 'gpt-4o-mini',
+              },
+            ],
             notes: 'Manual assignment only',
             startingCredits: 20000,
             createdAt: '2026-03-26T00:00:00.000Z',
@@ -166,6 +180,18 @@ describe('admin plans handlers', () => {
           isDefault: true,
           sortOrder: 20,
           channelIds: ['channel-1', 'channel-2'],
+          modelEntitlements: [
+            {
+              channelId: 'channel-1',
+              endpoint: 'azureOpenAI',
+              model: 'gpt-4o-mini',
+            },
+            {
+              channelId: 'channel-2',
+              endpoint: 'azureOpenAI',
+              model: 'gpt-4o',
+            },
+          ],
           notes: 'Internal users',
           startingCredits: 20000,
           createdAt: new Date('2026-03-26T00:00:00.000Z'),
@@ -182,6 +208,23 @@ describe('admin plans handlers', () => {
           isDefault: true,
           sortOrder: 20,
           channelIds: ['channel-1', ' channel-2 ', 'channel-1'],
+          modelEntitlements: [
+            {
+              channelId: 'channel-1',
+              endpoint: 'azureOpenAI',
+              model: 'gpt-4o-mini',
+            },
+            {
+              channelId: ' channel-2 ',
+              endpoint: 'azureOpenAI',
+              model: 'gpt-4o',
+            },
+            {
+              channelId: 'channel-1',
+              endpoint: 'azureOpenAI',
+              model: 'gpt-4o-mini',
+            },
+          ],
           notes: 'Internal users',
           startingCredits: 20000,
         },
@@ -198,6 +241,18 @@ describe('admin plans handlers', () => {
         isDefault: true,
         sortOrder: 20,
         channelIds: ['channel-1', 'channel-2'],
+        modelEntitlements: [
+          {
+            channelId: 'channel-1',
+            endpoint: 'azureOpenAI',
+            model: 'gpt-4o-mini',
+          },
+          {
+            channelId: 'channel-2',
+            endpoint: 'azureOpenAI',
+            model: 'gpt-4o',
+          },
+        ],
         notes: 'Internal users',
         startingCredits: 20000,
       });
@@ -251,6 +306,13 @@ describe('admin plans handlers', () => {
             isDefault: false,
             sortOrder: 5,
             channelIds: [],
+            modelEntitlements: [
+              {
+                channelId: 'channel-1',
+                endpoint: 'azureOpenAI',
+                model: 'gpt-4o-mini',
+              },
+            ],
             notes: '',
             startingCredits: 1000,
             createdAt: new Date('2026-03-26T00:00:00.000Z'),
@@ -275,6 +337,13 @@ describe('admin plans handlers', () => {
           isDefault: false,
           sortOrder: 5,
           channelIds: [],
+          modelEntitlements: [
+            {
+              channelId: 'channel-1',
+              endpoint: 'azureOpenAI',
+              model: 'gpt-4o-mini',
+            },
+          ],
           notes: '',
           startingCredits: 1000,
         },
@@ -293,7 +362,14 @@ describe('admin plans handlers', () => {
             enabled: true,
             isDefault: false,
             sortOrder: 5,
-            channelIds: [],
+            channelIds: ['channel-1'],
+            modelEntitlements: [
+              {
+                channelId: 'channel-1',
+                endpoint: 'azureOpenAI',
+                model: 'gpt-4o-mini',
+              },
+            ],
             notes: '',
             startingCredits: 1000,
           },

@@ -86,12 +86,14 @@ export type AdminUserDetail = AdminUserSummary & {
     id: string;
     name: string;
     slug: string;
+    startingCredits: number | null;
   } | null;
   planAssignedAt: string | null;
   balance: {
     tokenCredits: number;
     updatedAt: string | null;
   };
+  provisioning: AdminUserProvisioningState;
 };
 
 export type AdminBalanceUpdateRequest = {
@@ -120,10 +122,90 @@ export type AdminUserPlanAssignmentResponse = {
   assignedAt: string | null;
 };
 
+export type AdminProvisioningSource = 'plan_assignment_auto_seed' | 'admin_manual_apply';
+
+export type AdminUserProvisioningState = {
+  balanceEnabled: boolean;
+  hasBalanceRecord: boolean;
+  currentPlanStartingCredits: number | null;
+  appliedAt: string | null;
+  appliedPlanId: string | null;
+  appliedAmount: number | null;
+  appliedSource: AdminProvisioningSource | null;
+  appliedPlanMatchesCurrent: boolean;
+  canApplyStartingCredits: boolean;
+};
+
+export type AdminApplyStartingCreditsRequest = {
+  userId: string;
+};
+
+export type AdminApplyStartingCreditsResponse = {
+  applied: boolean;
+  reason:
+    | 'applied'
+    | 'already_applied_for_current_plan'
+    | 'balance_disabled'
+    | 'existing_balance_record'
+    | 'no_plan'
+    | 'plan_has_no_starting_credits';
+  tokenCredits: number;
+  provisioning: AdminUserProvisioningState;
+};
+
+export type AdminTransactionsListParams = {
+  cursor?: string;
+  limit?: number;
+  userId?: string;
+  model?: string;
+  context?: string;
+  tokenType?: 'prompt' | 'completion' | 'credits';
+  dateFrom?: string;
+  dateTo?: string;
+};
+
+export type AdminTransactionItem = {
+  id: string;
+  userId: string;
+  userEmail: string | null;
+  userName: string | null;
+  conversationId: string | null;
+  tokenType: 'prompt' | 'completion' | 'credits';
+  model: string | null;
+  context: string | null;
+  rawAmount: number | null;
+  tokenValue: number | null;
+  rate: number | null;
+  rateDetail: Record<string, number> | null;
+  inputTokens: number | null;
+  writeTokens: number | null;
+  readTokens: number | null;
+  createdAt: string | null;
+};
+
+export type AdminTransactionsResponse = {
+  transactions: AdminTransactionItem[];
+  nextCursor: string | null;
+};
+
+export type AdminUsageSummaryResponse = {
+  transactionCount: number;
+  uniqueUsers: number;
+  totalTokenValue: number;
+  totalRawAmount: number;
+  totalInputTokens: number;
+  totalWriteTokens: number;
+  totalReadTokens: number;
+  newestTransactionAt: string | null;
+  oldestTransactionAt: string | null;
+};
+
 export type AdminChannelInventoryItem = {
   endpoint: string;
   model: string;
   label: string;
+  source: 'runtime' | 'builtin';
+  defaultRates: AdminChannelPricingOverride | null;
   defaultParameters: null;
 };
 
@@ -131,23 +213,66 @@ export type AdminChannelInventoryResponse = {
   inventory: AdminChannelInventoryItem[];
 };
 
-export type AdminChannelEntry = {
-  endpoint: string;
+export type AdminChannelProviderType =
+  | 'azureOpenAI'
+  | 'custom'
+  | 'ollama'
+  | 'openAI'
+  | 'google'
+  | 'anthropic'
+  | 'bedrock';
+
+export type AdminChannelPricingOverride = {
+  prompt: number | null;
+  completion: number | null;
+  write: number | null;
+  read: number | null;
+};
+
+export type AdminChannelHeader = {
+  key: string;
+  value: string;
+};
+
+export type AdminChannelConnection = {
+  runtimeEndpoint: string;
+  baseURL: string;
+  instanceName: string;
+  apiVersion: string;
+  region: string;
+  modelFetch: boolean;
+  headers: AdminChannelHeader[];
+};
+
+export type AdminChannelSecrets = {
+  apiKey: string;
+  apiKeyRef: string;
+  accessKeyId: string;
+  accessKeyIdRef: string;
+  secretAccessKey: string;
+  secretAccessKeyRef: string;
+  sessionToken: string;
+  sessionTokenRef: string;
+};
+
+export type AdminChannelModel = {
   model: string;
-  label: string;
   enabled: boolean;
-  defaultParameters: null;
+  deploymentName: string;
+  pricingOverride: AdminChannelPricingOverride | null;
 };
 
 export type AdminChannel = {
   id: string;
   name: string;
   slug: string;
+  providerType: AdminChannelProviderType;
   description: string;
   enabled: boolean;
   sortOrder: number;
-  icon: string;
-  entries: AdminChannelEntry[];
+  connection: AdminChannelConnection;
+  secrets: AdminChannelSecrets;
+  models: AdminChannelModel[];
   createdAt: string | null;
   updatedAt: string | null;
 };
@@ -159,11 +284,13 @@ export type AdminChannelsListResponse = {
 export type AdminChannelUpsertRequest = {
   name: string;
   slug: string;
+  providerType: AdminChannelProviderType;
   description: string;
   enabled: boolean;
   sortOrder: number;
-  icon: string;
-  entries: AdminChannelEntry[];
+  connection: AdminChannelConnection;
+  secrets: AdminChannelSecrets;
+  models: AdminChannelModel[];
 };
 
 export type AdminChannelUpdateRequest = AdminChannelUpsertRequest & {
@@ -175,6 +302,12 @@ export type AdminChannelDeleteResponse = {
   deleted: true;
 };
 
+export type AdminPlanModelEntitlement = {
+  channelId: string;
+  endpoint: string;
+  model: string;
+};
+
 export type AdminPlan = {
   id: string;
   name: string;
@@ -184,6 +317,7 @@ export type AdminPlan = {
   isDefault: boolean;
   sortOrder: number;
   channelIds: string[];
+  modelEntitlements: AdminPlanModelEntitlement[];
   notes: string;
   startingCredits: number | null;
   createdAt: string | null;
@@ -202,6 +336,7 @@ export type AdminPlanUpsertRequest = {
   isDefault: boolean;
   sortOrder: number;
   channelIds: string[];
+  modelEntitlements: AdminPlanModelEntitlement[];
   notes: string;
   startingCredits: number | null;
 };

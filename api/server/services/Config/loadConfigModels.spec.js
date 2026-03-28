@@ -400,4 +400,29 @@ describe('loadConfigModels', () => {
       }),
     );
   });
+
+  it('keeps configured ollama models in chat config even when local fetch returns more models', async () => {
+    getAppConfig.mockResolvedValue({
+      endpoints: {
+        custom: [
+          {
+            name: 'ollama',
+            apiKey: 'ollama',
+            baseURL: 'http://localhost:11434/v1',
+            configuredModelsOnly: true,
+            models: {
+              fetch: true,
+              default: ['llama3.1:latest'],
+            },
+          },
+        ],
+      },
+    });
+
+    fetchModels.mockResolvedValue(['llama3.1:latest', 'mistral:latest', 'phi3:latest']);
+
+    const result = await loadConfigModels(mockRequest);
+
+    expect(result.ollama).toEqual(['llama3.1:latest']);
+  });
 });

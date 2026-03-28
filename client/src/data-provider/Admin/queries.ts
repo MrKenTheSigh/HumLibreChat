@@ -198,3 +198,41 @@ export const useGetAdminConversationMessagesQuery = (
     },
   );
 };
+
+export const useGetAdminTransactionsQuery = (
+  params: t.AdminTransactionsListParams,
+  config?: UseQueryOptions<t.AdminTransactionsResponse>,
+): QueryObserverResult<t.AdminTransactionsResponse> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+
+  return useQuery<t.AdminTransactionsResponse>(
+    [QueryKeys.adminTransactions, params],
+    () => dataService.getAdminTransactions(params),
+    {
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      refetchOnMount: true,
+      ...config,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled,
+    },
+  );
+};
+
+export const useGetAdminUsageSummaryQuery = (
+  params: t.AdminTransactionsListParams,
+  config?: UseQueryOptions<t.AdminUsageSummaryResponse>,
+): QueryObserverResult<t.AdminUsageSummaryResponse> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+
+  return useQuery<t.AdminUsageSummaryResponse>(
+    [QueryKeys.adminUsageSummary, params],
+    () => dataService.getAdminUsageSummary(params),
+    {
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      refetchOnMount: true,
+      ...config,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled,
+    },
+  );
+};

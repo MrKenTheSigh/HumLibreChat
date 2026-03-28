@@ -43,10 +43,35 @@ async function getEndpointsConfig(req) {
     };
   }
 
+  if (appConfig.endpoints?.[EModelEndpoint.openAI]?.apiKey) {
+    mergedConfig[EModelEndpoint.openAI] = {
+      userProvide: false,
+    };
+  }
+
+  if (appConfig.endpoints?.[EModelEndpoint.google]?.apiKey) {
+    mergedConfig[EModelEndpoint.google] = {
+      userProvide: false,
+    };
+  }
+
   // Enable Anthropic endpoint when Vertex AI is configured in YAML
-  if (appConfig.endpoints?.[EModelEndpoint.anthropic]?.vertexConfig?.enabled) {
+  if (
+    appConfig.endpoints?.[EModelEndpoint.anthropic]?.vertexConfig?.enabled ||
+    appConfig.endpoints?.[EModelEndpoint.anthropic]?.apiKey
+  ) {
     /** @type {Omit<TConfig, 'order'>} */
     mergedConfig[EModelEndpoint.anthropic] = {
+      userProvide: false,
+    };
+  }
+
+  if (
+    appConfig.endpoints?.[EModelEndpoint.bedrock]?.region ||
+    appConfig.endpoints?.[EModelEndpoint.bedrock]?.accessKeyId ||
+    appConfig.endpoints?.[EModelEndpoint.bedrock]?.secretAccessKey
+  ) {
+    mergedConfig[EModelEndpoint.bedrock] = {
       userProvide: false,
     };
   }
@@ -110,6 +135,33 @@ async function getEndpointsConfig(req) {
   }
 
   const endpointsConfig = orderEndpointsConfig(mergedConfig);
+
+  const maxOrder = Object.values(endpointsConfig).reduce((highest, endpointConfig) => {
+    if (endpointConfig == null || typeof endpointConfig.order !== 'number') {
+      return highest;
+    }
+
+    return Math.max(highest, endpointConfig.order);
+  }, -1);
+
+  let nextOrder = maxOrder + 1;
+  for (const provider of [
+    EModelEndpoint.azureOpenAI,
+    EModelEndpoint.openAI,
+    EModelEndpoint.google,
+    EModelEndpoint.anthropic,
+    EModelEndpoint.bedrock,
+  ]) {
+    if (endpointsConfig[provider] != null || mergedConfig[provider] == null) {
+      continue;
+    }
+
+    endpointsConfig[provider] = {
+      ...mergedConfig[provider],
+      order: nextOrder,
+    };
+    nextOrder += 1;
+  }
 
   await cache.set(CacheKeys.ENDPOINT_CONFIG, endpointsConfig);
   return endpointsConfig;

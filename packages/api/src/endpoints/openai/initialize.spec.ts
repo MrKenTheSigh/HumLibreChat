@@ -1,5 +1,5 @@
 import { AuthType, EModelEndpoint } from 'librechat-data-provider';
-import type { BaseInitializeParams } from '~/types';
+import type { BaseInitializeParams, EndpointTokenConfig } from '~/types';
 
 const mockValidateEndpointURL = jest.fn();
 jest.mock('~/auth', () => ({
@@ -23,7 +23,14 @@ jest.mock('~/utils', () => ({
 
 import { initializeOpenAI } from './initialize';
 
-function createParams(env: Record<string, string | undefined>): BaseInitializeParams {
+function createParams(
+  env: Record<string, string | undefined>,
+  overrides?: {
+    endpoint?: EModelEndpoint;
+    model?: string;
+    config?: BaseInitializeParams['req']['config'];
+  },
+): BaseInitializeParams {
   const savedEnv: Record<string, string | undefined> = {};
   for (const key of Object.keys(env)) {
     savedEnv[key] = process.env[key];
@@ -41,10 +48,10 @@ function createParams(env: Record<string, string | undefined>): BaseInitializePa
     req: {
       user: { id: 'user-1' },
       body: { key: '2099-01-01' },
-      config: { endpoints: {} },
+      config: overrides?.config ?? { endpoints: {} },
     } as unknown as BaseInitializeParams['req'],
-    endpoint: EModelEndpoint.openAI,
-    model_parameters: { model: 'gpt-4' },
+    endpoint: overrides?.endpoint ?? EModelEndpoint.openAI,
+    model_parameters: { model: overrides?.model ?? 'gpt-4' },
     db,
   };
 
@@ -131,5 +138,135 @@ describe('initializeOpenAI – SSRF guard wiring', () => {
     }
 
     expect(mockGetOpenAIConfig).not.toHaveBeenCalled();
+  });
+
+  it('attaches azure group tokenConfig when managed azure pricing overrides are present', async () => {
+    const tokenConfig: EndpointTokenConfig = {
+      'gpt-4o': {
+        prompt: 9,
+        completion: 18,
+        context: 120000,
+      },
+    };
+
+    const params = createParams(
+      {
+        AZURE_API_KEY: 'sk-azure',
+      },
+      {
+        endpoint: EModelEndpoint.azureOpenAI,
+        model: 'gpt-4o',
+        config: {
+          endpoints: {
+            [EModelEndpoint.azureOpenAI]: {
+              modelGroupMap: {
+                'gpt-4o': { group: 'managed-azure' },
+              },
+              groupMap: {
+                'managed-azure': {
+                  apiKey: 'sk-managed-azure',
+                  instanceName: 'managed-instance',
+                  version: '2025-01-01-preview',
+                  tokenConfig,
+                  models: {
+                    'gpt-4o': {
+                      deploymentName: 'gpt-4o',
+                    },
+                  },
+                },
+              },
+            },
+          },
+        } as BaseInitializeParams['req']['config'],
+      },
+    );
+
+    try {
+      const result = await initializeOpenAI(params);
+      expect(result.endpointTokenConfig).toEqual(tokenConfig);
+    } finally {
+      (params as unknown as { _restore: () => void })._restore();
+    }
+  });
+
+  it('prefers managed OpenAI API keys over legacy user_provided env mode', async () => {
+    const params = createParams(
+      {
+        OPENAI_API_KEY: AuthType.USER_PROVIDED,
+      },
+      {
+        endpoint: EModelEndpoint.openAI,
+        model: 'gpt-4o',
+        config: {
+          endpoints: {
+            [EModelEndpoint.openAI]: {
+              apiKey: 'managed-openai-key',
+              baseURL: 'https://managed-openai.example.com/v1',
+            },
+          },
+        } as BaseInitializeParams['req']['config'],
+      },
+    );
+
+    try {
+      await initializeOpenAI(params);
+    } finally {
+      (params as unknown as { _restore: () => void })._restore();
+    }
+
+    expect((params.db as unknown as { getUserKeyValues: jest.Mock }).getUserKeyValues).not.toHaveBeenCalled();
+    expect(mockGetOpenAIConfig).toHaveBeenCalledWith(
+      'managed-openai-key',
+      expect.objectContaining({
+        reverseProxyUrl: 'https://managed-openai.example.com/v1',
+      }),
+      EModelEndpoint.openAI,
+    );
+  });
+
+  it('prefers managed Azure config over legacy user_provided env mode', async () => {
+    const params = createParams(
+      {
+        AZURE_API_KEY: AuthType.USER_PROVIDED,
+      },
+      {
+        endpoint: EModelEndpoint.azureOpenAI,
+        model: 'gpt-4o',
+        config: {
+          endpoints: {
+            [EModelEndpoint.azureOpenAI]: {
+              modelGroupMap: {
+                'gpt-4o': { group: 'managed-azure' },
+              },
+              groupMap: {
+                'managed-azure': {
+                  apiKey: 'managed-azure-key',
+                  instanceName: 'managed-instance',
+                  version: '2025-01-01-preview',
+                  models: {
+                    'gpt-4o': {
+                      deploymentName: 'gpt-4o',
+                    },
+                  },
+                },
+              },
+            },
+          },
+        } as BaseInitializeParams['req']['config'],
+      },
+    );
+
+    try {
+      await initializeOpenAI(params);
+    } finally {
+      (params as unknown as { _restore: () => void })._restore();
+    }
+
+    expect((params.db as unknown as { getUserKeyValues: jest.Mock }).getUserKeyValues).not.toHaveBeenCalled();
+    expect(mockGetOpenAIConfig).toHaveBeenCalledWith(
+      'managed-azure-key',
+      expect.objectContaining({ azure: expect.any(Object) }),
+      EModelEndpoint.azureOpenAI,
+    );
   });
 });

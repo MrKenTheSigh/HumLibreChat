@@ -15,6 +15,24 @@ const mockAssignAdminUserPlan = jest.fn((_req, res) =>
     assignedAt: '2026-03-26T03:00:00.000Z',
   }),
 );
+const mockApplyAdminUserPlanStartingCredits = jest.fn((_req, res) =>
+  res.status(200).json({
+    applied: true,
+    reason: 'applied',
+    tokenCredits: 5000,
+    provisioning: {
+      balanceEnabled: true,
+      hasBalanceRecord: true,
+      currentPlanStartingCredits: 5000,
+      appliedAt: '2026-03-26T03:00:00.000Z',
+      appliedPlanId: 'plan-1',
+      appliedAmount: 5000,
+      appliedSource: 'admin_manual_apply',
+      appliedPlanMatchesCurrent: true,
+      canApplyStartingCredits: false,
+    },
+  }),
+);
 const mockClearAdminUserPlan = jest.fn((_req, res) =>
   res.status(200).json({ userId: 'user-1', plan: null, assignedAt: null }),
 );
@@ -39,6 +57,7 @@ jest.mock(
     getAdminUsers: (...args) => mockGetAdminUsers(...args),
     getAdminUser: (...args) => mockGetAdminUser(...args),
     addAdminUserBalance: (...args) => mockAddAdminUserBalance(...args),
+    applyAdminUserPlanStartingCredits: (...args) => mockApplyAdminUserPlanStartingCredits(...args),
     assignAdminUserPlan: (...args) => mockAssignAdminUserPlan(...args),
     clearAdminUserPlan: (...args) => mockClearAdminUserPlan(...args),
     setAdminUserBalance: (...args) => mockSetAdminUserBalance(...args),
@@ -160,6 +179,11 @@ describe('Admin Users Routes', () => {
       body: { planId: 'plan-1' },
     });
     await executeRoute({
+      method: 'POST',
+      url: '/user-1/plan/apply-starting-credits',
+      headers: { 'x-auth': 'true', 'x-admin': 'true' },
+    });
+    await executeRoute({
       method: 'DELETE',
       url: '/user-1/plan',
       headers: { 'x-auth': 'true', 'x-admin': 'true' },
@@ -170,6 +194,7 @@ describe('Admin Users Routes', () => {
     expect(mockAddAdminUserBalance).toHaveBeenCalledTimes(1);
     expect(mockSetAdminUserBalance).toHaveBeenCalledTimes(1);
     expect(mockAssignAdminUserPlan).toHaveBeenCalledTimes(1);
+    expect(mockApplyAdminUserPlanStartingCredits).toHaveBeenCalledTimes(1);
     expect(mockClearAdminUserPlan).toHaveBeenCalledTimes(1);
   });
 });

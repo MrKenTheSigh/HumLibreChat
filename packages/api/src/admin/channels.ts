@@ -1,26 +1,88 @@
 import mongoose from 'mongoose';
 import { z } from 'zod';
 import { createModels, logger } from '@librechat/data-schemas';
-import type {
-  AdminChannelInventoryResponse,
-  TEndpointsConfig,
-  TModelsConfig,
-} from 'librechat-data-provider';
+import type { TEndpointsConfig, TModelsConfig } from 'librechat-data-provider';
 import type { AppConfig } from '@librechat/data-schemas';
 import type { Request, Response } from 'express';
-import { buildAdminChannelInventory } from './channelInventory';
+import {
+  createChannelPairKey,
+  normalizeAdminChannelDocument,
+  type RawAdminChannelDocument,
+} from './channelDomain';
 import { createStatusError, parseObjectId } from './utils';
 
 const { AdminChannel } = createModels(mongoose);
 
 const slugPattern = /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/;
+const managedProviderTypes = [
+  'azureOpenAI',
+  'custom',
+  'ollama',
+  'openAI',
+  'google',
+  'anthropic',
+  'bedrock',
+] as const;
 
-const adminChannelEntrySchema = z.object({
-  endpoint: z.string().trim().min(1, 'entry endpoint is required'),
-  model: z.string().trim().min(1, 'entry model is required'),
-  label: z.string().trim().min(1, 'entry label is required'),
+const pricingOverrideSchema = z
+  .object({
+    prompt: z.number().finite().nullable().optional().default(null),
+    completion: z.number().finite().nullable().optional().default(null),
+    write: z.number().finite().nullable().optional().default(null),
+    read: z.number().finite().nullable().optional().default(null),
+  })
+  .nullable()
+  .optional()
+  .transform((value) => {
+    if (value == null) {
+      return null;
+    }
+
+    const normalized = {
+      prompt: value.prompt ?? null,
+      completion: value.completion ?? null,
+      write: value.write ?? null,
+      read: value.read ?? null,
+    };
+
+    if (Object.values(normalized).every((entry) => entry == null)) {
+      return null;
+    }
+
+    return normalized;
+  });
+
+const channelHeaderSchema = z.object({
+  key: z.string().trim().min(1, 'header key is required'),
+  value: z.string().trim().min(1, 'header value is required'),
+});
+
+const channelModelSchema = z.object({
+  model: z.string().trim().min(1, 'model is required'),
   enabled: z.boolean().optional().default(true),
-  defaultParameters: z.null().optional().default(null),
+  deploymentName: z.string().trim().optional().default(''),
+  pricingOverride: pricingOverrideSchema,
+});
+
+const channelConnectionSchema = z.object({
+  runtimeEndpoint: z.string().trim().min(1, 'runtime endpoint is required'),
+  baseURL: z.string().trim().optional().default(''),
+  instanceName: z.string().trim().optional().default(''),
+  apiVersion: z.string().trim().optional().default(''),
+  region: z.string().trim().optional().default(''),
+  modelFetch: z.boolean().optional().default(false),
+  headers: z.array(channelHeaderSchema).optional().default([]),
+});
+
+const channelSecretsSchema = z.object({
+  apiKey: z.string().trim().optional().default(''),
+  apiKeyRef: z.string().trim().optional().default(''),
+  accessKeyId: z.string().trim().optional().default(''),
+  accessKeyIdRef: z.string().trim().optional().default(''),
+  secretAccessKey: z.string().trim().optional().default(''),
+  secretAccessKeyRef: z.string().trim().optional().default(''),
+  sessionToken: z.string().trim().optional().default(''),
+  sessionTokenRef: z.string().trim().optional().default(''),
 });
 
 const adminChannelInputSchema = z.object({
@@ -34,59 +96,56 @@ const adminChannelInputSchema = z.object({
       (value) => slugPattern.test(value),
       'slug must contain only lowercase letters, numbers, hyphens, or underscores',
     ),
+  providerType: z.enum(managedProviderTypes, {
+    errorMap: () => ({ message: 'provider type is required' }),
+  }),
   description: z.string().trim().optional().default(''),
   enabled: z.boolean().optional().default(true),
   sortOrder: z.number().int('sortOrder must be an integer').optional().default(0),
-  icon: z.string().trim().optional().default(''),
-  entries: z.array(adminChannelEntrySchema).min(1, 'at least one entry is required'),
+  connection: channelConnectionSchema,
+  secrets: channelSecretsSchema.optional().default({
+    apiKey: '',
+    apiKeyRef: '',
+    accessKeyId: '',
+    accessKeyIdRef: '',
+    secretAccessKey: '',
+    secretAccessKeyRef: '',
+    sessionToken: '',
+    sessionTokenRef: '',
+  }),
+  models: z.array(channelModelSchema).min(1, 'at least one model is required'),
 });
 
 type AdminChannelLoaders = {
   getAppConfig: (options?: { role?: string }) => Promise<AppConfig>;
   getEndpointsConfig: (req: Request) => Promise<TEndpointsConfig>;
   getModelsConfig: (req: Request) => Promise<TModelsConfig>;
+  refreshRuntimeConfig?: () => Promise<unknown>;
 };
 
-type AdminChannelRecord = {
+type AdminChannelRecord = RawAdminChannelDocument & {
   _id: mongoose.Types.ObjectId;
-  name: string;
-  slug: string;
-  description?: string;
-  enabled?: boolean;
-  sortOrder?: number;
-  icon?: string;
-  entries: Array<{
-    endpoint: string;
-    model: string;
-    label: string;
-    enabled?: boolean;
-    defaultParameters?: null;
-  }>;
-  createdAt?: Date;
-  updatedAt?: Date;
 };
 
 type AdminChannelInput = z.infer<typeof adminChannelInputSchema>;
-type AdminChannelEntryInput = AdminChannelInput['entries'][number];
+type AdminChannelModelInput = AdminChannelInput['models'][number];
 
 function sanitizeChannel(channel: AdminChannelRecord) {
+  const normalized = normalizeAdminChannelDocument(channel);
+
   return {
     id: channel._id.toString(),
-    name: channel.name,
-    slug: channel.slug,
-    description: channel.description ?? '',
-    enabled: channel.enabled ?? true,
-    sortOrder: channel.sortOrder ?? 0,
-    icon: channel.icon ?? '',
-    entries: channel.entries.map((entry) => ({
-      endpoint: entry.endpoint,
-      model: entry.model,
-      label: entry.label,
-      enabled: entry.enabled ?? true,
-      defaultParameters: null,
-    })),
-    createdAt: channel.createdAt?.toISOString() ?? null,
-    updatedAt: channel.updatedAt?.toISOString() ?? null,
+    name: normalized.name,
+    slug: normalized.slug,
+    providerType: normalized.providerType,
+    description: normalized.description,
+    enabled: normalized.enabled,
+    sortOrder: normalized.sortOrder,
+    connection: normalized.connection,
+    secrets: normalized.secrets,
+    models: normalized.models,
+    createdAt: normalized.createdAt?.toISOString() ?? null,
+    updatedAt: normalized.updatedAt?.toISOString() ?? null,
   };
 }
 
@@ -110,23 +169,47 @@ function handleAdminError(error: unknown, res: Response, context: string) {
   return res.status(statusCode).json({ message });
 }
 
-function normalizeEntryKey(entry: Pick<AdminChannelEntryInput, 'endpoint' | 'model'>): string {
-  return `${entry.endpoint.trim()}::${entry.model.trim()}`;
-}
-
 function parseAdminChannelInput(input: unknown): AdminChannelInput {
   const parsed = adminChannelInputSchema.parse(input);
-  const seen = new Set<string>();
+  const seenModels = new Set<string>();
 
-  for (const entry of parsed.entries) {
-    const key = normalizeEntryKey(entry);
-    if (seen.has(key)) {
-      throw createStatusError(400, 'Duplicate endpoint/model entries are not allowed');
+  for (const model of parsed.models) {
+    const normalizedModel = model.model.trim().toLowerCase();
+    if (seenModels.has(normalizedModel)) {
+      throw createStatusError(400, 'Duplicate channel models are not allowed');
     }
-    seen.add(key);
+    seenModels.add(normalizedModel);
   }
 
-  return parsed;
+  const normalizedProviderDefaults =
+    parsed.providerType === 'custom'
+      ? parsed
+      : {
+          ...parsed,
+          connection: {
+            ...parsed.connection,
+            runtimeEndpoint: parsed.providerType,
+          },
+        };
+
+  return normalizedProviderDefaults;
+}
+
+function hasApiKeyValue(input: AdminChannelInput): boolean {
+  return input.secrets.apiKey.trim().length > 0 || input.secrets.apiKeyRef.trim().length > 0;
+}
+
+function hasAwsAccessKeyValue(input: AdminChannelInput): boolean {
+  return (
+    input.secrets.accessKeyId.trim().length > 0 || input.secrets.accessKeyIdRef.trim().length > 0
+  );
+}
+
+function hasAwsSecretValue(input: AdminChannelInput): boolean {
+  return (
+    input.secrets.secretAccessKey.trim().length > 0 ||
+    input.secrets.secretAccessKeyRef.trim().length > 0
+  );
 }
 
 async function ensureUniqueSlug(slug: string, channelId?: mongoose.Types.ObjectId) {
@@ -152,44 +235,100 @@ async function getChannelOrThrow(channelIdParam: string) {
   return { channelId, channel };
 }
 
-function createInventoryKeySet(inventory: AdminChannelInventoryResponse['inventory']): Set<string> {
-  return inventory.reduce<Set<string>>(
-    (
-      set: Set<string>,
-      item: AdminChannelInventoryResponse['inventory'][number],
-    ): Set<string> => {
-      set.add(normalizeEntryKey(item));
-      return set;
-    },
-    new Set<string>(),
-  );
-}
-
-async function loadInventory(
-  req: Request,
-  loaders: AdminChannelLoaders,
-): Promise<AdminChannelInventoryResponse['inventory']> {
-  const [appConfig, endpointsConfig, modelsConfig] = await Promise.all([
-    loaders.getAppConfig(),
-    loaders.getEndpointsConfig(req),
-    loaders.getModelsConfig(req),
-  ]);
-
-  return buildAdminChannelInventory(endpointsConfig, modelsConfig, appConfig).inventory;
-}
-
-function validateEntriesAgainstInventory(
-  entries: AdminChannelEntryInput[],
-  inventory: AdminChannelInventoryResponse['inventory'],
-) {
-  const inventoryKeys = createInventoryKeySet(inventory);
-  const invalidEntry = entries.find((entry) => inventoryKeys.has(normalizeEntryKey(entry)) !== true);
-  if (invalidEntry) {
+function validateModelCollection(input: AdminChannelInput) {
+  if (
+    input.providerType !== 'custom' &&
+    input.providerType !== 'ollama' &&
+    input.connection.runtimeEndpoint !== input.providerType
+  ) {
     throw createStatusError(
       400,
-      `Invalid channel entry: ${invalidEntry.endpoint} / ${invalidEntry.model}`,
+      `${input.providerType} channels must use the ${input.providerType} runtime endpoint`,
     );
   }
+
+  if (input.providerType === 'azureOpenAI') {
+    if (input.connection.instanceName.trim().length === 0) {
+      throw createStatusError(400, 'Azure channels require an instance name');
+    }
+
+    if (input.connection.apiVersion.trim().length === 0) {
+      throw createStatusError(400, 'Azure channels require an API version');
+    }
+
+    if (!hasApiKeyValue(input)) {
+      throw createStatusError(400, 'Azure channels require an API key or API key reference');
+    }
+  }
+
+  if (input.providerType === 'ollama') {
+    if (input.connection.baseURL.trim().length === 0) {
+      throw createStatusError(400, 'Ollama channels require a base URL');
+    }
+  }
+
+  if (
+    (input.providerType === 'openAI' ||
+      input.providerType === 'google' ||
+      input.providerType === 'anthropic') &&
+    !hasApiKeyValue(input)
+  ) {
+    throw createStatusError(
+      400,
+      `${input.providerType} channels require an API key or API key reference`,
+    );
+  }
+
+  if (input.providerType === 'bedrock') {
+    if (input.connection.region.trim().length === 0) {
+      throw createStatusError(400, 'Bedrock channels require a region');
+    }
+
+    if (hasAwsAccessKeyValue(input) !== hasAwsSecretValue(input)) {
+      throw createStatusError(
+        400,
+        'Bedrock channels require both access key ID and secret access key when using static credentials',
+      );
+    }
+  }
+
+  const duplicatePairs = new Set<string>();
+  for (const model of input.models) {
+    if (
+      input.providerType === 'azureOpenAI' &&
+      model.enabled === true &&
+      model.deploymentName.trim().length === 0
+    ) {
+      throw createStatusError(400, 'Enabled Azure models require a deployment name');
+    }
+
+    const pairKey = createChannelPairKey(input.connection.runtimeEndpoint, model.model);
+    if (duplicatePairs.has(pairKey)) {
+      throw createStatusError(400, 'Duplicate runtime endpoint/model pairs are not allowed');
+    }
+    duplicatePairs.add(pairKey);
+  }
+}
+
+function toStoredChannel(input: AdminChannelInput) {
+  const normalized = normalizeAdminChannelDocument(input);
+
+  return {
+    name: normalized.name,
+    slug: normalized.slug,
+    providerType: normalized.providerType,
+    description: normalized.description,
+    enabled: normalized.enabled,
+    sortOrder: normalized.sortOrder,
+    connection: normalized.connection,
+    secrets: normalized.secrets,
+    models: normalized.models.map((model: AdminChannelModelInput) => ({
+      model: model.model,
+      enabled: model.enabled,
+      deploymentName: model.deploymentName,
+      pricingOverride: model.pricingOverride,
+    })),
+  };
 }
 
 export function createAdminChannelsHandlers(loaders: AdminChannelLoaders) {
@@ -220,17 +359,18 @@ export function createAdminChannelsHandlers(loaders: AdminChannelLoaders) {
     async createAdminChannel(req: Request, res: Response) {
       try {
         const input = parseAdminChannelInput(req.body);
-        const inventory = await loadInventory(req, loaders);
-        validateEntriesAgainstInventory(input.entries, inventory);
+        validateModelCollection(input);
         await ensureUniqueSlug(input.slug);
 
-        const createdChannel = await AdminChannel.create(input);
+        const createdChannel = await AdminChannel.create(toStoredChannel(input));
         const createdId = parseObjectId(createdChannel._id.toString(), 'channelId');
         const storedChannel = await AdminChannel.findById(createdId).lean<AdminChannelRecord | null>();
 
         if (!storedChannel) {
           throw createStatusError(500, 'Failed to load created channel');
         }
+
+        await loaders.refreshRuntimeConfig?.();
 
         return res.status(201).json(sanitizeChannel(storedChannel));
       } catch (error) {
@@ -242,19 +382,26 @@ export function createAdminChannelsHandlers(loaders: AdminChannelLoaders) {
       try {
         const { channelId } = await getChannelOrThrow(req.params.channelId);
         const input = parseAdminChannelInput(req.body);
-        const inventory = await loadInventory(req, loaders);
-        validateEntriesAgainstInventory(input.entries, inventory);
+        validateModelCollection(input);
         await ensureUniqueSlug(input.slug, channelId);
 
         const updatedChannel = await AdminChannel.findByIdAndUpdate(
           channelId,
-          { $set: input },
+          {
+            $set: toStoredChannel(input),
+            $unset: {
+              entries: 1,
+              icon: 1,
+            },
+          },
           { new: true },
         ).lean<AdminChannelRecord | null>();
 
         if (!updatedChannel) {
           throw createStatusError(404, 'Channel not found');
         }
+
+        await loaders.refreshRuntimeConfig?.();
 
         return res.status(200).json(sanitizeChannel(updatedChannel));
       } catch (error) {
@@ -266,6 +413,7 @@ export function createAdminChannelsHandlers(loaders: AdminChannelLoaders) {
       try {
         const { channelId } = await getChannelOrThrow(req.params.channelId);
         await AdminChannel.deleteOne({ _id: channelId });
+        await loaders.refreshRuntimeConfig?.();
 
         return res.status(200).json({
           id: channelId.toString(),

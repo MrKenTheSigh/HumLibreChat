@@ -1,5 +1,10 @@
 import { EModelEndpoint, AuthKeys } from 'librechat-data-provider';
-import type { BaseInitializeParams, InitializeResultBase, AnthropicConfigOptions } from '~/types';
+import type {
+  AnthropicConfigOptions,
+  BaseInitializeParams,
+  EndpointTokenConfig,
+  InitializeResultBase,
+} from '~/types';
 import { checkUserKeyExpiry, isEnabled } from '~/utils';
 import { loadAnthropicVertexCredentials, getVertexCredentialOptions } from './vertex';
 import { getLLMConfig } from './llm';
@@ -22,6 +27,11 @@ export async function initializeAnthropic({
   const appConfig = req.config;
   const { ANTHROPIC_API_KEY, ANTHROPIC_REVERSE_PROXY, PROXY } = process.env;
   const { key: expiresAt } = req.body;
+  const anthropicConfig = appConfig?.endpoints?.[EModelEndpoint.anthropic];
+  const managedApiKey = anthropicConfig?.apiKey;
+  const managedBaseURL = anthropicConfig?.baseURL;
+  const endpointTokenConfig: EndpointTokenConfig | undefined = anthropicConfig?.tokenConfig;
+  const hasManagedApiKey = typeof managedApiKey === 'string' && managedApiKey.trim().length > 0;
 
   let credentials: Record<string, unknown> = {};
   let vertexOptions: { region?: string; projectId?: string } | undefined;
@@ -32,7 +42,8 @@ export async function initializeAnthropic({
   // Check for Vertex AI configuration: YAML config takes priority over env var
   // When vertexConfig exists and enabled is not explicitly false, Vertex AI is enabled
   const useVertexAI =
-    (vertexConfig && vertexConfig.enabled !== false) || isEnabled(process.env.ANTHROPIC_USE_VERTEX);
+    (vertexConfig && vertexConfig.enabled !== false) ||
+    (hasManagedApiKey !== true && isEnabled(process.env.ANTHROPIC_USE_VERTEX));
 
   if (useVertexAI) {
     // Load credentials with optional YAML config overrides
@@ -47,11 +58,11 @@ export async function initializeAnthropic({
       };
     }
   } else {
-    const isUserProvided = ANTHROPIC_API_KEY === 'user_provided';
+    const isUserProvided = ANTHROPIC_API_KEY === 'user_provided' && hasManagedApiKey !== true;
 
     const anthropicApiKey = isUserProvided
       ? await db.getUserKey({ userId: req.user?.id ?? '', name: EModelEndpoint.anthropic })
-      : ANTHROPIC_API_KEY;
+      : managedApiKey || ANTHROPIC_API_KEY;
 
     if (!anthropicApiKey) {
       throw new Error('Anthropic API key not provided. Please provide it again.');
@@ -66,7 +77,7 @@ export async function initializeAnthropic({
 
   const clientOptions: AnthropicConfigOptions = {
     proxy: PROXY ?? undefined,
-    reverseProxyUrl: ANTHROPIC_REVERSE_PROXY ?? undefined,
+    reverseProxyUrl: managedBaseURL || ANTHROPIC_REVERSE_PROXY || undefined,
     modelOptions: {
       ...(model_parameters ?? {}),
       user: req.user?.id,
@@ -77,10 +88,13 @@ export async function initializeAnthropic({
     ...(vertexConfig && { vertexConfig }),
   };
 
-  const anthropicConfig = appConfig?.endpoints?.[EModelEndpoint.anthropic];
   const allConfig = appConfig?.endpoints?.all;
 
-  const result = getLLMConfig(credentials, clientOptions);
+  const result = getLLMConfig(credentials, clientOptions) as InitializeResultBase;
+
+  if (endpointTokenConfig) {
+    result.endpointTokenConfig = endpointTokenConfig;
+  }
 
   if (anthropicConfig?.streamRate) {
     (result.llmConfig as Record<string, unknown>)._lc_stream_delay = anthropicConfig.streamRate;

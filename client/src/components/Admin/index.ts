@@ -8,3 +8,4 @@ export { default as AdminUsersPage } from './Users/AdminUsersPage';
 export { default as AdminUserDetail } from './Users/AdminUserDetail';
 export { default as AdminConversationsPage } from './Conversations/AdminConversationsPage';
 export { default as AdminConversationDetail } from './Conversations/AdminConversationDetail';
+export { default as AdminUsagePage } from './Usage/AdminUsagePage';

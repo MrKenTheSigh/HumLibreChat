@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import type { TError } from 'librechat-data-provider';
+import type {
+  AdminChannel,
+  AdminPlanModelEntitlement,
+  TError,
+} from 'librechat-data-provider';
 import {
   useCreateAdminPlanMutation,
   useGetAdminChannelsQuery,
@@ -11,6 +15,8 @@ import {
 import { useLocalize } from '~/hooks';
 import AdminLayout from '../AdminLayout';
 
+type AvailablePlanModelEntitlement = AdminPlanModelEntitlement;
+
 type PlanFormState = {
   name: string;
   slug: string;
@@ -18,7 +24,7 @@ type PlanFormState = {
   enabled: boolean;
   isDefault: boolean;
   sortOrder: string;
-  channelIds: string[];
+  modelEntitlements: AdminPlanModelEntitlement[];
   notes: string;
   startingCredits: string;
 };
@@ -30,13 +36,68 @@ const emptyPlanState: PlanFormState = {
   enabled: true,
   isDefault: false,
   sortOrder: '0',
-  channelIds: [],
+  modelEntitlements: [],
   notes: '',
   startingCredits: '',
 };
 
 function toErrorMessage(error: TError | undefined): string | null {
   return error?.response?.data?.message ?? error?.message ?? null;
+}
+
+function createEntitlementKey(entitlement: AdminPlanModelEntitlement): string {
+  return `${entitlement.channelId}::${entitlement.endpoint}::${entitlement.model}`;
+}
+
+function createAvailablePlanModelEntitlements(
+  channels: AdminChannel[],
+): AvailablePlanModelEntitlement[] {
+  return channels.reduce<AvailablePlanModelEntitlement[]>((records, channel) => {
+    if (channel.enabled !== true) {
+      return records;
+    }
+
+    const endpoint = channel.connection.runtimeEndpoint.trim();
+    if (endpoint.length === 0) {
+      return records;
+    }
+
+    for (const model of channel.models) {
+      if (model.enabled !== true) {
+        continue;
+      }
+
+      records.push({
+        channelId: channel.id,
+        endpoint,
+        model: model.model,
+      });
+    }
+
+    return records;
+  }, []);
+}
+
+function deriveLegacyModelEntitlements(
+  channelIds: string[],
+  channels: AdminChannel[],
+): AdminPlanModelEntitlement[] {
+  const selectedChannelIds = new Set(channelIds);
+  return createAvailablePlanModelEntitlements(channels).reduce<AdminPlanModelEntitlement[]>(
+    (records, entitlement) => {
+      if (selectedChannelIds.has(entitlement.channelId) !== true) {
+        return records;
+      }
+
+      records.push({
+        channelId: entitlement.channelId,
+        endpoint: entitlement.endpoint,
+        model: entitlement.model,
+      });
+      return records;
+    },
+    [],
+  );
 }
 
 export default function AdminPlanForm() {
@@ -58,6 +119,11 @@ export default function AdminPlanForm() {
       return;
     }
 
+    const modelEntitlements =
+      planQuery.data.modelEntitlements.length > 0
+        ? planQuery.data.modelEntitlements
+        : deriveLegacyModelEntitlements(planQuery.data.channelIds, channelsQuery.data?.channels ?? []);
+
     setForm({
       name: planQuery.data.name,
       slug: planQuery.data.slug,
@@ -65,16 +131,24 @@ export default function AdminPlanForm() {
       enabled: planQuery.data.enabled,
       isDefault: planQuery.data.isDefault,
       sortOrder: String(planQuery.data.sortOrder),
-      channelIds: planQuery.data.channelIds,
+      modelEntitlements,
       notes: planQuery.data.notes,
       startingCredits:
         planQuery.data.startingCredits == null ? '' : String(planQuery.data.startingCredits),
     });
-  }, [planQuery.data]);
+  }, [planQuery.data, channelsQuery.data?.channels]);
 
   const channels = channelsQuery.data?.channels ?? [];
-  const channelMap = new Map(channels.map((channel) => [channel.id, channel]));
-  const missingChannelIds = form.channelIds.filter((channelId) => channelMap.has(channelId) !== true);
+  const availableEntitlements = createAvailablePlanModelEntitlements(channels);
+  const availableEntitlementKeySet = new Set(
+    availableEntitlements.map((entitlement) => createEntitlementKey(entitlement)),
+  );
+  const selectedEntitlementKeySet = new Set(
+    form.modelEntitlements.map((entitlement) => createEntitlementKey(entitlement)),
+  );
+  const missingEntitlements = form.modelEntitlements.filter(
+    (entitlement) => availableEntitlementKeySet.has(createEntitlementKey(entitlement)) !== true,
+  );
 
   const mutationError =
     toErrorMessage(createMutation.error) ??
@@ -137,7 +211,8 @@ export default function AdminPlanForm() {
               enabled: form.enabled,
               isDefault: form.isDefault,
               sortOrder: Number(form.sortOrder || '0'),
-              channelIds: form.channelIds,
+              channelIds: [],
+              modelEntitlements: form.modelEntitlements,
               notes: form.notes.trim(),
               startingCredits:
                 form.startingCredits.trim().length === 0 ? null : Number(form.startingCredits),
@@ -229,76 +304,120 @@ export default function AdminPlanForm() {
           </div>
 
           <label className="flex flex-col gap-2 text-sm text-text-secondary">
-            <span>{localize('com_ui_admin_channel_ids')}</span>
+            <span>{localize('com_ui_admin_plan_model_entitlements')}</span>
             <div className="rounded-xl border border-border-medium bg-surface-primary p-3">
               {channelsQuery.isLoading ? (
                 <div className="text-sm text-text-secondary">{localize('com_ui_loading')}</div>
-              ) : channels.length === 0 ? (
+              ) : availableEntitlements.length === 0 ? (
                 <div className="text-sm text-text-secondary">
-                  {localize('com_ui_admin_no_channels_available')}
+                  {localize('com_ui_admin_no_models_available')}
                 </div>
               ) : (
                 <div className="grid gap-3">
                   {channels.map((channel) => {
-                    const checked = form.channelIds.includes(channel.id);
+                    const channelEntitlements = availableEntitlements.filter(
+                      (entitlement) => entitlement.channelId === channel.id,
+                    );
+                    if (channelEntitlements.length === 0) {
+                      return null;
+                    }
 
                     return (
-                      <label
+                      <div
                         key={channel.id}
-                        className="flex items-start gap-3 rounded-xl border border-border-light bg-background px-4 py-3 text-sm text-text-primary"
+                        className="grid gap-3 rounded-xl border border-border-light bg-background px-4 py-3"
                       >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={(event) =>
-                            setForm((current) => ({
-                              ...current,
-                              channelIds: event.target.checked
-                                ? [...current.channelIds, channel.id]
-                                : current.channelIds.filter((channelId) => channelId !== channel.id),
-                            }))
-                          }
-                        />
-                        <span className="min-w-0">
-                          <span className="block font-medium">{channel.name}</span>
+                        <div className="min-w-0">
+                          <span className="block font-medium text-text-primary">{channel.name}</span>
                           <span className="block text-xs text-text-secondary">{channel.slug}</span>
-                        </span>
-                      </label>
+                        </div>
+                        <div className="grid gap-2">
+                          {channelEntitlements.map((entitlement) => {
+                            const entitlementKey = createEntitlementKey(entitlement);
+                            const checked = selectedEntitlementKeySet.has(entitlementKey);
+
+                            return (
+                              <label
+                                key={entitlementKey}
+                                className="flex items-start gap-3 rounded-xl border border-border-light bg-surface-primary px-4 py-3 text-sm text-text-primary"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={(event) =>
+                                    setForm((current) => ({
+                                      ...current,
+                                      modelEntitlements: event.target.checked
+                                        ? [
+                                            ...current.modelEntitlements,
+                                            {
+                                              channelId: entitlement.channelId,
+                                              endpoint: entitlement.endpoint,
+                                              model: entitlement.model,
+                                            },
+                                          ]
+                                        : current.modelEntitlements.filter(
+                                            (currentEntitlement) =>
+                                              createEntitlementKey(currentEntitlement) !== entitlementKey,
+                                          ),
+                                    }))
+                                  }
+                                />
+                                <span className="min-w-0">
+                                  <span className="block font-medium">{entitlement.model}</span>
+                                  <span className="block text-xs text-text-secondary">
+                                    {entitlement.endpoint}
+                                  </span>
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
                     );
                   })}
                 </div>
               )}
 
-              {missingChannelIds.length > 0 && (
+              {missingEntitlements.length > 0 && (
                 <div className="mt-4 grid gap-2 border-t border-border-light pt-4">
                   <p className="text-xs font-medium text-text-secondary">
-                    {localize('com_ui_admin_missing_channels')}
+                    {localize('com_ui_admin_missing_model_entitlements')}
                   </p>
-                  {missingChannelIds.map((channelId) => (
-                    <div
-                      key={channelId}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-yellow-500/30 bg-background px-4 py-3 text-sm text-text-primary"
-                    >
-                      <span className="min-w-0">
-                        <span className="block font-medium">{channelId}</span>
-                        <span className="block text-xs text-text-secondary">
-                          {localize('com_ui_admin_missing_channel_description')}
-                        </span>
-                      </span>
-                      <button
-                        type="button"
-                        className="rounded-lg border border-border-medium px-3 py-1 text-xs text-text-secondary"
-                        onClick={() =>
-                          setForm((current) => ({
-                            ...current,
-                            channelIds: current.channelIds.filter((value) => value !== channelId),
-                          }))
-                        }
+                  {missingEntitlements.map((entitlement) => {
+                    const entitlementKey = createEntitlementKey(entitlement);
+
+                    return (
+                      <div
+                        key={entitlementKey}
+                        className="flex items-center justify-between gap-3 rounded-xl border border-yellow-500/30 bg-background px-4 py-3 text-sm text-text-primary"
                       >
-                        {localize('com_ui_remove')}
-                      </button>
-                    </div>
-                  ))}
+                        <span className="min-w-0">
+                          <span className="block font-medium">
+                            {`${entitlement.endpoint} / ${entitlement.model}`}
+                          </span>
+                          <span className="block text-xs text-text-secondary">
+                            {localize('com_ui_admin_missing_model_entitlement_description')}
+                          </span>
+                        </span>
+                        <button
+                          type="button"
+                          className="rounded-lg border border-border-medium px-3 py-1 text-xs text-text-secondary"
+                          onClick={() =>
+                            setForm((current) => ({
+                              ...current,
+                              modelEntitlements: current.modelEntitlements.filter(
+                                (currentEntitlement) =>
+                                  createEntitlementKey(currentEntitlement) !== entitlementKey,
+                              ),
+                            }))
+                          }
+                        >
+                          {localize('com_ui_remove')}
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

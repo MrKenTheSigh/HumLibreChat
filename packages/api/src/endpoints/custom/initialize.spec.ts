@@ -1,6 +1,8 @@
 import { AuthType } from 'librechat-data-provider';
-import type { BaseInitializeParams } from '~/types';
+import type { BaseInitializeParams, EndpointTokenConfig } from '~/types';
 
+const mockFetchModels = jest.fn();
+const mockCacheGet = jest.fn();
 const mockValidateEndpointURL = jest.fn();
 jest.mock('~/auth', () => ({
   validateEndpointURL: (...args: unknown[]) => mockValidateEndpointURL(...args),
@@ -15,11 +17,11 @@ jest.mock('~/endpoints/openai/config', () => ({
 }));
 
 jest.mock('~/endpoints/models', () => ({
-  fetchModels: jest.fn(),
+  fetchModels: (...args: unknown[]) => mockFetchModels(...args),
 }));
 
 jest.mock('~/cache', () => ({
-  standardCache: jest.fn(() => ({ get: jest.fn().mockResolvedValue(null) })),
+  standardCache: jest.fn(() => ({ get: (...args: unknown[]) => mockCacheGet(...args) })),
 }));
 
 jest.mock('~/utils', () => ({
@@ -40,6 +42,8 @@ function createParams(overrides: {
   userBaseURL?: string;
   userApiKey?: string;
   expiresAt?: string;
+  endpointConfig?: Record<string, unknown>;
+  endpoint?: string;
 }): BaseInitializeParams {
   const { apiKey = 'sk-test-key', baseURL = 'https://api.example.com/v1' } = overrides;
 
@@ -47,6 +51,7 @@ function createParams(overrides: {
     apiKey,
     baseURL,
     models: {},
+    ...(overrides.endpointConfig ?? {}),
   });
 
   const db = {
@@ -62,7 +67,7 @@ function createParams(overrides: {
       body: { key: overrides.expiresAt ?? '2099-01-01' },
       config: {},
     } as unknown as BaseInitializeParams['req'],
-    endpoint: 'test-custom',
+    endpoint: overrides.endpoint ?? 'test-custom',
     model_parameters: { model: 'gpt-4' },
     db,
   };
@@ -71,6 +76,7 @@ function createParams(overrides: {
 describe('initializeCustom – SSRF guard wiring', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockCacheGet.mockResolvedValue(null);
   });
 
   it('should call validateEndpointURL when baseURL is user_provided', async () => {
@@ -115,5 +121,42 @@ describe('initializeCustom – SSRF guard wiring', () => {
 
     await expect(initializeCustom(params)).rejects.toThrow('targets a restricted address');
     expect(mockGetOpenAIConfig).not.toHaveBeenCalled();
+  });
+
+  it('merges fetched token config with configured channel pricing overrides', async () => {
+    const fetchedTokenConfig: EndpointTokenConfig = {
+      'gpt-4': {
+        prompt: 2,
+        completion: 8,
+        context: 128000,
+      },
+    };
+    mockCacheGet.mockResolvedValue(fetchedTokenConfig);
+
+    const result = await initializeCustom(
+      createParams({
+        endpoint: 'openrouter',
+        endpointConfig: {
+          models: { fetch: true },
+          tokenConfig: {
+            'gpt-4': {
+              prompt: 9,
+              context: 11111,
+              write: 0.5,
+            },
+          },
+        },
+      }),
+    );
+
+    expect(mockFetchModels).not.toHaveBeenCalled();
+    expect(result.endpointTokenConfig).toEqual({
+      'gpt-4': {
+        prompt: 9,
+        completion: 8,
+        context: 11111,
+        write: 0.5,
+      },
+    });
   });
 });

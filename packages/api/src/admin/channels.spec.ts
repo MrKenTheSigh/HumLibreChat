@@ -55,45 +55,10 @@ function createSelectLeanQuery<T>(value: T) {
 
 function createHandlers() {
   return createAdminChannelsHandlers({
-    getAppConfig: jest.fn().mockResolvedValue({
-      endpoints: {
-        azureOpenAI: {
-          groupMap: {
-            default: {
-              apiKey: 'azure-key',
-              instanceName: 'az-coai',
-              deploymentName: '',
-              version: '2025-01-01-preview',
-              models: {
-                'gpt-4o': {
-                  deploymentName: 'gpt-4o',
-                },
-                'gpt-4o-mini': {
-                  deploymentName: 'gpt-4o-mini',
-                },
-              },
-              serverless: false,
-            },
-          },
-          modelGroupMap: {
-            'gpt-4o': {
-              group: 'default',
-            },
-            'gpt-4o-mini': {
-              group: 'default',
-            },
-          },
-        },
-      },
-    }),
-    getEndpointsConfig: jest.fn().mockResolvedValue({
-      azureOpenAI: {},
-      openAI: {},
-    }),
-    getModelsConfig: jest.fn().mockResolvedValue({
-      azureOpenAI: ['gpt-4o', 'gpt-4o-mini'],
-      openAI: ['gpt-4.1-mini'],
-    }),
+    getAppConfig: jest.fn(),
+    getEndpointsConfig: jest.fn(),
+    getModelsConfig: jest.fn(),
+    refreshRuntimeConfig: jest.fn().mockResolvedValue(undefined),
   });
 }
 
@@ -103,7 +68,7 @@ describe('admin channels handlers', () => {
   });
 
   describe('getAdminChannels', () => {
-    it('returns a sorted list of channels', async () => {
+    it('returns managed channels with the new domain shape', async () => {
       const channelId = new mongoose.Types.ObjectId();
       mockAdminChannelFind.mockReturnValue(
         createLeanQuery([
@@ -111,16 +76,27 @@ describe('admin channels handlers', () => {
             _id: channelId,
             name: 'Azure Premium',
             slug: 'azure-premium',
+            providerType: 'azureOpenAI',
             description: 'High-capability Azure options',
             enabled: true,
             sortOrder: 10,
-            icon: 'shield',
-            entries: [
+            connection: {
+              runtimeEndpoint: 'azureOpenAI',
+              instanceName: 'az-coai',
+              apiVersion: '2025-01-01-preview',
+            },
+            secrets: {
+              apiKeyRef: '${AZURE_OPENAI_API_KEY}',
+            },
+            models: [
               {
-                endpoint: 'azureOpenAI',
                 model: 'gpt-4o',
-                label: 'Azure GPT-4o',
                 enabled: true,
+                deploymentName: 'gpt-4o',
+                pricingOverride: {
+                  prompt: 1,
+                  completion: 2,
+                },
               },
             ],
             createdAt: new Date('2026-03-26T00:00:00.000Z'),
@@ -140,17 +116,40 @@ describe('admin channels handlers', () => {
             id: channelId.toString(),
             name: 'Azure Premium',
             slug: 'azure-premium',
+            providerType: 'azureOpenAI',
             description: 'High-capability Azure options',
             enabled: true,
             sortOrder: 10,
-            icon: 'shield',
-            entries: [
+            connection: {
+              runtimeEndpoint: 'azureOpenAI',
+              baseURL: '',
+              instanceName: 'az-coai',
+              apiVersion: '2025-01-01-preview',
+              region: '',
+              modelFetch: false,
+              headers: [],
+            },
+            secrets: {
+              apiKey: '',
+              apiKeyRef: '${AZURE_OPENAI_API_KEY}',
+              accessKeyId: '',
+              accessKeyIdRef: '',
+              secretAccessKey: '',
+              secretAccessKeyRef: '',
+              sessionToken: '',
+              sessionTokenRef: '',
+            },
+            models: [
               {
-                endpoint: 'azureOpenAI',
                 model: 'gpt-4o',
-                label: 'Azure GPT-4o',
                 enabled: true,
-                defaultParameters: null,
+                deploymentName: 'gpt-4o',
+                pricingOverride: {
+                  prompt: 1,
+                  completion: 2,
+                  write: null,
+                  read: null,
+                },
               },
             ],
             createdAt: '2026-03-26T00:00:00.000Z',
@@ -159,11 +158,58 @@ describe('admin channels handlers', () => {
         ],
       });
     });
+
+    it('normalizes legacy entry-based channels while reading', async () => {
+      const channelId = new mongoose.Types.ObjectId();
+      mockAdminChannelFind.mockReturnValue(
+        createLeanQuery([
+          {
+            _id: channelId,
+            name: 'Legacy Azure',
+            slug: 'legacy-azure',
+            description: 'Legacy overlay channel',
+            enabled: true,
+            sortOrder: 1,
+            entries: [
+              {
+                endpoint: 'azureOpenAI',
+                model: 'gpt-4o',
+                enabled: true,
+              },
+            ],
+          },
+        ]),
+      );
+
+      const res = createMockResponse();
+
+      await createHandlers().getAdminChannels({} as Request, res);
+
+      expect(res.json).toHaveBeenCalledWith({
+        channels: [
+          expect.objectContaining({
+            providerType: 'azureOpenAI',
+            connection: expect.objectContaining({
+              runtimeEndpoint: 'azureOpenAI',
+            }),
+            models: [
+              {
+                model: 'gpt-4o',
+                enabled: true,
+                deploymentName: '',
+                pricingOverride: null,
+              },
+            ],
+          }),
+        ],
+      });
+    });
   });
 
   describe('createAdminChannel', () => {
-    it('creates a channel with inventory-backed entries', async () => {
+    it('creates a managed channel with connection and model metadata', async () => {
       const channelId = new mongoose.Types.ObjectId();
+      const refreshRuntimeConfig = jest.fn().mockResolvedValue(undefined);
       mockAdminChannelFindOne.mockReturnValue(createSelectLeanQuery(null));
       mockAdminChannelCreate.mockResolvedValue({ _id: channelId });
       mockAdminChannelFindById.mockReturnValue(
@@ -171,20 +217,31 @@ describe('admin channels handlers', () => {
           _id: channelId,
           name: 'Azure Premium',
           slug: 'azure-premium',
+          providerType: 'azureOpenAI',
           description: 'High-capability Azure options',
           enabled: true,
           sortOrder: 10,
-          icon: 'shield',
-          entries: [
+          connection: {
+            runtimeEndpoint: 'azureOpenAI',
+            instanceName: 'az-coai',
+            apiVersion: '2025-01-01-preview',
+          },
+          secrets: {
+            apiKeyRef: '${AZURE_OPENAI_API_KEY}',
+          },
+          models: [
             {
-              endpoint: 'azureOpenAI',
               model: 'gpt-4o',
-              label: 'Azure GPT-4o',
               enabled: true,
+              deploymentName: 'gpt-4o',
+              pricingOverride: {
+                prompt: 1,
+                completion: 2,
+                write: null,
+                read: null,
+              },
             },
           ],
-          createdAt: new Date('2026-03-26T00:00:00.000Z'),
-          updatedAt: new Date('2026-03-26T01:00:00.000Z'),
         }),
       );
 
@@ -192,54 +249,102 @@ describe('admin channels handlers', () => {
         body: {
           name: 'Azure Premium',
           slug: 'AZURE-PREMIUM',
+          providerType: 'azureOpenAI',
           description: 'High-capability Azure options',
           enabled: true,
           sortOrder: 10,
-          icon: 'shield',
-          entries: [
+          connection: {
+            runtimeEndpoint: 'azureOpenAI',
+            instanceName: 'az-coai',
+            apiVersion: '2025-01-01-preview',
+            modelFetch: false,
+            headers: [],
+          },
+          secrets: {
+            apiKey: '',
+            apiKeyRef: '${AZURE_OPENAI_API_KEY}',
+          },
+          models: [
             {
-              endpoint: 'azureOpenAI',
               model: 'gpt-4o',
-              label: 'Azure GPT-4o',
               enabled: true,
+              deploymentName: 'gpt-4o',
+              pricingOverride: {
+                prompt: 1,
+                completion: 2,
+                write: null,
+                read: null,
+              },
             },
           ],
         },
       } as Request;
       const res = createMockResponse();
 
-      await createHandlers().createAdminChannel(req, res);
+      await createAdminChannelsHandlers({
+        getAppConfig: jest.fn(),
+        getEndpointsConfig: jest.fn(),
+        getModelsConfig: jest.fn(),
+        refreshRuntimeConfig,
+      }).createAdminChannel(req, res);
 
       expect(mockAdminChannelCreate).toHaveBeenCalledWith({
         name: 'Azure Premium',
         slug: 'azure-premium',
+        providerType: 'azureOpenAI',
         description: 'High-capability Azure options',
         enabled: true,
         sortOrder: 10,
-        icon: 'shield',
-        entries: [
+        connection: {
+          runtimeEndpoint: 'azureOpenAI',
+          baseURL: '',
+          instanceName: 'az-coai',
+          apiVersion: '2025-01-01-preview',
+          region: '',
+          modelFetch: false,
+          headers: [],
+        },
+        secrets: {
+          apiKey: '',
+          apiKeyRef: '${AZURE_OPENAI_API_KEY}',
+          accessKeyId: '',
+          accessKeyIdRef: '',
+          secretAccessKey: '',
+          secretAccessKeyRef: '',
+          sessionToken: '',
+          sessionTokenRef: '',
+        },
+        models: [
           {
-            endpoint: 'azureOpenAI',
             model: 'gpt-4o',
-            label: 'Azure GPT-4o',
             enabled: true,
-            defaultParameters: null,
+            deploymentName: 'gpt-4o',
+            pricingOverride: {
+              prompt: 1,
+              completion: 2,
+              write: null,
+              read: null,
+            },
           },
         ],
       });
+      expect(refreshRuntimeConfig).toHaveBeenCalledTimes(1);
       expect(res.status).toHaveBeenCalledWith(201);
     });
 
-    it('returns 400 for invalid inventory entries', async () => {
+    it('returns 400 when azure channels target a non-azure runtime endpoint', async () => {
       const req = {
         body: {
-          name: 'Broken',
-          slug: 'broken',
-          entries: [
+          name: 'Broken Azure',
+          slug: 'broken-azure',
+          providerType: 'azureOpenAI',
+          connection: {
+            runtimeEndpoint: 'Mistral',
+          },
+          secrets: {},
+          models: [
             {
-              endpoint: 'azureOpenAI',
-              model: 'unknown-model',
-              label: 'Unknown',
+              model: 'gpt-4o',
             },
           ],
         },
@@ -250,114 +355,173 @@ describe('admin channels handlers', () => {
 
       expect(res.status).toHaveBeenCalledWith(400);
       expect(res.json).toHaveBeenCalledWith({
-        message: 'Invalid channel entry: azureOpenAI / unknown-model',
+        message: 'Azure channels require an instance name',
       });
     });
 
-    it('returns 400 for azure entries that are not actually configured', async () => {
-      const handlers = createAdminChannelsHandlers({
-        getAppConfig: jest.fn().mockResolvedValue({
-          endpoints: {
-            azureOpenAI: {
-              groupMap: {},
-              modelGroupMap: {},
-            },
+    it('creates a managed openai channel with provider runtime defaults', async () => {
+      const channelId = new mongoose.Types.ObjectId();
+      mockAdminChannelFindOne.mockReturnValue(createSelectLeanQuery(null));
+      mockAdminChannelCreate.mockResolvedValue({ _id: channelId });
+      mockAdminChannelFindById.mockReturnValue(
+        createSelectLeanQuery({
+          _id: channelId,
+          name: 'Managed OpenAI',
+          slug: 'managed-openai',
+          providerType: 'openAI',
+          description: '',
+          enabled: true,
+          sortOrder: 0,
+          connection: {
+            runtimeEndpoint: 'openAI',
+            baseURL: 'https://api.openai.example/v1',
           },
+          secrets: {
+            apiKeyRef: '${OPENAI_API_KEY}',
+          },
+          models: [
+            {
+              model: 'gpt-4o',
+              enabled: true,
+              deploymentName: '',
+              pricingOverride: null,
+            },
+          ],
         }),
-        getEndpointsConfig: jest.fn().mockResolvedValue({
-          azureOpenAI: {},
-        }),
-        getModelsConfig: jest.fn().mockResolvedValue({
-          azureOpenAI: ['gpt-4o'],
-        }),
-      });
+      );
 
       const req = {
         body: {
-          name: 'Azure Premium',
-          slug: 'azure-premium',
-          entries: [
+          name: 'Managed OpenAI',
+          slug: 'managed-openai',
+          providerType: 'openAI',
+          description: '',
+          enabled: true,
+          sortOrder: 0,
+          connection: {
+            runtimeEndpoint: 'ignored-by-normalizer',
+            baseURL: 'https://api.openai.example/v1',
+            modelFetch: false,
+            headers: [],
+          },
+          secrets: {
+            apiKeyRef: '${OPENAI_API_KEY}',
+          },
+          models: [
             {
-              endpoint: 'azureOpenAI',
               model: 'gpt-4o',
-              label: 'Azure GPT-4o',
             },
           ],
         },
       } as Request;
       const res = createMockResponse();
 
-      await handlers.createAdminChannel(req, res);
+      await createHandlers().createAdminChannel(req, res);
 
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({
-        message: 'Invalid channel entry: azureOpenAI / gpt-4o',
-      });
+      expect(mockAdminChannelCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          providerType: 'openAI',
+          connection: expect.objectContaining({
+            runtimeEndpoint: 'openAI',
+            baseURL: 'https://api.openai.example/v1',
+          }),
+          secrets: expect.objectContaining({
+            apiKeyRef: '${OPENAI_API_KEY}',
+          }),
+        }),
+      );
+      expect(res.status).toHaveBeenCalledWith(201);
     });
 
-    it('returns 400 for custom entries without resolved server-side credentials', async () => {
-      const handlers = createAdminChannelsHandlers({
-        getAppConfig: jest.fn().mockResolvedValue({
-          endpoints: {
-            custom: [
-              {
-                name: 'Mistral',
-                apiKey: '${MISTRAL_API_KEY}',
-                baseURL: 'https://api.mistral.ai/v1',
-                models: {
-                  default: ['mistral-small'],
-                  fetch: true,
-                },
-              },
-            ],
+    it('creates a managed ollama channel without requiring an API key', async () => {
+      const channelId = new mongoose.Types.ObjectId();
+      mockAdminChannelFindOne.mockReturnValue(createSelectLeanQuery(null));
+      mockAdminChannelCreate.mockResolvedValue({ _id: channelId });
+      mockAdminChannelFindById.mockReturnValue(
+        createSelectLeanQuery({
+          _id: channelId,
+          name: 'Local Ollama',
+          slug: 'local-ollama',
+          providerType: 'ollama',
+          description: '',
+          enabled: true,
+          sortOrder: 0,
+          connection: {
+            runtimeEndpoint: 'ollama',
+            baseURL: 'http://localhost:11434/v1',
+            modelFetch: true,
           },
+          secrets: {},
+          models: [
+            {
+              model: 'llama3.2',
+              enabled: true,
+              deploymentName: '',
+              pricingOverride: null,
+            },
+          ],
         }),
-        getEndpointsConfig: jest.fn().mockResolvedValue({
-          Mistral: {},
-        }),
-        getModelsConfig: jest.fn().mockResolvedValue({
-          Mistral: ['mistral-small'],
-        }),
-      });
+      );
 
       const req = {
         body: {
-          name: 'Custom',
-          slug: 'custom',
-          entries: [
+          name: 'Local Ollama',
+          slug: 'local-ollama',
+          providerType: 'ollama',
+          description: '',
+          enabled: true,
+          sortOrder: 0,
+          connection: {
+            runtimeEndpoint: 'ignored-by-normalizer',
+            baseURL: 'http://localhost:11434/v1',
+            modelFetch: true,
+            headers: [],
+          },
+          secrets: {},
+          models: [
             {
-              endpoint: 'Mistral',
-              model: 'mistral-small',
-              label: 'Mistral / mistral-small',
+              model: 'llama3.2',
             },
           ],
         },
       } as Request;
       const res = createMockResponse();
 
-      await handlers.createAdminChannel(req, res);
+      await createHandlers().createAdminChannel(req, res);
 
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({
-        message: 'Invalid channel entry: Mistral / mistral-small',
-      });
+      expect(mockAdminChannelCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          providerType: 'ollama',
+          connection: expect.objectContaining({
+            runtimeEndpoint: 'ollama',
+            baseURL: 'http://localhost:11434/v1',
+            modelFetch: true,
+          }),
+          secrets: expect.objectContaining({
+            apiKey: '',
+            apiKeyRef: '',
+          }),
+        }),
+      );
+      expect(res.status).toHaveBeenCalledWith(201);
     });
 
-    it('returns 400 for duplicate endpoint/model entries', async () => {
+    it('returns 400 when bedrock static credentials are incomplete', async () => {
       const req = {
         body: {
-          name: 'Duplicate',
-          slug: 'duplicate',
-          entries: [
+          name: 'Managed Bedrock',
+          slug: 'managed-bedrock',
+          providerType: 'bedrock',
+          connection: {
+            runtimeEndpoint: 'bedrock',
+            region: 'us-west-2',
+          },
+          secrets: {
+            accessKeyIdRef: '${AWS_ACCESS_KEY_ID}',
+          },
+          models: [
             {
-              endpoint: 'azureOpenAI',
-              model: 'gpt-4o',
-              label: 'Azure GPT-4o',
-            },
-            {
-              endpoint: 'azureOpenAI',
-              model: 'gpt-4o',
-              label: 'Azure GPT-4o Again',
+              model: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
             },
           ],
         },
@@ -368,24 +532,35 @@ describe('admin channels handlers', () => {
 
       expect(res.status).toHaveBeenCalledWith(400);
       expect(res.json).toHaveBeenCalledWith({
-        message: 'Duplicate endpoint/model entries are not allowed',
+        message:
+          'Bedrock channels require both access key ID and secret access key when using static credentials',
       });
     });
 
     it('returns 409 for duplicate slugs', async () => {
       mockAdminChannelFindOne.mockReturnValue(
-        createSelectLeanQuery({ _id: new mongoose.Types.ObjectId() }),
+        createSelectLeanQuery({
+          _id: new mongoose.Types.ObjectId(),
+        }),
       );
 
       const req = {
         body: {
           name: 'Azure Premium',
           slug: 'azure-premium',
-          entries: [
+          providerType: 'azureOpenAI',
+          connection: {
+            runtimeEndpoint: 'azureOpenAI',
+            instanceName: 'az-coai',
+            apiVersion: '2025-01-01-preview',
+          },
+          secrets: {
+            apiKeyRef: '${AZURE_OPENAI_API_KEY}',
+          },
+          models: [
             {
-              endpoint: 'azureOpenAI',
               model: 'gpt-4o',
-              label: 'Azure GPT-4o',
+              deploymentName: 'gpt-4o',
             },
           ],
         },
@@ -398,71 +573,6 @@ describe('admin channels handlers', () => {
       expect(res.json).toHaveBeenCalledWith({
         message: 'A channel with this slug already exists',
       });
-    });
-  });
-
-  describe('updateAdminChannel', () => {
-    it('updates an existing channel', async () => {
-      const channelId = new mongoose.Types.ObjectId();
-      mockAdminChannelFindById.mockReturnValueOnce(
-        createSelectLeanQuery({
-          _id: channelId,
-          name: 'Starter',
-          slug: 'starter',
-          entries: [
-            {
-              endpoint: 'azureOpenAI',
-              model: 'gpt-4o-mini',
-              label: 'Azure GPT-4o mini',
-            },
-          ],
-        }),
-      );
-      mockAdminChannelFindOne.mockReturnValue(createSelectLeanQuery(null));
-      mockAdminChannelFindByIdAndUpdate.mockReturnValue(
-        createSelectLeanQuery({
-          _id: channelId,
-          name: 'Starter',
-          slug: 'starter',
-          description: '',
-          enabled: true,
-          sortOrder: 5,
-          icon: '',
-          entries: [
-            {
-              endpoint: 'azureOpenAI',
-              model: 'gpt-4o-mini',
-              label: 'Azure GPT-4o mini',
-              enabled: true,
-            },
-          ],
-          createdAt: new Date('2026-03-26T00:00:00.000Z'),
-          updatedAt: new Date('2026-03-26T02:00:00.000Z'),
-        }),
-      );
-
-      const req = {
-        params: {
-          channelId: channelId.toString(),
-        },
-        body: {
-          name: 'Starter',
-          slug: 'starter',
-          entries: [
-            {
-              endpoint: 'azureOpenAI',
-              model: 'gpt-4o-mini',
-              label: 'Azure GPT-4o mini',
-              enabled: true,
-            },
-          ],
-        },
-      } as unknown as Request;
-      const res = createMockResponse();
-
-      await createHandlers().updateAdminChannel(req, res);
-
-      expect(res.status).toHaveBeenCalledWith(200);
     });
   });
 });

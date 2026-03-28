@@ -23,6 +23,43 @@ export default function AdminChannelsPage() {
   const channelsQuery = useGetAdminChannelsQuery();
   const channels = channelsQuery.data?.channels ?? [];
 
+  const getProviderLabel = (
+    providerType:
+      | 'azureOpenAI'
+      | 'custom'
+      | 'ollama'
+      | 'openAI'
+      | 'google'
+      | 'anthropic'
+      | 'bedrock',
+  ) => {
+    if (providerType === 'azureOpenAI') {
+      return localize('com_ui_admin_channel_provider_type_azure_openai');
+    }
+
+    if (providerType === 'ollama') {
+      return localize('com_ui_admin_channel_provider_type_ollama');
+    }
+
+    if (providerType === 'openAI') {
+      return localize('com_ui_admin_channel_provider_type_openai');
+    }
+
+    if (providerType === 'google') {
+      return localize('com_ui_admin_channel_provider_type_google');
+    }
+
+    if (providerType === 'anthropic') {
+      return localize('com_ui_admin_channel_provider_type_anthropic');
+    }
+
+    if (providerType === 'bedrock') {
+      return localize('com_ui_admin_channel_provider_type_bedrock');
+    }
+
+    return localize('com_ui_admin_channel_provider_type_custom');
+  };
+
   return (
     <AdminLayout
       title={localize('com_ui_admin_channels')}
@@ -51,12 +88,13 @@ export default function AdminChannelsPage() {
               <thead className="border-b border-border-medium text-text-secondary">
                 <tr>
                   <th className="px-4 py-3 font-medium">{localize('com_ui_name')}</th>
+                  <th className="px-4 py-3 font-medium">{localize('com_ui_provider')}</th>
                   <th className="px-4 py-3 font-medium">
                     {localize('com_ui_admin_channel_status')}
                   </th>
                   <th className="px-4 py-3 font-medium">{localize('com_ui_admin_sort_order')}</th>
                   <th className="px-4 py-3 font-medium">
-                    {localize('com_ui_admin_channel_entries')}
+                    {localize('com_ui_admin_channel_models')}
                   </th>
                   <th className="px-4 py-3 font-medium">{localize('com_ui_admin_updated_at')}</th>
                 </tr>
@@ -72,6 +110,9 @@ export default function AdminChannelsPage() {
                       <div className="font-medium text-text-primary">{channel.name}</div>
                       <div className="text-xs text-text-secondary">{channel.slug}</div>
                     </td>
+                    <td className="px-4 py-3 text-text-primary">
+                      {getProviderLabel(channel.providerType)}
+                    </td>
                     <td className="px-4 py-3">
                       <StatusBadge
                         active={channel.enabled}
@@ -83,7 +124,7 @@ export default function AdminChannelsPage() {
                       />
                     </td>
                     <td className="px-4 py-3 text-text-primary">{channel.sortOrder}</td>
-                    <td className="px-4 py-3 text-text-primary">{channel.entries.length}</td>
+                    <td className="px-4 py-3 text-text-primary">{channel.models.length}</td>
                     <td className="px-4 py-3 text-text-primary">{channel.updatedAt ?? '-'}</td>
                   </tr>
                 ))}

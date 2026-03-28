@@ -23,7 +23,7 @@ describe('AdminChannelsPage', () => {
     jest.clearAllMocks();
   });
 
-  it('renders the channels list', async () => {
+  it('renders the managed channels list', () => {
     mockUseGetAdminChannelsQuery.mockReturnValue({
       data: {
         channels: [
@@ -31,17 +31,28 @@ describe('AdminChannelsPage', () => {
             id: 'channel-1',
             name: 'Azure Premium',
             slug: 'azure-premium',
+            providerType: 'azureOpenAI',
             description: 'High-capability Azure options',
             enabled: true,
             sortOrder: 10,
-            icon: 'shield',
-            entries: [
+            connection: {
+              runtimeEndpoint: 'azureOpenAI',
+              baseURL: '',
+              instanceName: 'az-coai',
+              apiVersion: '2025-01-01-preview',
+              modelFetch: false,
+              headers: [],
+            },
+            secrets: {
+              apiKey: '',
+              apiKeyRef: '',
+            },
+            models: [
               {
-                endpoint: 'azureOpenAI',
                 model: 'gpt-4o',
-                label: 'Azure GPT-4o',
                 enabled: true,
-                defaultParameters: null,
+                deploymentName: 'gpt-4o',
+                pricingOverride: null,
               },
             ],
             createdAt: '2026-03-26T00:00:00.000Z',
@@ -56,7 +67,61 @@ describe('AdminChannelsPage', () => {
 
     expect(screen.getByText('Azure Premium')).toBeInTheDocument();
     expect(screen.getByText('azure-premium')).toBeInTheDocument();
+    expect(screen.getByText('com_ui_admin_channel_provider_type_azure_openai')).toBeInTheDocument();
     expect(screen.getByText('com_ui_admin_enabled')).toBeInTheDocument();
     expect(screen.getByText('1')).toBeInTheDocument();
+  });
+
+  it('renders non-custom provider labels correctly', () => {
+    mockUseGetAdminChannelsQuery.mockReturnValue({
+      data: {
+        channels: [
+          {
+            id: 'channel-2',
+            name: 'Google Flash',
+            slug: 'google-flash',
+            providerType: 'google',
+            description: 'Managed Google channel',
+            enabled: true,
+            sortOrder: 20,
+            connection: {
+              runtimeEndpoint: 'google',
+              baseURL: '',
+              instanceName: '',
+              apiVersion: '',
+              region: '',
+              modelFetch: false,
+              headers: [],
+            },
+            secrets: {
+              apiKey: '',
+              apiKeyRef: '',
+              accessKeyId: '',
+              accessKeyIdRef: '',
+              secretAccessKey: '',
+              secretAccessKeyRef: '',
+              sessionToken: '',
+              sessionTokenRef: '',
+            },
+            models: [
+              {
+                model: 'gemini-2.5-flash',
+                enabled: true,
+                deploymentName: '',
+                pricingOverride: null,
+              },
+            ],
+            createdAt: null,
+            updatedAt: null,
+          } satisfies t.AdminChannel,
+        ],
+      },
+      isLoading: false,
+    });
+
+    render(<AdminChannelsPage />);
+
+    expect(screen.getByText('com_ui_admin_channel_provider_type_google')).toBeInTheDocument();
+    expect(screen.queryByText('com_ui_admin_channel_provider_type_custom')).not.toBeInTheDocument();
   });
 });

@@ -5,6 +5,8 @@ import type { Request, Response } from 'express';
 import { SystemRoles } from 'librechat-data-provider';
 import type { AppConfig, IUser, IBalance } from '@librechat/data-schemas';
 import { getBalanceConfig } from '~/app/config';
+import type { AdminUserProvisioningState } from './provisioning';
+import { applyStartingCredits, resolveProvisioningState } from './provisioning';
 import {
   buildCreatedAtCursorFilter,
   buildPagedResult,
@@ -115,6 +117,10 @@ type AdminUserDetailRecord = AdminUserListItem & {
   plugins?: string[];
   adminPlanId?: mongoose.Types.ObjectId | null;
   adminPlanAssignedAt?: Date | null;
+  adminPlanStartingCreditsAppliedAt?: Date | null;
+  adminPlanStartingCreditsAppliedPlanId?: mongoose.Types.ObjectId | null;
+  adminPlanStartingCreditsAppliedAmount?: number | null;
+  adminPlanStartingCreditsAppliedSource?: 'plan_assignment_auto_seed' | 'admin_manual_apply' | null;
   personalization?: {
     memories?: boolean;
   };
@@ -133,6 +139,7 @@ type AdminPlanSummaryRecord = {
   _id: mongoose.Types.ObjectId;
   name: string;
   slug: string;
+  startingCredits?: number | null;
 };
 
 type AppAwareRequest = Request & {
@@ -167,6 +174,7 @@ function sanitizeUserDetail(
   user: AdminUserDetailRecord,
   balance: IBalance | null,
   plan: AdminPlanSummaryRecord | null,
+  provisioning: AdminUserProvisioningState,
 ) {
   const base = sanitizeUserListItem(user);
   return {
@@ -182,6 +190,7 @@ function sanitizeUserDetail(
           id: plan._id.toString(),
           name: plan.name,
           slug: plan.slug,
+          startingCredits: typeof plan.startingCredits === 'number' ? plan.startingCredits : null,
         }
       : null,
     planAssignedAt: user.adminPlanAssignedAt?.toISOString() ?? null,
@@ -189,6 +198,7 @@ function sanitizeUserDetail(
       tokenCredits: balance?.tokenCredits ?? 0,
       updatedAt: null,
     },
+    provisioning,
   };
 }
 
@@ -321,7 +331,7 @@ export async function getAdminUser(req: Request, res: Response) {
     const userId = parseObjectId(req.params.userId, 'userId');
     const user = await User.findById(userId)
       .select(
-        '_id name username email role provider emailVerified twoFactorEnabled termsAccepted personalization plugins favorites adminPlanId adminPlanAssignedAt createdAt updatedAt',
+        '_id name username email role provider emailVerified twoFactorEnabled termsAccepted personalization plugins favorites adminPlanId adminPlanAssignedAt adminPlanStartingCreditsAppliedAt adminPlanStartingCreditsAppliedPlanId adminPlanStartingCreditsAppliedAmount adminPlanStartingCreditsAppliedSource createdAt updatedAt',
       )
       .lean<AdminUserDetailRecord | null>();
 
@@ -329,20 +339,22 @@ export async function getAdminUser(req: Request, res: Response) {
       throw createStatusError(404, 'User not found');
     }
 
-    const [balance, plan] = await Promise.all([
+    const [balance, plan, provisioning] = await Promise.all([
       Balance.findOne({ user: userId }).lean(),
       user.adminPlanId
         ? User.db
             .model('AdminPlan')
             .findById(user.adminPlanId)
-            .select('_id name slug')
+            .select('_id name slug startingCredits')
             .lean<AdminPlanSummaryRecord | null>()
         : Promise.resolve(null),
+      resolveProvisioningState({
+        appConfig: (req as AppAwareRequest).config,
+        userId,
+      }),
     ]);
 
-    return res
-      .status(200)
-      .json(sanitizeUserDetail(user, balance as IBalance | null, plan));
+    return res.status(200).json(sanitizeUserDetail(user, balance as IBalance | null, plan, provisioning));
   } catch (error) {
     return handleAdminError(error, res, '[getAdminUser]');
   }
@@ -489,6 +501,13 @@ export async function assignAdminUserPlan(req: Request, res: Response) {
       throw createStatusError(404, 'User not found');
     }
 
+    await applyStartingCredits({
+      appConfig: (req as AppAwareRequest).config,
+      userId,
+      source: 'plan_assignment_auto_seed',
+      onlyIfNoBalanceRecord: true,
+    });
+
     return res
       .status(200)
       .json(sanitizePlanAssignment(userId, plan, updatedUser.adminPlanAssignedAt ?? assignedAt));
@@ -520,5 +539,21 @@ export async function clearAdminUserPlan(req: Request, res: Response) {
     return res.status(200).json(sanitizePlanAssignment(userId, null, null));
   } catch (error) {
     return handleAdminError(error, res, '[clearAdminUserPlan]');
+  }
+}
+
+export async function applyAdminUserPlanStartingCredits(req: Request, res: Response) {
+  try {
+    const { userId } = await getExistingUserOrThrow(req.params.userId);
+    const result = await applyStartingCredits({
+      appConfig: (req as AppAwareRequest).config,
+      userId,
+      source: 'admin_manual_apply',
+      onlyIfNoBalanceRecord: false,
+    });
+
+    return res.status(200).json(result);
+  } catch (error) {
+    return handleAdminError(error, res, '[applyAdminUserPlanStartingCredits]');
   }
 }

@@ -3,4 +3,7 @@ export * from './channels';
 export * from './channelInventory';
 export * from './conversations';
 export * from './plans';
+export * from './provisioning';
+export * from './runtimeConfig';
+export * from './usage';
 export * from './users';

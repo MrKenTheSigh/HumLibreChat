@@ -1,5 +1,6 @@
 const { CacheKeys } = require('librechat-data-provider');
 const { logger, AppService } = require('@librechat/data-schemas');
+const { loadManagedChannelsIntoConfig } = require('@librechat/api');
 const { loadAndFormatTools } = require('~/server/services/start/tools');
 const loadCustomConfig = require('./loadCustomConfig');
 const { setCachedTools } = require('./getCachedTools');
@@ -10,7 +11,8 @@ const BASE_CONFIG_KEY = '_BASE_';
 
 const loadBaseConfig = async () => {
   /** @type {TCustomConfig} */
-  const config = (await loadCustomConfig()) ?? {};
+  const bootstrapConfig = (await loadCustomConfig()) ?? {};
+  const config = await loadManagedChannelsIntoConfig(bootstrapConfig);
   /** @type {Record<string, FunctionTool>} */
   const systemTools = loadAndFormatTools({
     adminFilter: config.filteredTools,
@@ -40,7 +42,7 @@ async function getAppConfig(options = {}) {
     }
   }
 
-  let baseConfig = await cache.get(BASE_CONFIG_KEY);
+  let baseConfig = refresh ? null : await cache.get(BASE_CONFIG_KEY);
   if (!baseConfig) {
     logger.info('[getAppConfig] App configuration not initialized. Initializing AppService...');
     baseConfig = await loadBaseConfig();
@@ -73,12 +75,26 @@ async function getAppConfig(options = {}) {
  * @returns {Promise<boolean>}
  */
 async function clearAppConfigCache() {
-  const cache = getLogStores(CacheKeys.CONFIG_STORE);
-  const cacheKey = CacheKeys.APP_CONFIG;
-  return await cache.delete(cacheKey);
+  const cache = getLogStores(CacheKeys.APP_CONFIG);
+  return await cache.delete(BASE_CONFIG_KEY);
+}
+
+async function clearRuntimeConfigCaches() {
+  const appCache = getLogStores(CacheKeys.APP_CONFIG);
+  const configCache = getLogStores(CacheKeys.CONFIG_STORE);
+
+  await Promise.all([
+    appCache.delete(BASE_CONFIG_KEY),
+    configCache.delete(CacheKeys.ENDPOINT_CONFIG),
+    configCache.delete(CacheKeys.MODELS_CONFIG),
+    configCache.delete(CacheKeys.STARTUP_CONFIG),
+  ]);
+
+  return true;
 }
 
 module.exports = {
   getAppConfig,
   clearAppConfigCache,
+  clearRuntimeConfigCaches,
 };

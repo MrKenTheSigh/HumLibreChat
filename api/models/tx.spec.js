@@ -286,6 +286,22 @@ describe('getMultiplier', () => {
     expect(getMultiplier({ model: 'gpt-4-some-other-info' })).toBe(1);
   });
 
+  it('should fall back to default pricing if endpointTokenConfig does not override a known model', () => {
+    const endpointTokenConfig = {
+      'custom-model': {
+        prompt: 9,
+        completion: 18,
+      },
+    };
+
+    expect(getMultiplier({ model: 'gpt-4o', tokenType: 'prompt', endpointTokenConfig })).toBe(
+      tokenValues['gpt-4o'].prompt,
+    );
+    expect(
+      getMultiplier({ model: 'gpt-4o', tokenType: 'completion', endpointTokenConfig }),
+    ).toBe(tokenValues['gpt-4o'].completion);
+  });
+
   it('should return the correct multiplier for gpt-3.5-turbo-1106', () => {
     expect(getMultiplier({ valueKey: 'gpt-3.5-turbo-1106', tokenType: 'prompt' })).toBe(
       tokenValues['gpt-3.5-turbo-1106'].prompt,
@@ -1402,6 +1418,22 @@ describe('getCacheMultiplier', () => {
     expect(
       getCacheMultiplier({ model: 'unknown-model', cacheType: 'write', endpointTokenConfig }),
     ).toBeNull();
+  });
+
+  it('should fall back to default cache pricing if endpointTokenConfig does not override a known model', () => {
+    const endpointTokenConfig = {
+      'custom-model': {
+        write: 5,
+        read: 1,
+      },
+    };
+
+    expect(
+      getCacheMultiplier({ model: 'gpt-4o', cacheType: 'write', endpointTokenConfig }),
+    ).toBe(cacheTokenValues['gpt-4o'].write);
+    expect(
+      getCacheMultiplier({ model: 'gpt-4o', cacheType: 'read', endpointTokenConfig }),
+    ).toBe(cacheTokenValues['gpt-4o'].read);
   });
 
   it('should return correct cache multipliers for OpenAI models', () => {

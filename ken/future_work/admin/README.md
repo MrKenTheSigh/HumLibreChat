@@ -9,18 +9,21 @@ This directory is the entry point for the HumLibreChat admin backoffice planning
 - `phase-3/`: access enforcement and user entitlements
 - `phase-4/`: plan-linked balance provisioning and credit policy
 - `phase-5/`: usage reporting based on existing transaction data
+- `phase-6/`: managed runtime channels and plan-to-model migration
 
 ## Locked Decisions
 
 - Preserve HumLibreChat's current architecture.
-- Do not replace the existing YAML-driven endpoint/model system.
 - Keep quota/billing on HumLibreChat's existing global `Balance.tokenCredits`.
 - Build the admin backoffice inside the existing `client` app.
 - Prefer `SystemRoles.ADMIN` as the first access gate. Do not introduce a second large RBAC system in the first pass.
+- Do not edit `.env` or `librechat.yaml` from the admin UI as the primary configuration path.
+- If provider/channel configuration moves into the database, feed it into the existing runtime through config merging instead of replacing the runtime client stack.
+- `plan -> channel` is now a transition state only. The end state should be `plan -> model entitlement`.
 
 ## Current Readiness
 
-Phase 3 is complete. The project is ready to start Phase 4.
+Phase 5 is complete. Phase 6 is complete.
 
 What is already in place:
 
@@ -32,13 +35,70 @@ What is already in place:
 - authenticated user entitlements API
 - frontend filtering for endpoint, model, model spec, and mention choices
 
-What is intentionally not wired yet:
+What is now in place for Phase 4:
 
-- plan assignment does not yet change `Balance.tokenCredits`
-- plan assignment does not yet provision credits
-- usage reporting is still deferred
+- provisioning metadata is stored on the user document
+- plan assignment auto-seeds `startingCredits` only when no balance record exists
+- admin user detail exposes provisioning state
+- admin can explicitly apply the current plan's starting credits once per current plan
+- repeated application for the same current plan is blocked after the applied state is recorded
 
-That makes balance provisioning the correct next phase.
+What is now in place for Phase 5:
+
+- admin transactions API with cursor pagination
+- admin usage summary API based on existing `Transaction` data
+- admin usage dashboard route in the existing client app
+- shared filtering across usage summary and paginated transaction listing
+
+What is still deferred:
+
+- charts and richer visual analytics
+- CSV export and scheduled reporting
+- endpoint- or channel-level reporting that requires data not currently stored in `Transaction`
+- richer model-level policy UX such as templated "weakest model from every enabled channel" assignment
+
+What is now in place for Phase 6 slice 1:
+
+- `AdminChannel` has been upgraded from overlay-style `entries[]` to a managed domain shape with:
+  - `providerType`
+  - `connection`
+  - `secrets`
+  - `models`
+  - per-model `pricingOverride`
+- admin channel CRUD and admin channel UI now edit the managed channel shape directly
+- legacy stored `entries[]` channel documents are normalized when read
+- phase 3 entitlement enforcement still works because backend access resolution adapts managed channels back into the existing `allowedPairs` contract
+
+What is now in place for Phase 6 slice 2:
+
+- enabled managed channels are merged into the effective runtime config before `AppService` builds endpoint/model state
+- managed custom channels contribute to `endpoints.custom`
+- managed Azure channels contribute to `endpoints.azureOpenAI.groups`
+- managed `openAI`, `google`, `anthropic`, and `bedrock` channels contribute to their existing top-level runtime endpoint families
+- duplicate runtime endpoint names, Azure groups, and Azure model names are skipped safely with warnings instead of breaking startup
+- admin channel create, update, and delete operations now clear runtime config caches so managed channel changes can take effect without a process restart
+
+What is now in place for Phase 6 slice 3:
+
+- managed custom channels can now attach partial `tokenConfig` pricing overrides to runtime config
+- custom endpoint initialization merges fetched token config with admin-configured pricing overrides instead of forcing one source to win
+- token accounting now falls back to built-in pricing when an override only covers part of a model's token config
+- admin usage reporting now exposes stored transaction `rate` and `rateDetail` values
+
+What is now in place for Phase 6 slice 4:
+
+- managed Azure channels can now attach partial group-level `tokenConfig` pricing overrides to runtime config
+- Azure initialization reads managed group token config through the existing `groupMap` and `modelGroupMap` flow
+- Azure pricing overrides now affect runtime token accounting without introducing a second Azure runtime path
+- managed `openAI`, `google`, `anthropic`, and `bedrock` channels now read secrets and connection config directly from admin-managed runtime config
+- managed `openAI`, `google`, `anthropic`, and `bedrock` channels now attach partial endpoint-level pricing overrides where their runtime families support it
+
+What is now in place for Phase 6 slice 5:
+
+- `AdminPlan` now supports direct `modelEntitlements`
+- plan access resolution prioritizes model entitlements and only falls back to `channelIds` for legacy plans
+- the admin plan form now edits model entitlements by selecting models under each channel
+- legacy plans can be migrated incrementally because channel-based fallback remains available until a plan is resaved with model entitlements
 
 ## Target Outcomes
 
@@ -51,21 +111,24 @@ The target is to add an admin-only area that can do the following:
 5. Search and inspect all conversations and messages.
 6. View usage from existing transaction data.
 7. Apply plan-based credit provisioning without replacing HumLibreChat's balance model.
+8. Manage provider-backed channels from the admin UI without hand-editing runtime config files.
+9. Move plan restrictions from channel-level to model-level entitlements.
 
 ## Architecture Direction
 
-The safest path is to add an admin layer on top of HumLibreChat's current primitives instead of replacing them.
+The safest path is still to add on top of HumLibreChat's current primitives, but the current Phase 2 channel overlay is no longer the desired end state.
 
-- Provider setup remains in `librechat.yaml` and existing endpoint initialization.
-- Admin "channels" are metadata overlays over existing `endpoint + model` combinations.
+- Provider setup may start in `librechat.yaml`, but Phase 6 should allow admin-managed database channels to become the primary editable source.
+- Database-managed channel/provider config should be merged into the existing runtime `appConfig` shape before endpoint/model initialization.
 - Balance remains the source of truth for remaining credits.
 - Admin APIs live in `/api/admin/*`, but their implementation should live in `packages/api/src/admin/*`.
 - New persistent entities live in `packages/data-schemas`.
 - Client-side admin pages live under `client/src/routes` and `client/src/components/Admin`.
+- The current `AdminChannel` entity may be replaced rather than preserved if replacement is cleaner.
 
 ## Proposed Domain Model
 
-### 1. AdminChannel
+### 1. Legacy AdminChannel
 
 Purpose: create business-facing channel definitions without changing the low-level provider config.
 
@@ -86,12 +149,38 @@ Suggested fields:
 
 Key rule:
 
-- `AdminChannel` references models that already exist in HumLibreChat's configured endpoint/model inventory.
-- It does not store API keys, instance names, or deployment secrets.
+- This was sufficient for Phase 2 and Phase 3.
+- This is no longer the desired end-state channel model.
 
-### 2. AdminPlan
+### 2. Managed Runtime Channel
 
-Purpose: define which channels/models a user may access.
+Purpose: become the actual admin-managed provider/model configuration object.
+
+Suggested fields:
+
+- `name`
+- `slug`
+- `providerType`
+- `enabled`
+- `sortOrder`
+- `connection`
+  - provider-specific connection fields
+  - secret references or encrypted secrets
+- `models`
+  - `model`
+  - provider-specific deployment mapping
+  - `enabled`
+  - `pricingOverride`
+
+Key rules:
+
+- Managed channels should be convertible into the same normalized runtime structures HumLibreChat already uses.
+- They should not require rewriting endpoint initialization for every provider.
+- They should support provider-specific configuration, especially `custom`, `azureOpenAI`, `openAI`, `google`, `anthropic`, and `bedrock`.
+
+### 3. Transitional AdminPlan
+
+Purpose: define what a user may access during the migration period.
 
 Suggested fields:
 
@@ -101,7 +190,8 @@ Suggested fields:
 - `enabled`
 - `isDefault`
 - `sortOrder`
-- `channelIds`
+- `channelIds` during transition
+- later `modelEntitlements`
 - `notes`
 - optional `startingCredits`
 
@@ -109,9 +199,9 @@ Key rule:
 
 - `startingCredits` is a helper for provisioning, not a new quota engine.
 - Actual remaining usage still comes from `Balance.tokenCredits`.
-- The provisioning lifecycle for `startingCredits` is deferred to Phase 4.
+- The final entitlement target should be model-level, not channel-level.
 
-### 3. User Extension
+### 4. User Extension
 
 Extend the existing user document with:
 
@@ -123,7 +213,7 @@ Do not add a permanent banned flag in MongoDB for the first pass.
 - Existing temporary ban flow is cache-based already.
 - Admin ban/unban APIs should reuse that behavior.
 
-### 4. Usage Reporting
+### 5. Usage Reporting
 
 Initial implementation should use existing `Transaction` records.
 
@@ -131,6 +221,12 @@ Initial implementation should use existing `Transaction` records.
 - If reporting proves insufficient later, add a summary collection after the admin surface is already working.
 
 ## Phase Plan
+
+## Phase 6: Managed Runtime Channels And Plan-To-Model Migration
+
+This phase replaces the current overlay-style channel design with database-managed runtime channels, then moves plans from channel assignment toward model entitlement.
+
+See `phase-6/README.md` for the current detailed plan.
 
 ## Phase 1: Admin Foundation, Users, Conversations
 

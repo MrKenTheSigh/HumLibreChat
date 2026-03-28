@@ -163,6 +163,12 @@ export function clearAdminUserPlan(userId: string): Promise<q.AdminUserPlanAssig
   return request.delete(endpoints.adminUserPlan(userId));
 }
 
+export function applyAdminUserStartingCredits(
+  payload: q.AdminApplyStartingCreditsRequest,
+): Promise<q.AdminApplyStartingCreditsResponse> {
+  return request.post(endpoints.adminUserApplyStartingCredits(payload.userId));
+}
+
 export function getAdminChannelInventory(): Promise<q.AdminChannelInventoryResponse> {
   return request.get(endpoints.adminChannelInventory());
 }
@@ -223,6 +229,18 @@ export function getAdminConversationMessages(
   conversationId: string,
 ): Promise<q.AdminConversationMessagesResponse> {
   return request.get(endpoints.adminConversationMessages(conversationId));
+}
+
+export function getAdminTransactions(
+  params: q.AdminTransactionsListParams,
+): Promise<q.AdminTransactionsResponse> {
+  return request.get(endpoints.adminTransactions(params));
+}
+
+export function getAdminUsageSummary(
+  params: q.AdminTransactionsListParams,
+): Promise<q.AdminUsageSummaryResponse> {
+  return request.get(endpoints.adminUsageSummary(params));
 }
 
 export const updateTokenCount = (text: string) => {

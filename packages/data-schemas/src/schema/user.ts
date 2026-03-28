@@ -170,6 +170,24 @@ const userSchema = new Schema<IUser>(
       type: Date,
       default: null,
     },
+    adminPlanStartingCreditsAppliedAt: {
+      type: Date,
+      default: null,
+    },
+    adminPlanStartingCreditsAppliedPlanId: {
+      type: Schema.Types.ObjectId,
+      ref: 'AdminPlan',
+      default: null,
+    },
+    adminPlanStartingCreditsAppliedAmount: {
+      type: Number,
+      default: null,
+    },
+    adminPlanStartingCreditsAppliedSource: {
+      type: String,
+      enum: ['plan_assignment_auto_seed', 'admin_manual_apply', null],
+      default: null,
+    },
     /** Field for external source identification (for consistency with TPrincipal schema) */
     idOnTheSource: {
       type: String,

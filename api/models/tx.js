@@ -431,8 +431,12 @@ const getMultiplier = ({
   inputTokenCount,
   endpointTokenConfig,
 }) => {
-  if (endpointTokenConfig) {
-    return endpointTokenConfig?.[model]?.[tokenType] ?? defaultRate;
+  if (endpointTokenConfig && model && tokenType) {
+    const configuredKey = findMatchingPattern(model, endpointTokenConfig) ?? model;
+    const configuredValue = endpointTokenConfig?.[configuredKey]?.[tokenType];
+    if (typeof configuredValue === 'number') {
+      return configuredValue;
+    }
   }
 
   if (valueKey && tokenType) {
@@ -492,8 +496,12 @@ const getPremiumRate = (valueKey, tokenType, inputTokenCount) => {
  * @returns {number | null} The multiplier for the given parameters, or `null` if not found.
  */
 const getCacheMultiplier = ({ valueKey, cacheType, model, endpoint, endpointTokenConfig }) => {
-  if (endpointTokenConfig) {
-    return endpointTokenConfig?.[model]?.[cacheType] ?? null;
+  if (endpointTokenConfig && model && cacheType) {
+    const configuredKey = findMatchingPattern(model, endpointTokenConfig) ?? model;
+    const configuredValue = endpointTokenConfig?.[configuredKey]?.[cacheType];
+    if (typeof configuredValue === 'number') {
+      return configuredValue;
+    }
   }
 
   if (valueKey && cacheType) {

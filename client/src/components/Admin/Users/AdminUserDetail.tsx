@@ -5,6 +5,7 @@ import { useLocalize } from '~/hooks';
 import AdminLayout from '../AdminLayout';
 import AdminUserBalanceCard from './AdminUserBalanceCard';
 import AdminUserPlanCard from './AdminUserPlanCard';
+import AdminUserProvisioningCard from './AdminUserProvisioningCard';
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
@@ -111,6 +112,12 @@ export default function AdminUserDetail() {
           userId={user.id}
           currentPlan={user.plan}
           assignedAt={user.planAssignedAt}
+        />
+
+        <AdminUserProvisioningCard
+          userId={user.id}
+          currentPlan={user.plan}
+          provisioning={user.provisioning}
         />
 
         <section className="rounded-2xl border border-border-medium bg-surface-primary p-4">

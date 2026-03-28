@@ -3,6 +3,11 @@ import mongoose from 'mongoose';
 import { createModels } from '@librechat/data-schemas';
 import { SystemRoles } from 'librechat-data-provider';
 import type { IUser } from '@librechat/data-schemas';
+import {
+  getChannelAllowedPairs,
+  normalizeAdminChannelDocument,
+  type RawAdminChannelDocument,
+} from './channelDomain';
 import { createStatusError } from './utils';
 
 const { User, AdminPlan, AdminChannel } = createModels(mongoose);
@@ -54,20 +59,18 @@ type AdminPlanAccessRecord = {
   slug: string;
   enabled?: boolean;
   channelIds?: string[];
+  modelEntitlements?: Array<{
+    channelId?: string;
+    endpoint: string;
+    model: string;
+  }>;
 };
 
-type AdminChannelEntryRecord = {
-  endpoint: string;
-  model: string;
-  enabled?: boolean;
-};
-
-type AdminChannelAccessRecord = {
+type AdminChannelAccessRecord = RawAdminChannelDocument & {
   _id: mongoose.Types.ObjectId | string;
   name: string;
   slug: string;
   enabled?: boolean;
-  entries: AdminChannelEntryRecord[];
 };
 
 type AccessLoaders = {
@@ -148,6 +151,60 @@ function buildPlanEntitlements(
   const seenChannels = new Set<string>();
   const seenPairs = new Set<string>();
   const channelMap = new Map(channels.map((channel) => [toIdString(channel._id), channel]));
+  const modelEntitlements = plan.modelEntitlements ?? [];
+
+  if (modelEntitlements.length > 0) {
+    for (const entitlement of modelEntitlements) {
+      const entitlementChannelId = entitlement.channelId?.trim() ?? '';
+      const channel =
+        (entitlementChannelId.length > 0 ? channelMap.get(entitlementChannelId) : null) ??
+        channels.find((candidate) => {
+          if (candidate.enabled !== true) {
+            return false;
+          }
+
+          const normalizedChannel = normalizeAdminChannelDocument(candidate);
+          return getChannelAllowedPairs(normalizedChannel).some(
+            (pair) => pair.endpoint === entitlement.endpoint && pair.model === entitlement.model,
+          );
+        });
+
+      if (channel == null || channel.enabled !== true) {
+        continue;
+      }
+
+      const normalizedChannelId = toIdString(channel._id);
+      if (seenChannels.has(normalizedChannelId) !== true) {
+        seenChannels.add(normalizedChannelId);
+        allowedChannels.push({
+          id: normalizedChannelId,
+          name: channel.name,
+          slug: channel.slug,
+        });
+      }
+
+      const pairKey = `${entitlement.endpoint}::${entitlement.model}`;
+      if (seenPairs.has(pairKey)) {
+        continue;
+      }
+
+      seenPairs.add(pairKey);
+      allowedPairs.push({
+        endpoint: entitlement.endpoint,
+        model: entitlement.model,
+        channelId: normalizedChannelId,
+        channelSlug: channel.slug,
+      });
+    }
+
+    return createResolvedEntitlements(
+      userId,
+      scope,
+      toPlanSummary(plan),
+      allowedChannels,
+      allowedPairs,
+    );
+  }
 
   for (const channelId of plan.channelIds ?? []) {
     const channel = channelMap.get(channelId);
@@ -165,20 +222,18 @@ function buildPlanEntitlements(
       });
     }
 
-    for (const entry of channel.entries ?? []) {
-      if (entry.enabled !== true) {
-        continue;
-      }
+    const normalizedChannel = normalizeAdminChannelDocument(channel);
 
-      const pairKey = `${entry.endpoint}::${entry.model}`;
+    for (const pair of getChannelAllowedPairs(normalizedChannel)) {
+      const pairKey = `${pair.endpoint}::${pair.model}`;
       if (seenPairs.has(pairKey)) {
         continue;
       }
 
       seenPairs.add(pairKey);
       allowedPairs.push({
-        endpoint: entry.endpoint,
-        model: entry.model,
+        endpoint: pair.endpoint,
+        model: pair.model,
         channelId: normalizedChannelId,
         channelSlug: channel.slug,
       });
@@ -200,12 +255,12 @@ function createDefaultLoaders(): AccessLoaders {
       User.findById(userId).select('_id role adminPlanId').lean<UserAccessRecord | null>(),
     getAssignedPlan: async (planId) =>
       AdminPlan.findById(planId)
-        .select('_id name slug enabled channelIds')
+        .select('_id name slug enabled channelIds modelEntitlements')
         .lean<AdminPlanAccessRecord | null>(),
     getDefaultPlan: async () =>
       AdminPlan.findOne({ enabled: true, isDefault: true })
         .sort({ sortOrder: 1, name: 1, _id: 1 })
-        .select('_id name slug enabled channelIds')
+        .select('_id name slug enabled channelIds modelEntitlements')
         .lean<AdminPlanAccessRecord | null>(),
     getChannelsByIds: async (channelIds) => {
       if (channelIds.length === 0) {
@@ -215,7 +270,7 @@ function createDefaultLoaders(): AccessLoaders {
       return AdminChannel.find({
         _id: { $in: channelIds },
       })
-        .select('_id name slug enabled entries')
+        .select('_id name slug enabled providerType connection models entries')
         .lean<AdminChannelAccessRecord[]>();
     },
   };

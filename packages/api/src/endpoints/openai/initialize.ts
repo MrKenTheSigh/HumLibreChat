@@ -1,6 +1,7 @@
 import { ErrorTypes, EModelEndpoint, mapModelToAzureConfig } from 'librechat-data-provider';
 import type {
   BaseInitializeParams,
+  EndpointTokenConfig,
   InitializeResultBase,
   OpenAIConfigOptions,
   UserKeyValues,
@@ -29,6 +30,9 @@ export async function initializeOpenAI({
 
   const { key: expiresAt } = req.body;
   const modelName = model_parameters?.model as string | undefined;
+  const isAzureOpenAI = endpoint === EModelEndpoint.azureOpenAI;
+  const azureConfig = isAzureOpenAI ? appConfig?.endpoints?.[EModelEndpoint.azureOpenAI] : undefined;
+  const openAIConfig = !isAzureOpenAI ? appConfig?.endpoints?.[EModelEndpoint.openAI] : undefined;
 
   const credentials = {
     [EModelEndpoint.openAI]: OPENAI_API_KEY,
@@ -40,8 +44,32 @@ export async function initializeOpenAI({
     [EModelEndpoint.azureOpenAI]: AZURE_OPENAI_BASEURL,
   };
 
-  const userProvidesKey = isUserProvided(credentials[endpoint as keyof typeof credentials]);
-  const userProvidesURL = isUserProvided(baseURLOptions[endpoint as keyof typeof baseURLOptions]);
+  let hasManagedAzureConfig = false;
+  if (isAzureOpenAI && azureConfig && modelName) {
+    try {
+      mapModelToAzureConfig({
+        modelName,
+        modelGroupMap: azureConfig.modelGroupMap,
+        groupMap: azureConfig.groupMap,
+      });
+      hasManagedAzureConfig = true;
+    } catch {
+      hasManagedAzureConfig = false;
+    }
+  }
+
+  const hasManagedApiKey = isAzureOpenAI
+    ? hasManagedAzureConfig
+    : typeof openAIConfig?.apiKey === 'string' && openAIConfig.apiKey.trim().length > 0;
+  const hasManagedBaseURL = isAzureOpenAI
+    ? hasManagedAzureConfig
+    : typeof openAIConfig?.baseURL === 'string' && openAIConfig.baseURL.trim().length > 0;
+
+  const userProvidesKey =
+    isUserProvided(credentials[endpoint as keyof typeof credentials]) && hasManagedApiKey !== true;
+  const userProvidesURL =
+    isUserProvided(baseURLOptions[endpoint as keyof typeof baseURLOptions]) &&
+    hasManagedBaseURL !== true;
 
   let userValues: UserKeyValues | null = null;
   if (expiresAt && (userProvidesKey || userProvidesURL)) {
@@ -66,9 +94,20 @@ export async function initializeOpenAI({
     streaming: true,
   };
 
-  const isAzureOpenAI = endpoint === EModelEndpoint.azureOpenAI;
-  const azureConfig = isAzureOpenAI && appConfig?.endpoints?.[EModelEndpoint.azureOpenAI];
   let isServerless = false;
+  let endpointTokenConfig: EndpointTokenConfig | undefined;
+
+  if (!isAzureOpenAI) {
+    if (openAIConfig?.apiKey) {
+      apiKey = openAIConfig.apiKey;
+    }
+
+    if (openAIConfig?.baseURL) {
+      clientOptions.reverseProxyUrl = openAIConfig.baseURL;
+    }
+
+    endpointTokenConfig = openAIConfig?.tokenConfig;
+  }
 
   if (isAzureOpenAI && azureConfig) {
     const { modelGroupMap, groupMap } = azureConfig;
@@ -94,6 +133,7 @@ export async function initializeOpenAI({
     if (groupName && groupMap[groupName]) {
       clientOptions.addParams = groupMap[groupName]?.addParams;
       clientOptions.dropParams = groupMap[groupName]?.dropParams;
+      endpointTokenConfig = groupMap[groupName]?.tokenConfig;
     }
 
     apiKey = azureOptions.azureOpenAIApiKey;
@@ -140,12 +180,15 @@ export async function initializeOpenAI({
 
   const options = getOpenAIConfig(apiKey, finalClientOptions, endpoint);
 
+  if (endpointTokenConfig) {
+    (options as InitializeResultBase).endpointTokenConfig = endpointTokenConfig;
+  }
+
   /** Set useLegacyContent for Azure serverless deployments */
   if (isServerless) {
     (options as InitializeResultBase).useLegacyContent = true;
   }
 
-  const openAIConfig = appConfig?.endpoints?.[EModelEndpoint.openAI];
   const allConfig = appConfig?.endpoints?.all;
   const azureRate = modelName?.includes('gpt-4') ? 30 : 17;
 

@@ -489,8 +489,12 @@ export function getModelMaxTokens(
   endpoint = EModelEndpoint.openAI,
   endpointTokenConfig?: EndpointTokenConfig,
 ): number | undefined {
-  const tokensMap = endpointTokenConfig ?? maxTokensMap[endpoint as keyof typeof maxTokensMap];
-  return getModelTokenValue(modelName, tokensMap);
+  const endpointValue = getModelTokenValue(modelName, endpointTokenConfig);
+  if (endpointValue != null) {
+    return endpointValue;
+  }
+
+  return getModelTokenValue(modelName, maxTokensMap[endpoint as keyof typeof maxTokensMap]);
 }
 
 /**
@@ -506,9 +510,12 @@ export function getModelMaxOutputTokens(
   endpoint = EModelEndpoint.openAI,
   endpointTokenConfig?: EndpointTokenConfig,
 ): number | undefined {
-  const tokensMap =
-    endpointTokenConfig ?? maxOutputTokensMap[endpoint as keyof typeof maxOutputTokensMap];
-  return getModelTokenValue(modelName, tokensMap, 'output');
+  const endpointValue = getModelTokenValue(modelName, endpointTokenConfig, 'output');
+  if (endpointValue != null) {
+    return endpointValue;
+  }
+
+  return getModelTokenValue(modelName, maxOutputTokensMap[endpoint as keyof typeof maxOutputTokensMap], 'output');
 }
 
 /**

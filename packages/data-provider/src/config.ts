@@ -114,6 +114,17 @@ export const modelConfigSchema = z
 
 export type TAzureModelConfig = z.infer<typeof modelConfigSchema>;
 
+const tokenConfigItemSchema = z.object({
+  prompt: z.number().optional(),
+  completion: z.number().optional(),
+  context: z.number().optional(),
+  output: z.number().optional(),
+  write: z.number().optional(),
+  read: z.number().optional(),
+});
+
+const managedTokenConfigSchema = z.record(z.string(), tokenConfigItemSchema).optional();
+
 export const azureBaseSchema = z.object({
   apiKey: z.string(),
   serverless: z.boolean().optional(),
@@ -125,6 +136,7 @@ export const azureBaseSchema = z.object({
   version: z.string().optional(),
   baseURL: z.string().optional(),
   additionalHeaders: z.record(z.any()).optional(),
+  tokenConfig: z.record(z.string(), tokenConfigItemSchema).optional(),
 });
 
 export type TAzureBaseSchema = z.infer<typeof azureBaseSchema>;
@@ -197,6 +209,9 @@ export const defaultAssistantsVersion = {
 export const baseEndpointSchema = z.object({
   streamRate: z.number().optional(),
   baseURL: z.string().optional(),
+  apiKey: z.string().optional(),
+  models: z.array(z.string()).optional(),
+  tokenConfig: managedTokenConfigSchema,
   titlePrompt: z.string().optional(),
   titleModel: z.string().optional(),
   titleConvo: z.boolean().optional(),
@@ -211,6 +226,10 @@ export type TBaseEndpoint = z.infer<typeof baseEndpointSchema>;
 
 export const bedrockEndpointSchema = baseEndpointSchema.merge(
   z.object({
+    region: z.string().optional(),
+    accessKeyId: z.string().optional(),
+    secretAccessKey: z.string().optional(),
+    sessionToken: z.string().optional(),
     availableRegions: z.array(z.string()).optional(),
     models: z.array(z.string()).optional(),
     inferenceProfiles: z.record(z.string(), z.string()).optional(),
@@ -416,6 +435,7 @@ export type TVertexAIConfig = TVertexAISchema & {
  */
 export const anthropicEndpointSchema = baseEndpointSchema.merge(
   z.object({
+    apiKey: z.string().optional(),
     /** Vertex AI configuration for running Anthropic models on Google Cloud */
     vertex: vertexAISchema.optional(),
     /** Optional: List of available models */

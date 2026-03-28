@@ -54,7 +54,7 @@ export default function AdminPlansPage() {
                   <th className="px-4 py-3 font-medium">{localize('com_ui_admin_plan_status')}</th>
                   <th className="px-4 py-3 font-medium">{localize('com_ui_admin_sort_order')}</th>
                   <th className="px-4 py-3 font-medium">
-                    {localize('com_ui_admin_channel_count')}
+                    {localize('com_ui_admin_entitlement_count')}
                   </th>
                   <th className="px-4 py-3 font-medium">{localize('com_ui_admin_updated_at')}</th>
                 </tr>
@@ -89,7 +89,11 @@ export default function AdminPlansPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-text-primary">{plan.sortOrder}</td>
-                    <td className="px-4 py-3 text-text-primary">{plan.channelIds.length}</td>
+                    <td className="px-4 py-3 text-text-primary">
+                      {plan.modelEntitlements.length > 0
+                        ? plan.modelEntitlements.length
+                        : plan.channelIds.length}
+                    </td>
                     <td className="px-4 py-3 text-text-primary">{plan.updatedAt ?? '-'}</td>
                   </tr>
                 ))}

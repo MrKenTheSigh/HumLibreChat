@@ -32,6 +32,13 @@ describe('AdminPlansPage', () => {
             isDefault: true,
             sortOrder: 20,
             channelIds: ['channel-1', 'channel-2'],
+            modelEntitlements: [
+              {
+                channelId: 'channel-1',
+                endpoint: 'azureOpenAI',
+                model: 'gpt-4o-mini',
+              },
+            ],
             notes: '',
             startingCredits: 20000,
             createdAt: '2026-03-26T00:00:00.000Z',
@@ -48,6 +55,6 @@ describe('AdminPlansPage', () => {
     expect(screen.getByText('Pro')).toBeInTheDocument();
     expect(screen.getByText('pro')).toBeInTheDocument();
     expect(screen.getByText('com_ui_admin_default_plan')).toBeInTheDocument();
-    expect(screen.getByText('2')).toBeInTheDocument();
+    expect(screen.getByText('1')).toBeInTheDocument();
   });
 });

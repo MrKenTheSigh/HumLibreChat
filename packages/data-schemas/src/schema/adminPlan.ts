@@ -1,6 +1,27 @@
 import { Schema } from 'mongoose';
 import type { IAdminPlan } from '~/types';
 
+const adminPlanModelEntitlementSchema = new Schema(
+  {
+    channelId: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    endpoint: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    model: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+  },
+  { _id: false },
+);
+
 const adminPlanSchema = new Schema<IAdminPlan>(
   {
     name: {
@@ -35,6 +56,10 @@ const adminPlanSchema = new Schema<IAdminPlan>(
     },
     channelIds: {
       type: [String],
+      default: [],
+    },
+    modelEntitlements: {
+      type: [adminPlanModelEntitlementSchema],
       default: [],
     },
     notes: {

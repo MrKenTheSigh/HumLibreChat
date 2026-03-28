@@ -7,10 +7,13 @@
  * I've included it here until the interface can be typed more tightly.
  */
 export interface TokenConfig {
-  prompt: number;
-  completion: number;
-  context: number;
-  [key: string]: unknown;
+  prompt?: number;
+  completion?: number;
+  context?: number;
+  output?: number;
+  write?: number;
+  read?: number;
+  [key: string]: number | undefined;
 }
 
 /** An endpoint's config object mapping model keys to their respective prompt, completion rates, and context limit */

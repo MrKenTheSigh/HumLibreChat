@@ -7,6 +7,7 @@ const adminChannels = require('./admin/channels');
 const adminPlans = require('./admin/plans');
 const adminUsers = require('./admin/users');
 const adminConversations = require('./admin/conversations');
+const adminUsage = require('./admin/usage');
 const endpoints = require('./endpoints');
 const staticRoute = require('./static');
 const messages = require('./messages');
@@ -41,6 +42,7 @@ module.exports = {
   adminPlans,
   adminUsers,
   adminConversations,
+  adminUsage,
   keys,
   apiKeys,
   user,

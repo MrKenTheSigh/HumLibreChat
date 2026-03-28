@@ -17,6 +17,10 @@ import { standardCache } from '~/cache';
 
 const { PROXY } = process.env;
 
+type CustomEndpointWithTokenConfig = Partial<TEndpoint> & {
+  tokenConfig?: EndpointTokenConfig;
+};
+
 /**
  * Builds custom options from endpoint configuration
  */
@@ -48,6 +52,43 @@ function buildCustomOptions(
   }
 
   return customOptions;
+}
+
+function getConfiguredTokenConfig(endpointConfig: Partial<TEndpoint>): EndpointTokenConfig | undefined {
+  const tokenConfig = (endpointConfig as CustomEndpointWithTokenConfig).tokenConfig;
+  if (!tokenConfig || Object.keys(tokenConfig).length === 0) {
+    return undefined;
+  }
+
+  return tokenConfig;
+}
+
+function mergeEndpointTokenConfigs(
+  fetchedTokenConfig?: EndpointTokenConfig,
+  configuredTokenConfig?: EndpointTokenConfig,
+): EndpointTokenConfig | undefined {
+  if (!fetchedTokenConfig && !configuredTokenConfig) {
+    return undefined;
+  }
+
+  if (!fetchedTokenConfig) {
+    return configuredTokenConfig;
+  }
+
+  if (!configuredTokenConfig) {
+    return fetchedTokenConfig;
+  }
+
+  return Object.entries(configuredTokenConfig).reduce<EndpointTokenConfig>(
+    (mergedConfig, [modelName, tokenConfig]) => {
+      mergedConfig[modelName] = {
+        ...(mergedConfig[modelName] ?? {}),
+        ...tokenConfig,
+      };
+      return mergedConfig;
+    },
+    { ...fetchedTokenConfig },
+  );
 }
 
 /**
@@ -129,31 +170,27 @@ export async function initializeCustom({
   }
 
   let endpointTokenConfig: EndpointTokenConfig | undefined;
+  const configuredTokenConfig = getConfiguredTokenConfig(endpointConfig);
 
   const userId = req.user?.id ?? '';
 
   const cache = standardCache(CacheKeys.TOKEN_CONFIG);
-  /** tokenConfig is an optional extended property on custom endpoints */
-  const hasTokenConfig = (endpointConfig as Record<string, unknown>).tokenConfig != null;
-  const tokenKey =
-    !hasTokenConfig && (userProvidesKey || userProvidesURL) ? `${endpoint}:${userId}` : endpoint;
-
-  const cachedConfig =
-    !hasTokenConfig &&
+  const shouldFetchTokenConfig =
     FetchTokenConfig[endpoint.toLowerCase() as keyof typeof FetchTokenConfig] &&
-    (await cache.get(tokenKey));
+    endpointConfig.models?.fetch;
+  const tokenKey = userProvidesKey || userProvidesURL ? `${endpoint}:${userId}` : endpoint;
 
-  endpointTokenConfig = (cachedConfig as EndpointTokenConfig) || undefined;
-
-  if (
-    FetchTokenConfig[endpoint.toLowerCase() as keyof typeof FetchTokenConfig] &&
-    endpointConfig &&
-    endpointConfig.models?.fetch &&
-    !endpointTokenConfig
-  ) {
-    await fetchModels({ apiKey, baseURL, name: endpoint, user: userId, tokenKey });
-    endpointTokenConfig = (await cache.get(tokenKey)) as EndpointTokenConfig | undefined;
+  let fetchedTokenConfig: EndpointTokenConfig | undefined;
+  if (shouldFetchTokenConfig) {
+    fetchedTokenConfig = ((await cache.get(tokenKey)) as EndpointTokenConfig | null) ?? undefined;
   }
+
+  if (shouldFetchTokenConfig && !fetchedTokenConfig) {
+    await fetchModels({ apiKey, baseURL, name: endpoint, user: userId, tokenKey });
+    fetchedTokenConfig = ((await cache.get(tokenKey)) as EndpointTokenConfig | null) ?? undefined;
+  }
+
+  endpointTokenConfig = mergeEndpointTokenConfigs(fetchedTokenConfig, configuredTokenConfig);
 
   const customOptions = buildCustomOptions(endpointConfig, appConfig, endpointTokenConfig);
 

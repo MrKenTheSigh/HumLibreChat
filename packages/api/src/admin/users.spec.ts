@@ -13,6 +13,8 @@ const mockCreateUser = jest.fn();
 const mockUpdateBalance = jest.fn();
 const mockLoggerError = jest.fn();
 const mockGetBalanceConfig = jest.fn();
+const mockApplyStartingCredits = jest.fn();
+const mockResolveProvisioningState = jest.fn();
 
 jest.mock('@librechat/data-schemas', () => ({
   createModels: jest.fn(() => ({
@@ -48,7 +50,13 @@ jest.mock('~/app/config', () => ({
   getBalanceConfig: (...args: unknown[]) => mockGetBalanceConfig(...args),
 }));
 
+jest.mock('./provisioning', () => ({
+  applyStartingCredits: (...args: unknown[]) => mockApplyStartingCredits(...args),
+  resolveProvisioningState: (...args: unknown[]) => mockResolveProvisioningState(...args),
+}));
+
 const {
+  applyAdminUserPlanStartingCredits,
   createAdminUser,
   addAdminUserBalance,
   assignAdminUserPlan,
@@ -89,6 +97,33 @@ describe('admin users handlers', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGetBalanceConfig.mockReturnValue(null);
+    mockApplyStartingCredits.mockResolvedValue({
+      applied: false,
+      reason: 'no_plan',
+      tokenCredits: 0,
+      provisioning: {
+        balanceEnabled: true,
+        hasBalanceRecord: false,
+        currentPlanStartingCredits: null,
+        appliedAt: null,
+        appliedPlanId: null,
+        appliedAmount: null,
+        appliedSource: null,
+        appliedPlanMatchesCurrent: false,
+        canApplyStartingCredits: false,
+      },
+    });
+    mockResolveProvisioningState.mockResolvedValue({
+      balanceEnabled: true,
+      hasBalanceRecord: true,
+      currentPlanStartingCredits: 5000,
+      appliedAt: null,
+      appliedPlanId: null,
+      appliedAmount: null,
+      appliedSource: null,
+      appliedPlanMatchesCurrent: false,
+      canApplyStartingCredits: true,
+    });
   });
 
   describe('getAdminUsers', () => {
@@ -315,9 +350,21 @@ describe('admin users handlers', () => {
           id: expect.any(String),
           name: 'Pro',
           slug: 'pro',
+          startingCredits: null,
         },
         planAssignedAt: '2026-03-25T02:00:00.000Z',
         balance: { tokenCredits: 12345, updatedAt: null },
+        provisioning: {
+          balanceEnabled: true,
+          hasBalanceRecord: true,
+          currentPlanStartingCredits: 5000,
+          appliedAt: null,
+          appliedPlanId: null,
+          appliedAmount: null,
+          appliedSource: null,
+          appliedPlanMatchesCurrent: false,
+          canApplyStartingCredits: true,
+        },
       });
       expect(payload.password).toBeUndefined();
       expect(payload.backupCodes).toBeUndefined();
@@ -495,6 +542,12 @@ describe('admin users handlers', () => {
 
       await assignAdminUserPlan(req, res);
 
+      expect(mockApplyStartingCredits).toHaveBeenCalledWith({
+        appConfig: undefined,
+        userId,
+        source: 'plan_assignment_auto_seed',
+        onlyIfNoBalanceRecord: true,
+      });
       expect(mockUserFindByIdAndUpdate).toHaveBeenCalled();
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith({
@@ -564,6 +617,67 @@ describe('admin users handlers', () => {
         userId: userId.toString(),
         plan: null,
         assignedAt: null,
+      });
+    });
+  });
+
+  describe('applyAdminUserPlanStartingCredits', () => {
+    it('returns the provisioning result from the helper', async () => {
+      const userId = new mongoose.Types.ObjectId();
+      mockUserFindById.mockReturnValue(
+        createSelectLeanQuery({
+          _id: userId,
+          email: 'user@example.com',
+        }),
+      );
+      mockApplyStartingCredits.mockResolvedValue({
+        applied: true,
+        reason: 'applied',
+        tokenCredits: 5000,
+        provisioning: {
+          balanceEnabled: true,
+          hasBalanceRecord: true,
+          currentPlanStartingCredits: 5000,
+          appliedAt: '2026-03-26T03:00:00.000Z',
+          appliedPlanId: new mongoose.Types.ObjectId().toString(),
+          appliedAmount: 5000,
+          appliedSource: 'admin_manual_apply',
+          appliedPlanMatchesCurrent: true,
+          canApplyStartingCredits: false,
+        },
+      });
+
+      const req = {
+        params: {
+          userId: userId.toString(),
+        },
+      } as unknown as Request;
+      const res = createMockResponse();
+
+      await applyAdminUserPlanStartingCredits(req, res);
+
+      expect(mockApplyStartingCredits).toHaveBeenCalledWith({
+        appConfig: undefined,
+        userId,
+        source: 'admin_manual_apply',
+        onlyIfNoBalanceRecord: false,
+      });
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({
+        applied: true,
+        reason: 'applied',
+        tokenCredits: 5000,
+        provisioning: {
+          balanceEnabled: true,
+          hasBalanceRecord: true,
+          currentPlanStartingCredits: 5000,
+          appliedAt: '2026-03-26T03:00:00.000Z',
+          appliedPlanId: expect.any(String),
+          appliedAmount: 5000,
+          appliedSource: 'admin_manual_apply',
+          appliedPlanMatchesCurrent: true,
+          canApplyStartingCredits: false,
+        },
       });
     });
   });

@@ -86,6 +86,7 @@ describe('admin access resolver', () => {
         slug: 'pro',
         enabled: true,
         channelIds: [channelAId.toString(), channelBId.toString()],
+        modelEntitlements: [],
       }),
       getChannelsByIds: jest.fn().mockResolvedValue([
         {
@@ -194,6 +195,7 @@ describe('admin access resolver', () => {
         slug: 'legacy',
         enabled: false,
         channelIds: [],
+        modelEntitlements: [],
       }),
     });
 
@@ -230,6 +232,7 @@ describe('admin access resolver', () => {
         slug: 'default',
         enabled: true,
         channelIds: [channelId.toString()],
+        modelEntitlements: [],
       }),
       getChannelsByIds: jest.fn().mockResolvedValue([
         {
@@ -301,6 +304,7 @@ describe('admin access resolver', () => {
         slug: 'locked-down',
         enabled: true,
         channelIds: [channelId.toString(), 'missing-channel'],
+        modelEntitlements: [],
       }),
       getChannelsByIds: jest.fn().mockResolvedValue([
         {
@@ -321,6 +325,69 @@ describe('admin access resolver', () => {
     expect(result.allowedChannels).toEqual([]);
     expect(result.allowedPairs).toEqual([]);
     expect(result.isRestricted).toBe(true);
+  });
+
+  it('prioritizes direct model entitlements over legacy channel membership', async () => {
+    const planId = new mongoose.Types.ObjectId();
+    const channelAId = new mongoose.Types.ObjectId();
+    const channelBId = new mongoose.Types.ObjectId();
+    const loaders = createLoaders({
+      getUserById: jest.fn().mockResolvedValue({
+        _id: new mongoose.Types.ObjectId(),
+        role: SystemRoles.USER,
+        adminPlanId: planId,
+      }),
+      getAssignedPlan: jest.fn().mockResolvedValue({
+        _id: planId,
+        name: 'Selective',
+        slug: 'selective',
+        enabled: true,
+        channelIds: [channelAId.toString(), channelBId.toString()],
+        modelEntitlements: [
+          {
+            channelId: channelBId.toString(),
+            endpoint: 'azureOpenAI',
+            model: 'gpt-5.1-chat',
+          },
+        ],
+      }),
+      getChannelsByIds: jest.fn().mockResolvedValue([
+        {
+          _id: channelAId,
+          name: 'Starter',
+          slug: 'starter',
+          enabled: true,
+          entries: [{ endpoint: 'azureOpenAI', model: 'gpt-4o-mini', enabled: true }],
+        },
+        {
+          _id: channelBId,
+          name: 'Premium',
+          slug: 'premium',
+          enabled: true,
+          entries: [{ endpoint: 'azureOpenAI', model: 'gpt-5.1-chat', enabled: true }],
+        },
+      ]),
+    });
+
+    const result = await createResolveUserEntitlements(loaders)({
+      userId: 'user-1',
+    });
+
+    expect(result.allowedChannels).toEqual([
+      {
+        id: channelBId.toString(),
+        name: 'Premium',
+        slug: 'premium',
+      },
+    ]);
+    expect(result.allowedPairs).toEqual([
+      {
+        endpoint: 'azureOpenAI',
+        model: 'gpt-5.1-chat',
+        channelId: channelBId.toString(),
+        channelSlug: 'premium',
+      },
+    ]);
   });
 });
 

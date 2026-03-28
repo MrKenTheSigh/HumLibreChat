@@ -351,13 +351,13 @@ describe('getModelMaxTokens', () => {
     expect(getModelMaxTokens('gpt-4-32k', EModelEndpoint.openAI, customTokenConfig)).toBe(9999);
   });
 
-  test('should return undefined if the model is not found in custom endpointTokenConfig', () => {
+  test('should fall back to endpoint defaults if the model is not found in custom endpointTokenConfig', () => {
     const customTokenConfig = {
       'custom-model': 12345,
     };
     expect(
       getModelMaxTokens('nonexistent-model', EModelEndpoint.openAI, customTokenConfig),
-    ).toBeUndefined();
+    ).toBe(maxTokensMap[EModelEndpoint.openAI].system_default);
   });
 
   test('should return correct tokens for exact match in azureOpenAI models', () => {

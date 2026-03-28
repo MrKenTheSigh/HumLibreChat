@@ -24,9 +24,27 @@ const adminPlanInputSchema = z.object({
   isDefault: z.boolean().optional().default(false),
   sortOrder: z.number().int('sortOrder must be an integer').optional().default(0),
   channelIds: z.array(z.string()).optional().default([]),
+  modelEntitlements: z
+    .array(
+      z.object({
+        channelId: z.string().trim().optional().default(''),
+        endpoint: z.string().trim().min(1, 'model entitlements require an endpoint'),
+        model: z.string().trim().min(1, 'model entitlements require a model'),
+      }),
+    )
+    .optional()
+    .default([]),
   notes: z.string().trim().optional().default(''),
   startingCredits: z.number().int().min(0).nullable().optional().default(null),
 });
+
+type AdminPlanModelEntitlementRecord = {
+  channelId: string;
+  endpoint: string;
+  model: string;
+};
+
+type RawAdminPlanModelEntitlementRecord = Partial<AdminPlanModelEntitlementRecord> | null | undefined;
 
 type AdminPlanRecord = {
   _id: mongoose.Types.ObjectId;
@@ -37,6 +55,7 @@ type AdminPlanRecord = {
   isDefault?: boolean;
   sortOrder?: number;
   channelIds?: string[];
+  modelEntitlements?: RawAdminPlanModelEntitlementRecord[];
   notes?: string;
   startingCredits?: number | null;
   createdAt?: Date;
@@ -55,6 +74,44 @@ function sanitizeChannelIds(channelIds: string[]): string[] {
   );
 }
 
+function sanitizeModelEntitlements(
+  modelEntitlements: RawAdminPlanModelEntitlementRecord[],
+): AdminPlanModelEntitlementRecord[] {
+  const seen = new Set<string>();
+
+  return modelEntitlements.reduce<AdminPlanModelEntitlementRecord[]>((records, entitlement) => {
+    const channelId = entitlement?.channelId?.trim() ?? '';
+    const endpoint = entitlement?.endpoint?.trim() ?? '';
+    const model = entitlement?.model?.trim() ?? '';
+    if (endpoint.length === 0 || model.length === 0) {
+      return records;
+    }
+
+    const key = `${channelId}::${endpoint}::${model}`;
+    if (seen.has(key)) {
+      return records;
+    }
+
+    seen.add(key);
+    records.push({
+      channelId,
+      endpoint,
+      model,
+    });
+    return records;
+  }, []);
+}
+
+function deriveChannelIdsFromModelEntitlements(
+  modelEntitlements: AdminPlanModelEntitlementRecord[],
+): string[] {
+  return sanitizeChannelIds(
+    modelEntitlements
+      .map((entitlement) => entitlement.channelId?.trim() ?? '')
+      .filter((channelId) => channelId.length > 0),
+  );
+}
+
 function sanitizeAdminPlan(plan: AdminPlanRecord) {
   return {
     id: plan._id.toString(),
@@ -65,6 +122,7 @@ function sanitizeAdminPlan(plan: AdminPlanRecord) {
     isDefault: plan.isDefault ?? false,
     sortOrder: plan.sortOrder ?? 0,
     channelIds: plan.channelIds ?? [],
+    modelEntitlements: sanitizeModelEntitlements(plan.modelEntitlements ?? []),
     notes: plan.notes ?? '',
     startingCredits: plan.startingCredits ?? null,
     createdAt: plan.createdAt?.toISOString() ?? null,
@@ -74,9 +132,14 @@ function sanitizeAdminPlan(plan: AdminPlanRecord) {
 
 function parseAdminPlanInput(input: unknown): AdminPlanInput {
   const parsed = adminPlanInputSchema.parse(input);
+  const modelEntitlements = sanitizeModelEntitlements(parsed.modelEntitlements);
   return {
     ...parsed,
-    channelIds: sanitizeChannelIds(parsed.channelIds),
+    channelIds: sanitizeChannelIds([
+      ...parsed.channelIds,
+      ...deriveChannelIdsFromModelEntitlements(modelEntitlements),
+    ]),
+    modelEntitlements,
   };
 }
 

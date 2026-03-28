@@ -75,11 +75,30 @@ describe('AdminPlanForm', () => {
             id: 'channel-1',
             name: 'Starter',
             slug: 'starter',
+            providerType: 'azureOpenAI',
             description: '',
             enabled: true,
             sortOrder: 0,
-            icon: '',
-            entries: [],
+            connection: {
+              runtimeEndpoint: 'azureOpenAI',
+              baseURL: '',
+              instanceName: '',
+              apiVersion: '',
+              modelFetch: false,
+              headers: [],
+            },
+            secrets: {
+              apiKey: '',
+              apiKeyRef: '',
+            },
+            models: [
+              {
+                model: 'gpt-4o-mini',
+                enabled: true,
+                deploymentName: 'gpt-4o-mini',
+                pricingOverride: null,
+              },
+            ],
             createdAt: null,
             updatedAt: null,
           },
@@ -87,11 +106,30 @@ describe('AdminPlanForm', () => {
             id: 'channel-2',
             name: 'Premium',
             slug: 'premium',
+            providerType: 'azureOpenAI',
             description: '',
             enabled: true,
             sortOrder: 10,
-            icon: '',
-            entries: [],
+            connection: {
+              runtimeEndpoint: 'azureOpenAI',
+              baseURL: '',
+              instanceName: '',
+              apiVersion: '',
+              modelFetch: false,
+              headers: [],
+            },
+            secrets: {
+              apiKey: '',
+              apiKeyRef: '',
+            },
+            models: [
+              {
+                model: 'gpt-4o',
+                enabled: true,
+                deploymentName: 'gpt-4o',
+                pricingOverride: null,
+              },
+            ],
             createdAt: null,
             updatedAt: null,
           },
@@ -109,6 +147,18 @@ describe('AdminPlanForm', () => {
         isDefault: true,
         sortOrder: 20,
         channelIds: ['channel-1', 'channel-2'],
+        modelEntitlements: [
+          {
+            channelId: 'channel-1',
+            endpoint: 'azureOpenAI',
+            model: 'gpt-4o-mini',
+          },
+          {
+            channelId: 'channel-2',
+            endpoint: 'azureOpenAI',
+            model: 'gpt-4o',
+          },
+        ],
         notes: 'Internal users',
         startingCredits: 20000,
         createdAt: '2026-03-26T00:00:00.000Z',
@@ -120,16 +170,16 @@ describe('AdminPlanForm', () => {
   it('loads the selected plan into the form', () => {
     render(<AdminPlanForm />);
 
-    const starterLabel = screen.getByText('Starter').closest('label');
-    const premiumLabel = screen.getByText('Premium').closest('label');
+    const miniLabel = screen.getByText('gpt-4o-mini').closest('label');
+    const gpt4oLabel = screen.getByText('gpt-4o').closest('label');
 
-    expect(starterLabel).not.toBeNull();
-    expect(premiumLabel).not.toBeNull();
     expect(screen.getByDisplayValue('Pro')).toBeInTheDocument();
     expect(screen.getByDisplayValue('pro')).toBeInTheDocument();
     expect(screen.getByDisplayValue('Power users')).toBeInTheDocument();
-    expect(within(starterLabel as HTMLElement).getByRole('checkbox')).toBeChecked();
-    expect(within(premiumLabel as HTMLElement).getByRole('checkbox')).toBeChecked();
+    expect(miniLabel).not.toBeNull();
+    expect(gpt4oLabel).not.toBeNull();
+    expect(within(miniLabel as HTMLElement).getByRole('checkbox')).toBeChecked();
+    expect(within(gpt4oLabel as HTMLElement).getByRole('checkbox')).toBeChecked();
     expect(screen.getByRole('button', { name: 'com_ui_delete' })).toBeInTheDocument();
   });
 

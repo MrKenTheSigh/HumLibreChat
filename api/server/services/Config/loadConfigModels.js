@@ -19,9 +19,24 @@ async function loadConfigModels(req) {
   const modelsConfig = {};
   const azureConfig = appConfig.endpoints?.[EModelEndpoint.azureOpenAI];
   const { modelNames } = azureConfig ?? {};
+  const openAIConfig = appConfig.endpoints?.[EModelEndpoint.openAI];
+  const googleConfig = appConfig.endpoints?.[EModelEndpoint.google];
+  const anthropicConfig = appConfig.endpoints?.[EModelEndpoint.anthropic];
 
   if (modelNames && azureConfig) {
     modelsConfig[EModelEndpoint.azureOpenAI] = modelNames;
+  }
+
+  if (Array.isArray(openAIConfig?.models) && openAIConfig.models.length > 0) {
+    modelsConfig[EModelEndpoint.openAI] = openAIConfig.models;
+  }
+
+  if (Array.isArray(googleConfig?.models) && googleConfig.models.length > 0) {
+    modelsConfig[EModelEndpoint.google] = googleConfig.models;
+  }
+
+  if (Array.isArray(anthropicConfig?.models) && anthropicConfig.models.length > 0) {
+    modelsConfig[EModelEndpoint.anthropic] = anthropicConfig.models;
   }
 
   if (azureConfig?.assistants && azureConfig.assistantModels) {
@@ -107,7 +122,16 @@ async function loadConfigModels(req) {
 
     for (const name of associatedNames) {
       const endpoint = endpointsMap[name];
-      modelsConfig[name] = !modelData?.length ? (endpoint.models.default ?? []) : modelData;
+      const defaultModels = Array.isArray(endpoint.models.default)
+        ? endpoint.models.default.map((model) => (typeof model === 'string' ? model : model.name))
+        : [];
+
+      if (endpoint.configuredModelsOnly === true) {
+        modelsConfig[name] = defaultModels;
+        continue;
+      }
+
+      modelsConfig[name] = !modelData?.length ? defaultModels : modelData;
     }
   }
 

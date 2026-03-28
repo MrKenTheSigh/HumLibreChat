@@ -1,5 +1,5 @@
+import { BarChart3, ArrowLeft, Blocks, Layers3, MessagesSquare, Shield, Users } from 'lucide-react';
 import { Link, NavLink, Navigate, Outlet } from 'react-router-dom';
-import { ArrowLeft, Blocks, Layers3, MessagesSquare, Shield, Users } from 'lucide-react';
 import { SystemRoles } from 'librechat-data-provider';
 import { useAuthContext, useLocalize } from '~/hooks';
 import { cn } from '~/utils';
@@ -61,6 +61,10 @@ export default function AdminView() {
           <NavLink to="/d/admin/conversations" className={navItemClassName}>
             <MessagesSquare className="h-4 w-4" aria-hidden="true" />
             {localize('com_ui_admin_conversations')}
+          </NavLink>
+          <NavLink to="/d/admin/usage" className={navItemClassName}>
+            <BarChart3 className="h-4 w-4" aria-hidden="true" />
+            {localize('com_ui_admin_usage')}
           </NavLink>
         </nav>
       </aside>

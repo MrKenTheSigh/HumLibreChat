@@ -82,6 +82,39 @@ export const useClearAdminUserPlanMutation = (): UseMutationResult<
   });
 };
 
+export const useApplyAdminUserStartingCreditsMutation = (): UseMutationResult<
+  t.AdminApplyStartingCreditsResponse,
+  t.TError | undefined,
+  t.AdminApplyStartingCreditsRequest,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+
+  return useMutation((variables) => dataService.applyAdminUserStartingCredits(variables), {
+    onSuccess: (data, variables) => {
+      queryClient.setQueryData<t.AdminUserDetail | undefined>(
+        [QueryKeys.adminUser, variables.userId],
+        (current) => {
+          if (current == null) {
+            return current;
+          }
+
+          return {
+            ...current,
+            balance: {
+              ...current.balance,
+              tokenCredits: data.tokenCredits,
+            },
+            provisioning: data.provisioning,
+          };
+        },
+      );
+      queryClient.invalidateQueries([QueryKeys.adminUser, variables.userId]);
+      queryClient.invalidateQueries([QueryKeys.adminUsers]);
+    },
+  });
+};
+
 export const useCreateAdminPlanMutation = (): UseMutationResult<
   t.AdminPlan,
   t.TError | undefined,
@@ -108,6 +141,9 @@ export const useCreateAdminChannelMutation = (): UseMutationResult<
   return useMutation((variables) => dataService.createAdminChannel(variables), {
     onSuccess: () => {
       queryClient.invalidateQueries([QueryKeys.adminChannels]);
+      queryClient.invalidateQueries([QueryKeys.adminChannelInventory]);
+      queryClient.invalidateQueries([QueryKeys.endpoints]);
+      queryClient.invalidateQueries([QueryKeys.models]);
     },
   });
 };
@@ -124,6 +160,9 @@ export const useUpdateAdminChannelMutation = (): UseMutationResult<
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries([QueryKeys.adminChannels]);
       queryClient.invalidateQueries([QueryKeys.adminChannel, variables.channelId]);
+      queryClient.invalidateQueries([QueryKeys.adminChannelInventory]);
+      queryClient.invalidateQueries([QueryKeys.endpoints]);
+      queryClient.invalidateQueries([QueryKeys.models]);
     },
   });
 };
@@ -140,6 +179,9 @@ export const useDeleteAdminChannelMutation = (): UseMutationResult<
     onSuccess: (_data, channelId) => {
       queryClient.invalidateQueries([QueryKeys.adminChannels]);
       queryClient.removeQueries([QueryKeys.adminChannel, channelId]);
+      queryClient.invalidateQueries([QueryKeys.adminChannelInventory]);
+      queryClient.invalidateQueries([QueryKeys.endpoints]);
+      queryClient.invalidateQueries([QueryKeys.models]);
     },
   });
 };

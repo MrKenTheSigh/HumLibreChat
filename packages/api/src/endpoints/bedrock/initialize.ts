@@ -11,6 +11,7 @@ import {
 } from 'librechat-data-provider';
 import type {
   BaseInitializeParams,
+  EndpointTokenConfig,
   InitializeResultBase,
   BedrockCredentials,
   GuardrailConfiguration,
@@ -52,6 +53,11 @@ export async function initializeBedrock({
   const appConfig = req.config;
   const bedrockConfig = appConfig?.endpoints?.[EModelEndpoint.bedrock] as
     | ({
+        accessKeyId?: string;
+        secretAccessKey?: string;
+        sessionToken?: string;
+        region?: string;
+        tokenConfig?: EndpointTokenConfig;
         guardrailConfig?: GuardrailConfiguration;
         inferenceProfiles?: InferenceProfileConfig;
       } & Record<string, unknown>)
@@ -67,16 +73,23 @@ export async function initializeBedrock({
   } = process.env;
 
   const { key: expiresAt } = req.body;
-  const isUserProvided = BEDROCK_AWS_SECRET_ACCESS_KEY === AuthType.USER_PROVIDED;
+  const hasManagedCredentials =
+    (typeof bedrockConfig?.accessKeyId === 'string' && bedrockConfig.accessKeyId.trim().length > 0) ||
+    (typeof bedrockConfig?.secretAccessKey === 'string' &&
+      bedrockConfig.secretAccessKey.trim().length > 0);
+  const isUserProvided =
+    BEDROCK_AWS_SECRET_ACCESS_KEY === AuthType.USER_PROVIDED && hasManagedCredentials !== true;
 
   let credentials: BedrockCredentials | undefined = isUserProvided
     ? await db
         .getUserKey({ userId: req.user?.id ?? '', name: EModelEndpoint.bedrock })
         .then((key) => JSON.parse(key) as BedrockCredentials)
     : {
-        accessKeyId: BEDROCK_AWS_ACCESS_KEY_ID,
-        secretAccessKey: BEDROCK_AWS_SECRET_ACCESS_KEY,
-        ...(BEDROCK_AWS_SESSION_TOKEN && { sessionToken: BEDROCK_AWS_SESSION_TOKEN }),
+        accessKeyId: bedrockConfig?.accessKeyId || BEDROCK_AWS_ACCESS_KEY_ID,
+        secretAccessKey: bedrockConfig?.secretAccessKey || BEDROCK_AWS_SECRET_ACCESS_KEY,
+        ...((bedrockConfig?.sessionToken || BEDROCK_AWS_SESSION_TOKEN) && {
+          sessionToken: bedrockConfig?.sessionToken || BEDROCK_AWS_SESSION_TOKEN,
+        }),
       };
 
   if (!credentials) {
@@ -97,7 +110,7 @@ export async function initializeBedrock({
 
   const requestOptions: Record<string, unknown> = {
     model: model_parameters?.model as string | undefined,
-    region: BEDROCK_AWS_DEFAULT_REGION,
+    region: bedrockConfig?.region || BEDROCK_AWS_DEFAULT_REGION,
   };
 
   const configOptions: Record<string, unknown> = {};
@@ -175,5 +188,6 @@ export async function initializeBedrock({
   return {
     llmConfig,
     configOptions,
+    ...(bedrockConfig?.tokenConfig && { endpointTokenConfig: bedrockConfig.tokenConfig }),
   };
 }

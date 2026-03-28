@@ -271,6 +271,30 @@ describe('initializeBedrock', () => {
 
       expect(mockedCheckUserKeyExpiry).toHaveBeenCalledWith(expiresAt, EModelEndpoint.bedrock);
     });
+
+    it('prefers managed Bedrock credentials over legacy user_provided env mode', async () => {
+      process.env.BEDROCK_AWS_SECRET_ACCESS_KEY = AuthType.USER_PROVIDED;
+      const params = createMockParams({
+        config: {
+          endpoints: {
+            [EModelEndpoint.bedrock]: {
+              accessKeyId: 'managed-access-key',
+              secretAccessKey: 'managed-secret-key',
+              region: 'us-west-2',
+            },
+          },
+        },
+      });
+
+      const result = (await initializeBedrock(params)) as BedrockLLMConfigResult;
+
+      expect(params.db.getUserKey).not.toHaveBeenCalled();
+      expect(result.llmConfig.credentials).toEqual({
+        accessKeyId: 'managed-access-key',
+        secretAccessKey: 'managed-secret-key',
+      });
+      expect(result.llmConfig).toHaveProperty('region', 'us-west-2');
+    });
   });
 
   describe('Credentials Edge Cases', () => {
