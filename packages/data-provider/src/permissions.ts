@@ -5,6 +5,18 @@ import { z } from 'zod';
  */
 export enum PermissionTypes {
   /**
+   * Type for using the main chat experience
+   */
+  CHAT = 'CHAT',
+  /**
+   * Type for using model parameter controls
+   */
+  PARAMETERS = 'PARAMETERS',
+  /**
+   * Type for using file upload controls
+   */
+  FILE_UPLOADS = 'FILE_UPLOADS',
+  /**
    * Type for Prompt Permissions
    */
   PROMPTS = 'PROMPTS',
@@ -89,6 +101,21 @@ export const promptPermissionsSchema = z.object({
 });
 export type TPromptPermissions = z.infer<typeof promptPermissionsSchema>;
 
+export const chatPermissionsSchema = z.object({
+  [Permissions.USE]: z.boolean().default(true),
+});
+export type TChatPermissions = z.infer<typeof chatPermissionsSchema>;
+
+export const parametersPermissionsSchema = z.object({
+  [Permissions.USE]: z.boolean().default(true),
+});
+export type TParametersPermissions = z.infer<typeof parametersPermissionsSchema>;
+
+export const fileUploadsPermissionsSchema = z.object({
+  [Permissions.USE]: z.boolean().default(true),
+});
+export type TFileUploadsPermissions = z.infer<typeof fileUploadsPermissionsSchema>;
+
 export const bookmarkPermissionsSchema = z.object({
   [Permissions.USE]: z.boolean().default(true),
 });
@@ -171,6 +198,9 @@ export type TRemoteAgentsPermissions = z.infer<typeof remoteAgentsPermissionsSch
 
 // Define a single permissions schema that holds all permission types.
 export const permissionsSchema = z.object({
+  [PermissionTypes.CHAT]: chatPermissionsSchema,
+  [PermissionTypes.PARAMETERS]: parametersPermissionsSchema,
+  [PermissionTypes.FILE_UPLOADS]: fileUploadsPermissionsSchema,
   [PermissionTypes.PROMPTS]: promptPermissionsSchema,
   [PermissionTypes.BOOKMARKS]: bookmarkPermissionsSchema,
   [PermissionTypes.MEMORIES]: memoryPermissionsSchema,

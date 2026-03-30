@@ -1,8 +1,11 @@
 import { useDeferredValue, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { MessagesSquare, Search } from 'lucide-react';
+import { Outlet, useNavigate } from 'react-router-dom';
 import { useLocalize } from '~/hooks';
 import { useGetAdminConversationsQuery } from '~/data-provider/Admin';
+import AdminHelpButton from '../AdminHelpButton';
 import AdminLayout from '../AdminLayout';
+import formatAdminDateTime from '../formatAdminDateTime';
 
 export default function AdminConversationsPage() {
   const navigate = useNavigate();
@@ -29,122 +32,196 @@ export default function AdminConversationsPage() {
   });
 
   const conversations = conversationsQuery.data?.conversations ?? [];
+  const currentPage = cursorHistory.length + 1;
 
   return (
-    <AdminLayout
-      title={localize('com_ui_admin_conversations')}
-      description={localize('com_ui_admin_conversations_description')}
-    >
-      <div className="flex h-full flex-col gap-4">
-        <div className="grid gap-3 md:grid-cols-4">
-          <input
-            type="search"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder={localize('com_ui_admin_search_conversations_placeholder')}
-            className="rounded-xl border border-border-medium bg-surface-primary px-3 py-2 text-sm text-text-primary md:col-span-2"
-          />
-          <input
-            type="text"
-            value={userId}
-            onChange={(event) => setUserId(event.target.value)}
-            placeholder={localize('com_ui_admin_user_id_placeholder')}
-            className="rounded-xl border border-border-medium bg-surface-primary px-3 py-2 text-sm text-text-primary"
-          />
-          <input
-            type="text"
-            value={endpoint}
-            onChange={(event) => setEndpoint(event.target.value)}
-            placeholder={localize('com_ui_provider')}
-            className="rounded-xl border border-border-medium bg-surface-primary px-3 py-2 text-sm text-text-primary"
-          />
-          <input
-            type="text"
-            value={model}
-            onChange={(event) => setModel(event.target.value)}
-            placeholder={localize('com_ui_model')}
-            className="rounded-xl border border-border-medium bg-surface-primary px-3 py-2 text-sm text-text-primary"
-          />
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-auto rounded-2xl border border-border-medium bg-surface-primary">
-          {conversationsQuery.isLoading ? (
-            <div className="p-6 text-sm text-text-secondary">{localize('com_ui_loading')}</div>
-          ) : conversations.length === 0 ? (
-            <div className="p-6 text-sm text-text-secondary">
-              {localize('com_ui_admin_empty_conversations')}
+    <AdminLayout title={localize('com_ui_admin_conversations')} hideHeader={true}>
+      <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden">
+        <section className="shrink-0 rounded-3xl border border-border-medium bg-surface-primary p-5">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-background text-text-primary">
+                  <MessagesSquare className="h-5 w-5" aria-hidden="true" />
+                </div>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-lg font-medium text-text-primary">
+                    {localize('com_ui_admin_conversations')}
+                  </h1>
+                  <AdminHelpButton
+                    title="com_ui_admin_conversations"
+                    description="com_ui_admin_conversations_description"
+                  />
+                </div>
+              </div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-border-light bg-background px-3 py-1.5 text-xs font-medium text-text-secondary">
+                {localize('com_ui_results_found', { count: conversations.length })}
+              </div>
             </div>
-          ) : (
-            <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-border-medium text-text-secondary">
-                <tr>
-                  <th className="px-4 py-3 font-medium">{localize('com_ui_conversations')}</th>
-                  <th className="px-4 py-3 font-medium">{localize('com_ui_user')}</th>
-                  <th className="px-4 py-3 font-medium">{localize('com_ui_provider')}</th>
-                  <th className="px-4 py-3 font-medium">{localize('com_ui_model')}</th>
-                  <th className="px-4 py-3 font-medium">{localize('com_ui_admin_updated_at')}</th>
-                </tr>
-              </thead>
-              <tbody>
+
+            <div className="grid gap-3 md:grid-cols-4">
+              <label className="flex flex-col gap-2 text-sm text-text-secondary">
+                {localize('com_ui_search')}
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-secondary" />
+                  <input
+                    type="search"
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder={localize('com_ui_admin_search_conversations_placeholder')}
+                    className="w-full rounded-xl border border-border-medium bg-background py-2 pl-9 pr-3 text-sm text-text-primary"
+                  />
+                </div>
+              </label>
+              <label className="flex flex-col gap-2 text-sm text-text-secondary">
+                {localize('com_ui_user')}
+                <input
+                  type="text"
+                  value={userId}
+                  onChange={(event) => setUserId(event.target.value)}
+                  placeholder={localize('com_ui_admin_user_id_placeholder')}
+                  className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm text-text-secondary">
+                {localize('com_ui_provider')}
+                <input
+                  type="text"
+                  value={endpoint}
+                  onChange={(event) => setEndpoint(event.target.value)}
+                  placeholder={localize('com_ui_provider')}
+                  className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm text-text-secondary">
+                {localize('com_ui_model')}
+                <input
+                  type="text"
+                  value={model}
+                  onChange={(event) => setModel(event.target.value)}
+                  placeholder={localize('com_ui_model')}
+                  className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
+                />
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-border-medium bg-surface-primary">
+          <div className="min-h-0 flex-1 overflow-auto px-5 py-5">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 className="text-sm font-medium text-text-primary">
+                {localize('com_ui_admin_conversations')}
+              </h2>
+              <div className="text-sm text-text-secondary">{conversations.length}</div>
+            </div>
+
+            {conversationsQuery.isLoading ? (
+              <div className="rounded-2xl border border-dashed border-border-medium bg-background p-6 text-sm text-text-secondary">
+                {localize('com_ui_loading')}
+              </div>
+            ) : conversations.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-border-medium bg-background p-6 text-sm text-text-secondary">
+                {localize('com_ui_admin_empty_conversations')}
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
                 {conversations.map((conversation) => (
-                  <tr
+                  <button
                     key={conversation.conversationId}
-                    className="cursor-pointer border-b border-border-light transition-colors hover:bg-surface-hover"
-                    onClick={() => navigate(`/d/admin/conversations/${conversation.conversationId}`)}
+                    type="button"
+                    className="grid gap-4 rounded-2xl border border-border-medium bg-background p-4 text-left transition-colors hover:bg-surface-hover"
+                    onClick={() =>
+                      navigate(`/d/admin/conversations/${conversation.conversationId}`)
+                    }
                   >
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-text-primary">
+                    <div>
+                      <div className="text-base font-medium text-text-primary">
                         {conversation.title || localize('com_ui_unknown')}
                       </div>
-                      <div className="text-xs text-text-secondary">{conversation.conversationId}</div>
-                    </td>
-                    <td className="px-4 py-3 text-text-primary">
-                      {conversation.userEmail || conversation.userId || localize('com_ui_unknown')}
-                    </td>
-                    <td className="px-4 py-3 text-text-primary">
-                      {conversation.endpoint || localize('com_ui_unknown')}
-                    </td>
-                    <td className="px-4 py-3 text-text-primary">
-                      {conversation.model || localize('com_ui_unknown')}
-                    </td>
-                    <td className="px-4 py-3 text-text-primary">{conversation.updatedAt ?? '-'}</td>
-                  </tr>
+                      <div className="text-sm text-text-secondary">
+                        {conversation.conversationId}
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 text-sm md:grid-cols-4">
+                      <div className="rounded-xl border border-border-light bg-surface-primary px-3 py-2">
+                        <div className="text-xs uppercase tracking-wide text-text-secondary">
+                          {localize('com_ui_user')}
+                        </div>
+                        <div className="mt-1 text-text-primary">
+                          {conversation.userEmail ||
+                            conversation.userId ||
+                            localize('com_ui_unknown')}
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-border-light bg-surface-primary px-3 py-2">
+                        <div className="text-xs uppercase tracking-wide text-text-secondary">
+                          {localize('com_ui_provider')}
+                        </div>
+                        <div className="mt-1 text-text-primary">
+                          {conversation.endpoint || localize('com_ui_unknown')}
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-border-light bg-surface-primary px-3 py-2">
+                        <div className="text-xs uppercase tracking-wide text-text-secondary">
+                          {localize('com_ui_model')}
+                        </div>
+                        <div className="mt-1 text-text-primary">
+                          {conversation.model || localize('com_ui_unknown')}
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-border-light bg-surface-primary px-3 py-2">
+                        <div className="text-xs uppercase tracking-wide text-text-secondary">
+                          {localize('com_ui_admin_updated_at')}
+                        </div>
+                        <div className="mt-1 text-text-primary">
+                          {formatAdminDateTime(conversation.updatedAt)}
+                        </div>
+                      </div>
+                    </div>
+                  </button>
                 ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+              </div>
+            )}
+          </div>
+          <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border-light px-5 py-4">
+            <div className="text-sm text-text-secondary">
+              {localize('com_ui_page')} {currentPage}
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                disabled={cursorHistory.length === 0}
+                className="admin-button-secondary rounded-xl px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => {
+                  const nextHistory = [...cursorHistory];
+                  const previousCursor = nextHistory.pop();
+                  setCursorHistory(nextHistory);
+                  setCursor(previousCursor || undefined);
+                }}
+              >
+                {localize('com_ui_back')}
+              </button>
+              <button
+                type="button"
+                disabled={!conversationsQuery.data?.nextCursor}
+                className="admin-button-secondary rounded-xl px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => {
+                  if (!conversationsQuery.data?.nextCursor) {
+                    return;
+                  }
 
-        <div className="flex items-center justify-between">
-          <button
-            type="button"
-            disabled={cursorHistory.length === 0}
-            className="rounded-xl border border-border-medium px-4 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-60"
-            onClick={() => {
-              const nextHistory = [...cursorHistory];
-              const previousCursor = nextHistory.pop();
-              setCursorHistory(nextHistory);
-              setCursor(previousCursor || undefined);
-            }}
-          >
-            {localize('com_ui_back')}
-          </button>
-          <button
-            type="button"
-            disabled={!conversationsQuery.data?.nextCursor}
-            className="rounded-xl border border-border-medium px-4 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-60"
-            onClick={() => {
-              if (!conversationsQuery.data?.nextCursor) {
-                return;
-              }
-
-              setCursorHistory((current) => [...current, cursor ?? '']);
-              setCursor(conversationsQuery.data.nextCursor);
-            }}
-          >
-            {localize('com_ui_admin_next_page')}
-          </button>
-        </div>
+                  setCursorHistory((current) => [...current, cursor ?? '']);
+                  setCursor(conversationsQuery.data.nextCursor);
+                }}
+              >
+                {localize('com_ui_admin_next_page')}
+              </button>
+            </div>
+          </div>
+        </section>
+        <Outlet />
       </div>
     </AdminLayout>
   );

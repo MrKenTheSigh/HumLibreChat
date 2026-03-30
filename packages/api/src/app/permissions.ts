@@ -17,6 +17,12 @@ function hasExplicitConfig(
   permissionType: PermissionTypes,
 ) {
   switch (permissionType) {
+    case PermissionTypes.CHAT:
+      return false;
+    case PermissionTypes.PARAMETERS:
+      return false;
+    case PermissionTypes.FILE_UPLOADS:
+      return false;
     case PermissionTypes.PROMPTS:
       return interfaceConfig?.prompts !== undefined;
     case PermissionTypes.BOOKMARKS:
@@ -52,10 +58,12 @@ function hasExplicitConfig(
 
 export async function updateInterfacePermissions({
   appConfig,
+  getRoles,
   getRoleByName,
   updateAccessPermissions,
 }: {
   appConfig: AppConfig;
+  getRoles?: () => Promise<Pick<IRole, 'name'>[]>;
   getRoleByName: (roleName: string, fieldsToSelect?: string | string[]) => Promise<IRole | null>;
   updateAccessPermissions: (
     roleName: string,
@@ -94,13 +102,30 @@ export async function updateInterfacePermissions({
   };
 
   const defaults = getConfigDefaults().interface;
+  const systemRoleNames = [SystemRoles.USER, SystemRoles.ADMIN];
+  const existingRoles = (await getRoles?.()) ?? [];
+  const roleNames = Array.from(
+    new Set([
+      ...systemRoleNames,
+      ...existingRoles
+        .map((role) => role.name?.trim())
+        .filter((name): name is string => Boolean(name && name.length > 0))
+        .map((name) => name.toUpperCase()),
+    ]),
+  );
 
   // Permission precedence order:
-  // 1. Explicit user configuration (from librechat.yaml)
+  // 1. Existing role permissions from the admin-managed role document
   // 2. Role-specific defaults (from roleDefaults)
   // 3. Interface schema defaults (from interfaceSchema.default())
-  for (const roleName of [SystemRoles.USER, SystemRoles.ADMIN]) {
-    const defaultPerms = roleDefaults[roleName]?.permissions;
+  //
+  // Interface config is only used to seed missing permission groups on startup.
+  // Once a role has explicit permissions in the database, admin-managed role settings
+  // remain the source of truth and are not overwritten by librechat.yaml.
+  for (const roleName of roleNames) {
+    const defaultPerms =
+      roleDefaults[roleName as keyof typeof roleDefaults]?.permissions ??
+      roleDefaults[SystemRoles.USER].permissions;
 
     const existingRole = await getRoleByName(roleName);
     const existingPermissions = existingRole?.permissions as
@@ -118,21 +143,17 @@ export async function updateInterfacePermissions({
       permissions: Record<string, boolean | undefined>,
     ) => {
       const permTypeExists = existingPermissions?.[permType];
-      const isExplicitlyConfigured =
-        interfaceConfig && hasExplicitConfig(interfaceConfig, permType);
       const isMemoryDisabled = permType === PermissionTypes.MEMORIES && isMemoryExplicitlyDisabled;
       const isMemoryReenabling =
         permType === PermissionTypes.MEMORIES &&
         shouldEnableMemory &&
         existingPermissions?.[PermissionTypes.MEMORIES]?.[Permissions.USE] === false;
 
-      // Only update if: doesn't exist OR explicitly configured OR memory state change
-      if (!permTypeExists || isExplicitlyConfigured || isMemoryDisabled || isMemoryReenabling) {
+      // Only update if: doesn't exist OR memory state change
+      if (!permTypeExists || isMemoryDisabled || isMemoryReenabling) {
         permissionsToUpdate[permType] = permissions;
         if (!permTypeExists) {
           logger.debug(`Role '${roleName}': Setting up default permissions for '${permType}'`);
-        } else if (isExplicitlyConfigured) {
-          logger.debug(`Role '${roleName}': Applying explicit config for '${permType}'`);
         } else if (isMemoryDisabled) {
           logger.debug(`Role '${roleName}': Disabling memories as memory.disabled is true`);
         } else if (isMemoryReenabling) {
@@ -178,6 +199,29 @@ export async function updateInterfacePermissions({
       typeof defaults.agents === 'object' ? defaults.agents?.public : undefined;
 
     const allPermissions: Partial<Record<PermissionTypes, Record<string, boolean | undefined>>> = {
+      [PermissionTypes.CHAT]: {
+        [Permissions.USE]:
+          defaultPerms[PermissionTypes.CHAT]?.[Permissions.USE] ??
+          roleDefaults[SystemRoles.USER].permissions[PermissionTypes.CHAT]?.[Permissions.USE] ??
+          true,
+      },
+      [PermissionTypes.PARAMETERS]: {
+        [Permissions.USE]:
+          defaultPerms[PermissionTypes.PARAMETERS]?.[Permissions.USE] ??
+          roleDefaults[SystemRoles.USER].permissions[PermissionTypes.PARAMETERS]?.[
+            Permissions.USE
+          ] ??
+          defaults.parameters ??
+          true,
+      },
+      [PermissionTypes.FILE_UPLOADS]: {
+        [Permissions.USE]:
+          defaultPerms[PermissionTypes.FILE_UPLOADS]?.[Permissions.USE] ??
+          roleDefaults[SystemRoles.USER].permissions[PermissionTypes.FILE_UPLOADS]?.[
+            Permissions.USE
+          ] ??
+          true,
+      },
       [PermissionTypes.PROMPTS]: {
         [Permissions.USE]: getPermissionValue(
           getConfigUse(loadedInterface.prompts),

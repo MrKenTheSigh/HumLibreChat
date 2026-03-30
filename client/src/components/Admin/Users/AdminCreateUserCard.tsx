@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { TError } from 'librechat-data-provider';
-import { useCreateAdminUserMutation } from '~/data-provider/Admin';
+import { SystemRoles } from 'librechat-data-provider';
+import { useCreateAdminUserMutation, useGetAdminRolesQuery } from '~/data-provider/Admin';
 import { useLocalize } from '~/hooks';
 
 type CreateUserForm = {
@@ -8,7 +9,7 @@ type CreateUserForm = {
   username: string;
   email: string;
   password: string;
-  role: 'ADMIN' | 'USER';
+  role: string;
   emailVerified: boolean;
 };
 
@@ -17,11 +18,11 @@ const emptyForm: CreateUserForm = {
   username: '',
   email: '',
   password: '',
-  role: 'USER',
+  role: SystemRoles.USER,
   emailVerified: true,
 };
 
-function toErrorMessage(error: TError | undefined): string | null {
+function toErrorMessage(error: TError | null | undefined): string | null {
   return error?.response?.data?.message ?? error?.message ?? null;
 }
 
@@ -32,51 +33,56 @@ export default function AdminCreateUserCard(props: {
   const { onCreated, onCancel } = props;
   const localize = useLocalize();
   const [form, setForm] = useState<CreateUserForm>(emptyForm);
+  const rolesQuery = useGetAdminRolesQuery();
   const createMutation = useCreateAdminUserMutation();
   const errorMessage = toErrorMessage(createMutation.error);
+  const availableRoles = rolesQuery.data?.roles ?? [];
+
+  useEffect(() => {
+    if (availableRoles.length === 0 || availableRoles.some((role) => role.name === form.role)) {
+      return;
+    }
+
+    const nextRole =
+      availableRoles.find((role) => role.name === SystemRoles.USER)?.name ?? availableRoles[0].name;
+    setForm((current) => ({ ...current, role: nextRole }));
+  }, [availableRoles, form.role]);
 
   return (
-    <section className="rounded-2xl border border-border-medium bg-surface-primary p-4">
-      <div className="mb-4">
-        <h2 className="text-base font-medium text-text-primary">
-          {localize('com_ui_admin_create_user')}
-        </h2>
-        <p className="mt-1 text-sm text-text-secondary">
-          {localize('com_ui_admin_create_user_description')}
-        </p>
-      </div>
+    <form
+      className="grid gap-4"
+      onSubmit={(event) => {
+        event.preventDefault();
+        createMutation.mutate(
+          {
+            name: form.name.trim(),
+            username: form.username.trim() || null,
+            email: form.email.trim(),
+            password: form.password,
+            role: form.role,
+            emailVerified: form.emailVerified,
+          },
+          {
+            onSuccess: (user) => {
+              setForm(emptyForm);
+              onCreated(user.id);
+            },
+          },
+        );
+      }}
+    >
+      <h2 className="text-base font-medium text-text-primary">
+        {localize('com_ui_admin_create_user')}
+      </h2>
 
-      <form
-        className="grid gap-4"
-        onSubmit={(event) => {
-          event.preventDefault();
-          createMutation.mutate(
-            {
-              name: form.name.trim(),
-              username: form.username.trim() || null,
-              email: form.email.trim(),
-              password: form.password,
-              role: form.role,
-              emailVerified: form.emailVerified,
-            },
-            {
-              onSuccess: (user) => {
-                setForm(emptyForm);
-                onCreated(user.id);
-              },
-            },
-          );
-        }}
-      >
+      <section className="rounded-2xl border border-border-medium bg-surface-primary p-4">
         <div className="grid gap-4 md:grid-cols-2">
           <label className="flex flex-col gap-2 text-sm text-text-secondary">
             {localize('com_ui_name')}
             <input
               required={true}
               value={form.name}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, name: event.target.value }))
-              }
+              onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
               className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
             />
           </label>
@@ -92,7 +98,7 @@ export default function AdminCreateUserCard(props: {
           </label>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
           <label className="flex flex-col gap-2 text-sm text-text-secondary">
             {localize('com_auth_email')}
             <input
@@ -106,7 +112,12 @@ export default function AdminCreateUserCard(props: {
             />
           </label>
           <label className="flex flex-col gap-2 text-sm text-text-secondary">
-            {localize('com_auth_password')}
+            <span className="flex items-center justify-between gap-3">
+              <span>{localize('com_auth_password')}</span>
+              <span className="text-[11px] font-normal tracking-[0.02em] text-text-tertiary">
+                {localize('com_auth_password_min_length')}
+              </span>
+            </span>
             <input
               required={true}
               type="password"
@@ -117,13 +128,10 @@ export default function AdminCreateUserCard(props: {
               }
               className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
             />
-            <span className="text-xs text-text-secondary">
-              {localize('com_auth_password_min_length')}
-            </span>
           </label>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
           <label className="flex flex-col gap-2 text-sm text-text-secondary">
             {localize('com_ui_role')}
             <select
@@ -136,46 +144,53 @@ export default function AdminCreateUserCard(props: {
               }
               className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
             >
-              <option value="USER">USER</option>
-              <option value="ADMIN">ADMIN</option>
+              {availableRoles.length === 0 && <option value={form.role}>{form.role}</option>}
+              {availableRoles.map((role) => (
+                <option key={role.name} value={role.name}>
+                  {role.name}
+                </option>
+              ))}
             </select>
           </label>
-          <label className="flex items-center gap-3 rounded-xl border border-border-medium bg-background px-4 py-3 text-sm text-text-primary">
-            <input
-              type="checkbox"
-              checked={form.emailVerified}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, emailVerified: event.target.checked }))
-              }
-            />
-            <span>{localize('com_ui_admin_email_verified')}</span>
+          <label className="flex flex-col gap-2 text-sm text-text-secondary">
+            {localize('com_ui_admin_email_verified')}
+            <span className="flex h-[42px] items-center gap-3 rounded-xl border border-border-medium bg-background px-4 py-2 text-sm text-text-primary">
+              <input
+                type="checkbox"
+                checked={form.emailVerified}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, emailVerified: event.target.checked }))
+                }
+              />
+              <span>{localize('com_ui_yes')}</span>
+            </span>
           </label>
         </div>
 
         {errorMessage && (
-          <p className="rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+          <p className="mt-4 rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
             {errorMessage}
           </p>
         )}
+      </section>
 
-        <div className="flex items-center gap-3">
-          <button
-            type="submit"
-            disabled={createMutation.isLoading}
-            className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {localize('com_ui_create')}
-          </button>
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={createMutation.isLoading}
-            className="rounded-xl border border-border-medium px-4 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {localize('com_ui_cancel')}
-          </button>
-        </div>
-      </form>
-    </section>
+      <div className="flex items-center gap-3">
+        <button
+          type="submit"
+          disabled={createMutation.isLoading}
+          className="admin-button-primary rounded-xl px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {localize('com_ui_create')}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={createMutation.isLoading}
+          className="admin-button-secondary rounded-xl px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {localize('com_ui_cancel')}
+        </button>
+      </div>
+    </form>
   );
 }

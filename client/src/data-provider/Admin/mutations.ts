@@ -34,6 +34,55 @@ export const useCreateAdminUserMutation = (): UseMutationResult<
   });
 };
 
+export const useCreateAdminRoleMutation = (): UseMutationResult<
+  t.AdminRole,
+  t.TError | undefined,
+  t.AdminRoleCreateRequest,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+
+  return useMutation((variables) => dataService.createAdminRole(variables), {
+    onSuccess: () => {
+      queryClient.invalidateQueries([QueryKeys.adminRoles]);
+    },
+  });
+};
+
+export const useUpdateAdminRoleMutation = (): UseMutationResult<
+  t.AdminRole,
+  t.TError | undefined,
+  t.AdminRoleUpdateRequest,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+
+  return useMutation((variables) => dataService.updateAdminRole(variables), {
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries([QueryKeys.adminRoles]);
+      queryClient.invalidateQueries([QueryKeys.adminRole, variables.roleName]);
+      queryClient.invalidateQueries([QueryKeys.roles, variables.roleName]);
+    },
+  });
+};
+
+export const useDeleteAdminRoleMutation = (): UseMutationResult<
+  t.AdminRoleDeleteResponse,
+  t.TError | undefined,
+  string,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+
+  return useMutation((roleName) => dataService.deleteAdminRole(roleName), {
+    onSuccess: (_data, roleName) => {
+      queryClient.invalidateQueries([QueryKeys.adminRoles]);
+      queryClient.removeQueries([QueryKeys.adminRole, roleName]);
+      queryClient.removeQueries([QueryKeys.roles, roleName]);
+    },
+  });
+};
+
 export const useSetAdminUserBalanceMutation = (): UseMutationResult<
   t.AdminBalanceUpdateResponse,
   t.TError | undefined,
@@ -43,6 +92,22 @@ export const useSetAdminUserBalanceMutation = (): UseMutationResult<
   const queryClient = useQueryClient();
 
   return useMutation((variables) => dataService.setAdminUserBalance(variables), {
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries([QueryKeys.adminUser, variables.userId]);
+      queryClient.invalidateQueries([QueryKeys.adminUsers]);
+    },
+  });
+};
+
+export const useUpdateAdminUserRoleMutation = (): UseMutationResult<
+  t.AdminUserRoleAssignmentResponse,
+  t.TError | undefined,
+  t.AdminUserRoleAssignmentRequest,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+
+  return useMutation((variables) => dataService.updateAdminUserRole(variables), {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries([QueryKeys.adminUser, variables.userId]);
       queryClient.invalidateQueries([QueryKeys.adminUsers]);

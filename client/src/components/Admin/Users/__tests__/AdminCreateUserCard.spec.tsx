@@ -3,9 +3,11 @@ import AdminCreateUserCard from '../AdminCreateUserCard';
 
 const mockMutate = jest.fn();
 const mockUseCreateAdminUserMutation = jest.fn();
+const mockUseGetAdminRolesQuery = jest.fn();
 
 jest.mock('~/data-provider/Admin', () => ({
   useCreateAdminUserMutation: (...args: unknown[]) => mockUseCreateAdminUserMutation(...args),
+  useGetAdminRolesQuery: (...args: unknown[]) => mockUseGetAdminRolesQuery(...args),
 }));
 
 jest.mock('~/hooks', () => ({
@@ -19,6 +21,15 @@ describe('AdminCreateUserCard', () => {
       mutate: mockMutate,
       isLoading: false,
       error: undefined,
+    });
+    mockUseGetAdminRolesQuery.mockReturnValue({
+      data: {
+        roles: [
+          { name: 'USER' },
+          { name: 'ADMIN' },
+          { name: 'MEMBER' },
+        ],
+      },
     });
   });
 

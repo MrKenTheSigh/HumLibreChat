@@ -2,10 +2,16 @@ import { useState } from 'react';
 import { Settings2 } from 'lucide-react';
 import { TooltipAnchor } from '@librechat/client';
 import { Root, Anchor } from '@radix-ui/react-popover';
-import { isParamEndpoint, getEndpointField, tConvoUpdateSchema } from 'librechat-data-provider';
+import {
+  Permissions,
+  PermissionTypes,
+  isParamEndpoint,
+  getEndpointField,
+  tConvoUpdateSchema,
+} from 'librechat-data-provider';
 import type { TPreset, TInterfaceConfig } from 'librechat-data-provider';
 import { EndpointSettings, SaveAsPresetDialog, AlternativeSettings } from '~/components/Endpoints';
-import { useSetIndexOptions, useLocalize } from '~/hooks';
+import { useSetIndexOptions, useLocalize, useHasAccess } from '~/hooks';
 import { useGetEndpointsQuery } from '~/data-provider';
 import OptionsPopover from './OptionsPopover';
 import PopoverButtons from './PopoverButtons';
@@ -20,6 +26,10 @@ export default function HeaderOptions({
 
   const [saveAsDialogShow, setSaveAsDialogShow] = useState<boolean>(false);
   const localize = useLocalize();
+  const canUseParameters = useHasAccess({
+    permissionType: PermissionTypes.PARAMETERS,
+    permission: Permissions.USE,
+  });
 
   const { showPopover, conversation, setShowPopover } = useChatContext();
   const { setOption } = useSetIndexOptions();
@@ -47,7 +57,7 @@ export default function HeaderOptions({
         <div className="my-auto lg:max-w-2xl xl:max-w-3xl">
           <span className="flex w-full flex-col items-center justify-center gap-0 md:order-none md:m-auto md:gap-2">
             <div className="z-[61] flex w-full items-center justify-center gap-2">
-              {interfaceConfig?.parameters === true && paramEndpoint === false && (
+              {canUseParameters && paramEndpoint === false && (
                 <TooltipAnchor
                   id="parameters-button"
                   aria-label={localize('com_ui_model_parameters')}
@@ -62,7 +72,7 @@ export default function HeaderOptions({
                 </TooltipAnchor>
               )}
             </div>
-            {interfaceConfig?.parameters === true && paramEndpoint === false && (
+            {canUseParameters && paramEndpoint === false && (
               <OptionsPopover
                 visible={showPopover}
                 saveAsPreset={saveAsPreset}

@@ -41,7 +41,7 @@ That means the first reporting pass should be built around `Transaction` as-is.
 
 1. `admin-transactions-api-spec.md`
 2. `admin-usage-summary-api-spec.md`
-3. `admin-usage-dashboard-ui-spec.md`
+3. `../../ui-ux/admin/admin-usage-dashboard-ui-spec.md`
 
 ## Default Reporting Policy
 

@@ -12,6 +12,7 @@ import {
   AdminConversationsPage,
   AdminPlanForm,
   AdminPlansPage,
+  AdminRolesPage,
   AdminUsagePage,
   AdminUserDetail,
   AdminUsersPage,
@@ -77,42 +78,54 @@ const dashboardRoutes = {
         {
           path: 'users',
           element: <AdminUsersPage />,
+          children: [
+            {
+              path: ':userId',
+              element: <AdminUserDetail />,
+            },
+          ],
         },
         {
-          path: 'users/:userId',
-          element: <AdminUserDetail />,
+          path: 'roles',
+          element: <AdminRolesPage />,
         },
         {
           path: 'channels',
           element: <AdminChannelsPage />,
-        },
-        {
-          path: 'channels/new',
-          element: <AdminChannelForm />,
-        },
-        {
-          path: 'channels/:channelId',
-          element: <AdminChannelForm />,
+          children: [
+            {
+              path: 'new',
+              element: <AdminChannelForm />,
+            },
+            {
+              path: ':channelId',
+              element: <AdminChannelForm />,
+            },
+          ],
         },
         {
           path: 'plans',
           element: <AdminPlansPage />,
-        },
-        {
-          path: 'plans/new',
-          element: <AdminPlanForm />,
-        },
-        {
-          path: 'plans/:planId',
-          element: <AdminPlanForm />,
+          children: [
+            {
+              path: 'new',
+              element: <AdminPlanForm />,
+            },
+            {
+              path: ':planId',
+              element: <AdminPlanForm />,
+            },
+          ],
         },
         {
           path: 'conversations',
           element: <AdminConversationsPage />,
-        },
-        {
-          path: 'conversations/:conversationId',
-          element: <AdminConversationDetail />,
+          children: [
+            {
+              path: ':conversationId',
+              element: <AdminConversationDetail />,
+            },
+          ],
         },
         {
           path: 'usage',

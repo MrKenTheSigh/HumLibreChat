@@ -47,6 +47,8 @@ export enum QueryKeys {
   agentCategories = 'agentCategories',
   marketplaceAgents = 'marketplaceAgents',
   roles = 'roles',
+  adminRoles = 'adminRoles',
+  adminRole = 'adminRole',
   adminUsers = 'adminUsers',
   adminUser = 'adminUser',
   adminChannelInventory = 'adminChannelInventory',

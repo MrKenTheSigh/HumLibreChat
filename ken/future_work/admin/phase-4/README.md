@@ -60,7 +60,7 @@ Acceptance validation also confirmed the expected runtime behavior:
 
 1. `provisioning-policy-helper-spec.md`
 2. `apply-starting-credits-api-spec.md`
-3. `admin-user-provisioning-ui-spec.md`
+3. `../../ui-ux/admin/admin-user-provisioning-ui-spec.md`
 
 ## Default Policy Decisions
 

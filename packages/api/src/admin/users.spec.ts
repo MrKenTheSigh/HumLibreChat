@@ -5,6 +5,8 @@ const mockUserFind = jest.fn();
 const mockUserFindOne = jest.fn();
 const mockUserFindById = jest.fn();
 const mockUserFindByIdAndUpdate = jest.fn();
+const mockUserCountDocuments = jest.fn();
+const mockRoleFindOne = jest.fn();
 const mockBalanceFindOne = jest.fn();
 const mockBalanceFindOneAndUpdate = jest.fn();
 const mockAdminPlanFindById = jest.fn();
@@ -28,6 +30,10 @@ jest.mock('@librechat/data-schemas', () => ({
       findOne: mockUserFindOne,
       findById: mockUserFindById,
       findByIdAndUpdate: mockUserFindByIdAndUpdate,
+      countDocuments: mockUserCountDocuments,
+    },
+    Role: {
+      findOne: mockRoleFindOne,
     },
     Balance: {
       findOne: mockBalanceFindOne,
@@ -64,6 +70,7 @@ const {
   getAdminUser,
   getAdminUsers,
   setAdminUserBalance,
+  updateAdminUserRole,
 } = require('./users');
 
 type MockResponse = Response & {
@@ -96,6 +103,7 @@ function createSelectLeanQuery<T>(value: T) {
 describe('admin users handlers', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockUserFind.mockReturnValue(createLeanQuery([]));
     mockGetBalanceConfig.mockReturnValue(null);
     mockApplyStartingCredits.mockResolvedValue({
       applied: false,
@@ -124,6 +132,8 @@ describe('admin users handlers', () => {
       appliedPlanMatchesCurrent: false,
       canApplyStartingCredits: true,
     });
+    mockRoleFindOne.mockReturnValue(createSelectLeanQuery({ name: 'USER' }));
+    mockUserCountDocuments.mockResolvedValue(2);
   });
 
   describe('getAdminUsers', () => {
@@ -345,6 +355,11 @@ describe('admin users handlers', () => {
         email: 'tester@example.com',
         favoritesCount: 2,
         plugins: ['web'],
+        roleManagement: {
+          isPrimaryAdminProtected: false,
+          canChangeRole: true,
+          canDelete: true,
+        },
         personalization: { memories: false },
         plan: {
           id: expect.any(String),
@@ -450,6 +465,26 @@ describe('admin users handlers', () => {
         tokenCredits: 600,
         updatedAt: null,
       });
+    });
+
+    it('rejects unknown roles before creating the user', async () => {
+      mockRoleFindOne.mockReturnValue(createSelectLeanQuery(null));
+
+      const req = {
+        body: {
+          name: 'New User',
+          email: 'new@example.com',
+          password: 'Password123',
+          role: 'MISSING_ROLE',
+        },
+      } as unknown as Request;
+      const res = createMockResponse();
+
+      await createAdminUser(req, res);
+
+      expect(mockCreateUser).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.json).toHaveBeenCalledWith({ message: 'Role not found' });
     });
   });
 
@@ -678,6 +713,107 @@ describe('admin users handlers', () => {
           appliedPlanMatchesCurrent: true,
           canApplyStartingCredits: false,
         },
+      });
+    });
+  });
+
+  describe('updateAdminUserRole', () => {
+    it('updates a user to a custom role', async () => {
+      const userId = new mongoose.Types.ObjectId();
+      mockUserFindById.mockReturnValueOnce(createSelectLeanQuery({ _id: userId, email: 'user@example.com' }));
+      mockRoleFindOne.mockReturnValueOnce(createSelectLeanQuery({ name: 'MEMBER' }));
+      mockUserFindByIdAndUpdate.mockReturnValue(
+        createSelectLeanQuery({
+          _id: userId,
+          role: 'MEMBER',
+        }),
+      );
+
+      const req = {
+        params: {
+          userId: userId.toString(),
+        },
+        body: {
+          roleName: 'member',
+        },
+      } as unknown as Request;
+      const res = createMockResponse();
+
+      await updateAdminUserRole(req, res);
+
+      expect(mockUserFindByIdAndUpdate).toHaveBeenCalledWith(
+        userId,
+        {
+          $set: {
+            role: 'MEMBER',
+          },
+        },
+        { new: true },
+      );
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({
+        userId: userId.toString(),
+        role: 'MEMBER',
+      });
+    });
+
+    it('rejects demoting the last remaining admin user', async () => {
+      const userId = new mongoose.Types.ObjectId();
+      mockUserFindById
+        .mockReturnValueOnce(createSelectLeanQuery({ _id: userId, email: 'admin@example.com' }))
+        .mockReturnValueOnce(createSelectLeanQuery({ _id: userId, role: 'ADMIN' }));
+      mockRoleFindOne.mockReturnValueOnce(createSelectLeanQuery({ name: 'MEMBER' }));
+      mockUserCountDocuments.mockResolvedValueOnce(1);
+
+      const req = {
+        params: {
+          userId: userId.toString(),
+        },
+        body: {
+          roleName: 'MEMBER',
+        },
+      } as unknown as Request;
+      const res = createMockResponse();
+
+      await updateAdminUserRole(req, res);
+
+      expect(mockUserFindByIdAndUpdate).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(409);
+      expect(res.json).toHaveBeenCalledWith({
+        message: 'Cannot remove the last remaining ADMIN user',
+      });
+    });
+
+    it('rejects changing the role of the primary admin user', async () => {
+      const userId = new mongoose.Types.ObjectId();
+      mockUserFindById
+        .mockReturnValueOnce(createSelectLeanQuery({ _id: userId, email: 'admin@example.com' }))
+        .mockReturnValueOnce(createSelectLeanQuery({ _id: userId, role: 'ADMIN' }));
+      mockRoleFindOne.mockReturnValueOnce(createSelectLeanQuery({ name: 'MEMBER' }));
+      mockUserFind.mockReturnValueOnce(
+        createLeanQuery([
+          {
+            _id: userId,
+          },
+        ]),
+      );
+
+      const req = {
+        params: {
+          userId: userId.toString(),
+        },
+        body: {
+          roleName: 'MEMBER',
+        },
+      } as unknown as Request;
+      const res = createMockResponse();
+
+      await updateAdminUserRole(req, res);
+
+      expect(mockUserFindByIdAndUpdate).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(res.json).toHaveBeenCalledWith({
+        message: 'Cannot change the role of the primary ADMIN user',
       });
     });
   });

@@ -1,5 +1,6 @@
 import type { AdminUsageSummaryResponse } from 'librechat-data-provider';
 import { useLocalize } from '~/hooks';
+import formatAdminDateTime from '../formatAdminDateTime';
 
 type SummaryCardProps = {
   title: string;
@@ -14,7 +15,7 @@ type AdminUsageSummaryCardsProps = {
 
 function SummaryCard({ title, value }: SummaryCardProps) {
   return (
-    <div className="rounded-2xl border border-border-medium bg-surface-primary p-4">
+    <div className="rounded-2xl border border-border-medium bg-background p-4">
       <div className="text-xs uppercase tracking-wide text-text-secondary">{title}</div>
       <div className="mt-2 text-2xl font-semibold text-text-primary">{value}</div>
     </div>
@@ -26,11 +27,7 @@ function formatNumber(value: number | null | undefined) {
 }
 
 function formatDate(value: string | null | undefined) {
-  if (!value) {
-    return '-';
-  }
-
-  return value;
+  return formatAdminDateTime(value);
 }
 
 export default function AdminUsageSummaryCards({
@@ -42,13 +39,15 @@ export default function AdminUsageSummaryCards({
 
   if (errorMessage) {
     return (
-      <div className="rounded-2xl border border-danger text-danger p-4 text-sm">{errorMessage}</div>
+      <div className="border-danger text-danger rounded-2xl border bg-red-500/10 p-4 text-sm">
+        {errorMessage}
+      </div>
     );
   }
 
   if (isLoading) {
     return (
-      <div className="rounded-2xl border border-border-medium bg-surface-primary p-4 text-sm text-text-secondary">
+      <div className="rounded-2xl border border-border-medium bg-background p-4 text-sm text-text-secondary">
         {localize('com_ui_loading')}
       </div>
     );

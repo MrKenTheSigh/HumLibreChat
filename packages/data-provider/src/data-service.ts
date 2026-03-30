@@ -127,6 +127,27 @@ export function getUserBalance(): Promise<t.TBalanceResponse> {
   return request.get(endpoints.balance());
 }
 
+export function getAdminRoles(): Promise<q.AdminRolesListResponse> {
+  return request.get(endpoints.adminRoles());
+}
+
+export function getAdminRole(roleName: string): Promise<q.AdminRole> {
+  return request.get(endpoints.adminRole(roleName));
+}
+
+export function createAdminRole(payload: q.AdminRoleCreateRequest): Promise<q.AdminRole> {
+  return request.post(endpoints.adminRoles(), payload);
+}
+
+export function updateAdminRole(payload: q.AdminRoleUpdateRequest): Promise<q.AdminRole> {
+  const { roleName, ...body } = payload;
+  return request.patch(endpoints.adminRole(roleName), body);
+}
+
+export function deleteAdminRole(roleName: string): Promise<q.AdminRoleDeleteResponse> {
+  return request.delete(endpoints.adminRole(roleName));
+}
+
 export function getAdminUsers(params: q.AdminUsersListParams): Promise<q.AdminUsersListResponse> {
   return request.get(endpoints.adminUsers(params));
 }
@@ -151,6 +172,12 @@ export function setAdminUserBalance(
   payload: q.AdminBalanceUpdateRequest,
 ): Promise<q.AdminBalanceUpdateResponse> {
   return request.post(endpoints.adminUserBalanceSet(payload.userId), { amount: payload.amount });
+}
+
+export function updateAdminUserRole(
+  payload: q.AdminUserRoleAssignmentRequest,
+): Promise<q.AdminUserRoleAssignmentResponse> {
+  return request.post(endpoints.adminUserRole(payload.userId), { roleName: payload.roleName });
 }
 
 export function assignAdminUserPlan(

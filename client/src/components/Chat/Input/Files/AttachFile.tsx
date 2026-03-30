@@ -1,14 +1,23 @@
 import React, { useRef } from 'react';
 import { FileUpload, TooltipAnchor, AttachmentIcon } from '@librechat/client';
-import { useLocalize, useFileHandling } from '~/hooks';
+import { Permissions, PermissionTypes } from 'librechat-data-provider';
+import { useLocalize, useFileHandling, useHasAccess } from '~/hooks';
 import { cn } from '~/utils';
 
 const AttachFile = ({ disabled }: { disabled?: boolean | null }) => {
   const localize = useLocalize();
   const inputRef = useRef<HTMLInputElement>(null);
   const isUploadDisabled = disabled ?? false;
+  const canUseFileUploads = useHasAccess({
+    permissionType: PermissionTypes.FILE_UPLOADS,
+    permission: Permissions.USE,
+  });
 
   const { handleFileChange } = useFileHandling();
+
+  if (!canUseFileUploads) {
+    return null;
+  }
 
   return (
     <FileUpload ref={inputRef} handleFileChange={handleFileChange}>

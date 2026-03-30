@@ -380,6 +380,10 @@ describe('initializeRoles', () => {
     expect(adminRole.permissions[PermissionTypes.PROMPTS].SHARE).toBe(true);
     expect(adminRole.permissions[PermissionTypes.BOOKMARKS].USE).toBe(true);
     expect(adminRole.permissions[PermissionTypes.AGENTS].CREATE).toBe(true);
+    expect(adminRole.isSystem).toBe(true);
+    expect(adminRole.isDeletable).toBe(false);
+    expect(userRole.isSystem).toBe(true);
+    expect(userRole.isDeletable).toBe(false);
   });
 
   it('should not modify existing permissions for existing roles', async () => {
@@ -507,5 +511,21 @@ describe('initializeRoles', () => {
     const userRole = await getRoleByName(SystemRoles.USER);
     expect(userRole.permissions[PermissionTypes.MULTI_CONVO]).toBeDefined();
     expect(userRole.permissions[PermissionTypes.MULTI_CONVO].USE).toBeDefined();
+  });
+
+  it('should backfill role metadata for existing system roles', async () => {
+    await new Role({
+      name: SystemRoles.ADMIN,
+      permissions: roleDefaults[SystemRoles.ADMIN].permissions,
+    }).save();
+
+    await initializeRoles();
+
+    const adminRole = await getRoleByName(SystemRoles.ADMIN);
+
+    expect(adminRole.description).toBe('Built-in administrator role');
+    expect(adminRole.isSystem).toBe(true);
+    expect(adminRole.isEditable).toBe(false);
+    expect(adminRole.isDeletable).toBe(false);
   });
 });

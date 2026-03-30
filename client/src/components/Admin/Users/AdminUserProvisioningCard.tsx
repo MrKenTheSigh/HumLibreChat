@@ -1,6 +1,8 @@
 import type { AdminUserDetail, AdminUserProvisioningState } from 'librechat-data-provider';
 import { useApplyAdminUserStartingCreditsMutation } from '~/data-provider/Admin';
+import type { TranslationKeys } from '~/hooks/useLocalize';
 import { useLocalize } from '~/hooks';
+import formatAdminDateTime from '../formatAdminDateTime';
 
 type CurrentPlan = AdminUserDetail['plan'];
 type ProvisioningState = AdminUserProvisioningState;
@@ -16,7 +18,7 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 
 function getStatusLabel(params: {
   currentPlan: CurrentPlan;
-  localize: (key: string) => string;
+  localize: (key: TranslationKeys) => string;
   provisioning: ProvisioningState;
 }): string {
   const { currentPlan, localize, provisioning } = params;
@@ -42,7 +44,7 @@ function getStatusLabel(params: {
 
 function getSourceLabel(
   source: ProvisioningState['appliedSource'],
-  localize: (key: string) => string,
+  localize: (key: TranslationKeys) => string,
 ): string {
   if (source === 'plan_assignment_auto_seed') {
     return localize('com_ui_admin_provisioning_source_auto');
@@ -71,7 +73,7 @@ export default function AdminUserProvisioningCard({
     applyMutation.error?.response?.data?.message ?? applyMutation.error?.message ?? null;
 
   return (
-    <section className="rounded-2xl border border-border-medium bg-surface-primary p-4">
+    <section className="rounded-3xl border border-border-medium bg-surface-primary p-5">
       <div className="mb-4">
         <h2 className="text-sm font-medium text-text-primary">
           {localize('com_ui_admin_plan_provisioning')}
@@ -89,9 +91,7 @@ export default function AdminUserProvisioningCard({
         />
         <DetailRow
           label={localize('com_ui_admin_balance_record')}
-          value={
-            provisioning.hasBalanceRecord ? localize('com_ui_yes') : localize('com_ui_no')
-          }
+          value={provisioning.hasBalanceRecord ? localize('com_ui_yes') : localize('com_ui_no')}
         />
         <DetailRow
           label={localize('com_ui_admin_provisioning_status')}
@@ -99,7 +99,7 @@ export default function AdminUserProvisioningCard({
         />
         <DetailRow
           label={localize('com_ui_admin_provisioning_last_applied')}
-          value={provisioning.appliedAt ?? '-'}
+          value={formatAdminDateTime(provisioning.appliedAt)}
         />
         <DetailRow
           label={localize('com_ui_admin_provisioning_last_source')}
@@ -119,14 +119,18 @@ export default function AdminUserProvisioningCard({
         <button
           type="button"
           disabled={provisioning.canApplyStartingCredits !== true || applyMutation.isLoading}
-          className="rounded-xl bg-surface-hover px-4 py-2 text-sm font-medium text-text-primary disabled:cursor-not-allowed disabled:opacity-60"
+          className="admin-button-secondary rounded-xl px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
           onClick={() => applyMutation.mutate({ userId })}
         >
           {localize('com_ui_admin_apply_starting_credits')}
         </button>
       </div>
 
-      {errorMessage && <p className="mt-3 text-sm text-red-500">{errorMessage}</p>}
+      {errorMessage && (
+        <p className="mt-4 rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          {errorMessage}
+        </p>
+      )}
     </section>
   );
 }

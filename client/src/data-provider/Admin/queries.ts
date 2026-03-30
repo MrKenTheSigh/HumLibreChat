@@ -24,6 +24,24 @@ export const useGetAdminUsersQuery = (
   );
 };
 
+export const useGetAdminRolesQuery = (
+  config?: UseQueryOptions<t.AdminRolesListResponse>,
+): QueryObserverResult<t.AdminRolesListResponse> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+
+  return useQuery<t.AdminRolesListResponse>(
+    [QueryKeys.adminRoles],
+    () => dataService.getAdminRoles(),
+    {
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      refetchOnMount: true,
+      ...config,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled,
+    },
+  );
+};
+
 export const useGetAdminUserQuery = (
   userId: string,
   config?: UseQueryOptions<t.AdminUserDetail>,

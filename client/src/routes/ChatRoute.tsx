@@ -78,8 +78,9 @@ export default function ChatRoute() {
    *  Adjusting this may have unintended consequences on the conversation state.
    */
   useEffect(() => {
-    // Wait for roles to load so hasAgentAccess has a definitive value in useNewConvo
-    const rolesLoaded = roles?.USER != null;
+    // Wait for the signed-in user's role to load so access hooks have definitive values in useNewConvo
+    const activeRoleName = user?.role ?? '';
+    const rolesLoaded = activeRoleName.length > 0 && roles?.[activeRoleName] != null;
     const shouldSetConvo =
       (startupConfig && rolesLoaded && !hasSetConversation.current && !modelsQuery.data?.initial) ??
       false;

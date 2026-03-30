@@ -4,6 +4,7 @@ export * from './channelInventory';
 export * from './conversations';
 export * from './plans';
 export * from './provisioning';
+export * from './roles';
 export * from './runtimeConfig';
 export * from './usage';
 export * from './users';

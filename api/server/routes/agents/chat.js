@@ -15,6 +15,15 @@ const { getRoleByName } = require('~/models/Role');
 
 const router = express.Router();
 
+const skipChatCheck = (req) => !skipAgentCheck(req);
+
+const checkChatAccess = generateCheckAccess({
+  permissionType: PermissionTypes.CHAT,
+  permissions: [Permissions.USE],
+  skipCheck: skipChatCheck,
+  getRoleByName,
+});
+
 const checkAgentAccess = generateCheckAccess({
   permissionType: PermissionTypes.AGENTS,
   permissions: [Permissions.USE],
@@ -26,6 +35,7 @@ const checkAgentResourceAccess = canAccessAgentFromBody({
 });
 
 router.use(moderateText);
+router.use(checkChatAccess);
 router.use(checkAgentAccess);
 router.use(checkAgentResourceAccess);
 router.use(validateConvoAccess);

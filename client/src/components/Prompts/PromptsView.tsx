@@ -1,5 +1,5 @@
 import { useMemo, useEffect, useState, useCallback, useRef } from 'react';
-import { Outlet, useParams, useNavigate } from 'react-router-dom';
+import { Navigate, Outlet, useParams } from 'react-router-dom';
 import { PermissionTypes, Permissions } from 'librechat-data-provider';
 import FilterPrompts from '~/components/Prompts/Groups/FilterPrompts';
 import DashBreadcrumb from '~/routes/Layouts/DashBreadcrumb';
@@ -11,7 +11,6 @@ import { cn } from '~/utils';
 
 export default function PromptsView() {
   const params = useParams();
-  const navigate = useNavigate();
   const isDetailView = useMemo(() => !!(params.promptId || params['*'] === 'new'), [params]);
   const isSmallerScreen = useMediaQuery('(max-width: 768px)');
   const [panelVisible, setPanelVisible] = useState(!isSmallerScreen);
@@ -23,18 +22,6 @@ export default function PromptsView() {
     permissionType: PermissionTypes.PROMPTS,
     permission: Permissions.USE,
   });
-
-  useEffect(() => {
-    let timeoutId: ReturnType<typeof setTimeout>;
-    if (!hasAccess) {
-      timeoutId = setTimeout(() => {
-        navigate('/c/new');
-      }, 1000);
-    }
-    return () => {
-      clearTimeout(timeoutId);
-    };
-  }, [hasAccess, navigate]);
 
   const togglePanel = useCallback(() => {
     setPanelVisible((prev) => {
@@ -57,7 +44,7 @@ export default function PromptsView() {
   }, [isSmallerScreen, isDetailView]);
 
   if (!hasAccess) {
-    return null;
+    return <Navigate to="/c/new" replace={true} />;
   }
 
   return (

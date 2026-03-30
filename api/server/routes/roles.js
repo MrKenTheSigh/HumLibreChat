@@ -110,11 +110,12 @@ router.get('/:roleName', async (req, res) => {
   const { roleName: _r } = req.params;
   // TODO: TEMP, use a better parsing for roleName
   const roleName = _r.toUpperCase();
+  const requesterRole = req.user.role?.toUpperCase();
+  const isAdmin = requesterRole === SystemRoles.ADMIN;
+  const isOwnRole = requesterRole != null && requesterRole === roleName;
+  const isBuiltInRole = Boolean(roleDefaults[roleName]);
 
-  if (
-    (req.user.role !== SystemRoles.ADMIN && roleName === SystemRoles.ADMIN) ||
-    (req.user.role !== SystemRoles.ADMIN && !roleDefaults[roleName])
-  ) {
+  if (!isAdmin && !isOwnRole && !isBuiltInRole) {
     return res.status(403).send({ message: 'Unauthorized' });
   }
 

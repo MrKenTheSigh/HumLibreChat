@@ -12,13 +12,19 @@ export function createRoleMethods(mongoose: typeof import('mongoose')) {
 
     for (const roleName of [SystemRoles.ADMIN, SystemRoles.USER]) {
       let role = await Role.findOne({ name: roleName });
-      const defaultPerms = roleDefaults[roleName].permissions;
+      const defaultRole = roleDefaults[roleName];
+      const defaultPerms = defaultRole.permissions;
 
       if (!role) {
-        role = new Role(roleDefaults[roleName]);
+        role = new Role(defaultRole);
       } else {
         const permissions = role.toObject()?.permissions ?? {};
         role.permissions = role.permissions || {};
+        role.description = defaultRole.description ?? null;
+        role.isSystem = defaultRole.isSystem;
+        role.isEditable = defaultRole.isEditable;
+        role.isDeletable = defaultRole.isDeletable;
+
         for (const permType of Object.keys(defaultPerms)) {
           if (permissions[permType] == null || Object.keys(permissions[permType]).length === 0) {
             role.permissions[permType] = defaultPerms[permType as keyof typeof defaultPerms];

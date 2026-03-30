@@ -2,7 +2,7 @@ import { useMemo, useCallback } from 'react';
 import { useSetRecoilState } from 'recoil';
 import { Sidebar } from '@librechat/client';
 import { useLocation } from 'react-router-dom';
-import { SystemRoles } from 'librechat-data-provider';
+import { SystemRoles, Permissions, PermissionTypes } from 'librechat-data-provider';
 import { ArrowLeft, MessageSquareQuote } from 'lucide-react';
 import {
   Breadcrumb,
@@ -11,7 +11,7 @@ import {
   BreadcrumbList,
   BreadcrumbSeparator,
 } from '@librechat/client';
-import { useLocalize, useCustomLink, useAuthContext } from '~/hooks';
+import { useLocalize, useCustomLink, useAuthContext, useHasAccess } from '~/hooks';
 import AdvancedSwitch from '~/components/Prompts/AdvancedSwitch';
 import AdminSettings from '~/components/Prompts/AdminSettings';
 import { useDashboardContext } from '~/Providers';
@@ -39,6 +39,10 @@ export default function DashBreadcrumb({
   const location = useLocation();
   const localize = useLocalize();
   const { user } = useAuthContext();
+  const hasPromptsAccess = useHasAccess({
+    permissionType: PermissionTypes.PROMPTS,
+    permission: Permissions.USE,
+  });
   const { prevLocationPath } = useDashboardContext();
   const lastConversationId = useMemo(() => getConversationId(prevLocationPath), [prevLocationPath]);
 
@@ -91,7 +95,7 @@ export default function DashBreadcrumb({
               <span className="flex md:hidden">{localize('com_ui_chat')}</span>
             </BreadcrumbLink>
           </BreadcrumbItem>
-          <BreadcrumbSeparator />
+          {hasPromptsAccess && <BreadcrumbSeparator />}
           {/*
         <BreadcrumbItem className="hover:dark:text-white">
           <DropdownMenu>
@@ -111,21 +115,23 @@ export default function DashBreadcrumb({
         </BreadcrumbItem>
         <BreadcrumbSeparator />
         */}
-          <BreadcrumbItem className="hover:dark:text-white">
-            <BreadcrumbLink
-              href="/d/prompts"
-              className="flex flex-row items-center gap-1"
-              onClick={promptsLinkHandler}
-            >
-              <MessageSquareQuote className="h-4 w-4 dark:text-gray-300" aria-hidden="true" />
-              {localize('com_ui_prompts')}
-            </BreadcrumbLink>
-          </BreadcrumbItem>
+          {hasPromptsAccess && (
+            <BreadcrumbItem className="hover:dark:text-white">
+              <BreadcrumbLink
+                href="/d/prompts"
+                className="flex flex-row items-center gap-1"
+                onClick={promptsLinkHandler}
+              >
+                <MessageSquareQuote className="h-4 w-4 dark:text-gray-300" aria-hidden="true" />
+                {localize('com_ui_prompts')}
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+          )}
         </BreadcrumbList>
       </Breadcrumb>
       <div className="flex items-center justify-center gap-2">
-        {isPromptsPath && <AdvancedSwitch />}
-        {user?.role === SystemRoles.ADMIN && <AdminSettings />}
+        {hasPromptsAccess && isPromptsPath && <AdvancedSwitch />}
+        {hasPromptsAccess && user?.role === SystemRoles.ADMIN && <AdminSettings />}
       </div>
     </div>
   );

@@ -1,5 +1,8 @@
 import { z } from 'zod';
 import {
+  chatPermissionsSchema,
+  parametersPermissionsSchema,
+  fileUploadsPermissionsSchema,
   Permissions,
   PermissionTypes,
   permissionsSchema,
@@ -34,6 +37,10 @@ export enum SystemRoles {
 
 export const roleSchema = z.object({
   name: z.string(),
+  description: z.string().nullable().optional(),
+  isSystem: z.boolean().default(false),
+  isEditable: z.boolean().default(true),
+  isDeletable: z.boolean().default(true),
   permissions: permissionsSchema,
 });
 
@@ -43,6 +50,15 @@ const defaultRolesSchema = z.object({
   [SystemRoles.ADMIN]: roleSchema.extend({
     name: z.literal(SystemRoles.ADMIN),
     permissions: permissionsSchema.extend({
+      [PermissionTypes.CHAT]: chatPermissionsSchema.extend({
+        [Permissions.USE]: z.boolean().default(true),
+      }),
+      [PermissionTypes.PARAMETERS]: parametersPermissionsSchema.extend({
+        [Permissions.USE]: z.boolean().default(true),
+      }),
+      [PermissionTypes.FILE_UPLOADS]: fileUploadsPermissionsSchema.extend({
+        [Permissions.USE]: z.boolean().default(true),
+      }),
       [PermissionTypes.PROMPTS]: promptPermissionsSchema.extend({
         [Permissions.USE]: z.boolean().default(true),
         [Permissions.CREATE]: z.boolean().default(true),
@@ -114,7 +130,20 @@ const defaultRolesSchema = z.object({
 export const roleDefaults = defaultRolesSchema.parse({
   [SystemRoles.ADMIN]: {
     name: SystemRoles.ADMIN,
+    description: 'Built-in administrator role',
+    isSystem: true,
+    isEditable: false,
+    isDeletable: false,
     permissions: {
+      [PermissionTypes.CHAT]: {
+        [Permissions.USE]: true,
+      },
+      [PermissionTypes.PARAMETERS]: {
+        [Permissions.USE]: true,
+      },
+      [PermissionTypes.FILE_UPLOADS]: {
+        [Permissions.USE]: true,
+      },
       [PermissionTypes.PROMPTS]: {
         [Permissions.USE]: true,
         [Permissions.CREATE]: true,
@@ -179,7 +208,20 @@ export const roleDefaults = defaultRolesSchema.parse({
   },
   [SystemRoles.USER]: {
     name: SystemRoles.USER,
+    description: 'Built-in default user role',
+    isSystem: true,
+    isEditable: true,
+    isDeletable: false,
     permissions: {
+      [PermissionTypes.CHAT]: {
+        [Permissions.USE]: true,
+      },
+      [PermissionTypes.PARAMETERS]: {
+        [Permissions.USE]: true,
+      },
+      [PermissionTypes.FILE_UPLOADS]: {
+        [Permissions.USE]: true,
+      },
       [PermissionTypes.PROMPTS]: {
         [Permissions.USE]: true,
         [Permissions.CREATE]: true,

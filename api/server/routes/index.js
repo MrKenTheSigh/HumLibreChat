@@ -5,6 +5,7 @@ const adminAuth = require('./admin/auth');
 const adminChannelInventory = require('./admin/channelInventory');
 const adminChannels = require('./admin/channels');
 const adminPlans = require('./admin/plans');
+const adminRoles = require('./admin/roles');
 const adminUsers = require('./admin/users');
 const adminConversations = require('./admin/conversations');
 const adminUsage = require('./admin/usage');
@@ -40,6 +41,7 @@ module.exports = {
   adminChannelInventory,
   adminChannels,
   adminPlans,
+  adminRoles,
   adminUsers,
   adminConversations,
   adminUsage,

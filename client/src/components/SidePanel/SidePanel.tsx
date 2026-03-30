@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, memo } from 'react';
 import { getEndpointField } from 'librechat-data-provider';
 import { useUserKeyQuery } from 'librechat-data-provider/react-query';
 import { ResizableHandleAlt, ResizablePanel, useMediaQuery } from '@librechat/client';
-import type { TEndpointsConfig, TInterfaceConfig } from 'librechat-data-provider';
+import type { TEndpointsConfig } from 'librechat-data-provider';
 import type { ImperativePanelHandle } from 'react-resizable-panels';
 import useSideNavLinks from '~/hooks/Nav/useSideNavLinks';
 import { useLocalStorage, useLocalize } from '~/hooks';
@@ -27,7 +27,6 @@ const SidePanel = ({
   setIsCollapsed,
   fullCollapse,
   setFullCollapse,
-  interfaceConfig,
 }: {
   defaultSize?: number;
   hasArtifacts: boolean;
@@ -41,7 +40,6 @@ const SidePanel = ({
   fullCollapse: boolean;
   setFullCollapse: React.Dispatch<React.SetStateAction<boolean>>;
   panelRef: React.RefObject<ImperativePanelHandle>;
-  interfaceConfig: TInterfaceConfig;
 }) => {
   const localize = useLocalize();
   const { endpoint } = useSidePanelContext();
@@ -86,7 +84,6 @@ const SidePanel = ({
     hidePanel,
     keyProvided,
     endpointType,
-    interfaceConfig,
     endpointsConfig,
   });
 

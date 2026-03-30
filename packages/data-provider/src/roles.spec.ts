@@ -22,6 +22,12 @@ describe('roleDefaults', () => {
   describe('USER role', () => {
     const userPerms = roleDefaults[SystemRoles.USER].permissions;
 
+    it('should mark USER as an immutable built-in fallback role', () => {
+      expect(roleDefaults[SystemRoles.USER].isSystem).toBe(true);
+      expect(roleDefaults[SystemRoles.USER].isEditable).toBe(true);
+      expect(roleDefaults[SystemRoles.USER].isDeletable).toBe(false);
+    });
+
     it('should have explicit values for every field in every multi-field permission type', () => {
       const schemaShape = permissionsSchema.shape;
 
@@ -104,6 +110,12 @@ describe('roleDefaults', () => {
 
   describe('ADMIN role', () => {
     const adminPerms = roleDefaults[SystemRoles.ADMIN].permissions;
+
+    it('should mark ADMIN as a non-deletable built-in role', () => {
+      expect(roleDefaults[SystemRoles.ADMIN].isSystem).toBe(true);
+      expect(roleDefaults[SystemRoles.ADMIN].isEditable).toBe(false);
+      expect(roleDefaults[SystemRoles.ADMIN].isDeletable).toBe(false);
+    });
 
     it('should have explicit values for every field in every permission type', () => {
       const schemaShape = permissionsSchema.shape;

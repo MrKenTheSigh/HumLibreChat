@@ -7,6 +7,15 @@ import type { IRole } from '~/types';
  */
 const rolePermissionsSchema = new Schema(
   {
+    [PermissionTypes.CHAT]: {
+      [Permissions.USE]: { type: Boolean },
+    },
+    [PermissionTypes.PARAMETERS]: {
+      [Permissions.USE]: { type: Boolean },
+    },
+    [PermissionTypes.FILE_UPLOADS]: {
+      [Permissions.USE]: { type: Boolean },
+    },
     [PermissionTypes.BOOKMARKS]: {
       [Permissions.USE]: { type: Boolean },
     },
@@ -73,6 +82,22 @@ const rolePermissionsSchema = new Schema(
 
 const roleSchema: Schema<IRole> = new Schema({
   name: { type: String, required: true, unique: true, index: true },
+  description: {
+    type: String,
+    default: null,
+  },
+  isSystem: {
+    type: Boolean,
+    default: false,
+  },
+  isEditable: {
+    type: Boolean,
+    default: true,
+  },
+  isDeletable: {
+    type: Boolean,
+    default: true,
+  },
   permissions: {
     type: rolePermissionsSchema,
   },

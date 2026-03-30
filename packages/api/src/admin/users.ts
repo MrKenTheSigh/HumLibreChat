@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { createModels, createMethods, logger } from '@librechat/data-schemas';
 import type { Request, Response } from 'express';
 import { SystemRoles } from 'librechat-data-provider';
-import type { AppConfig, IUser, IBalance } from '@librechat/data-schemas';
+import type { AppConfig, IUser, IBalance, IRole } from '@librechat/data-schemas';
 import { getBalanceConfig } from '~/app/config';
 import type { AdminUserProvisioningState } from './provisioning';
 import { applyStartingCredits, resolveProvisioningState } from './provisioning';
@@ -17,7 +17,7 @@ import {
   trimSearch,
 } from './utils';
 
-const { User, Balance, Transaction } = createModels(mongoose);
+const { User, Balance, Transaction, Role } = createModels(mongoose);
 const { createUser, updateBalance } = createMethods(mongoose);
 
 const MIN_PASSWORD_LENGTH = parseInt(process.env.MIN_PASSWORD_LENGTH ?? '', 10) || 8;
@@ -76,7 +76,11 @@ const adminCreateUserSchema = z.object({
       message: 'Password cannot be only spaces',
     }),
   emailVerified: z.boolean().optional().default(true),
-  role: z.nativeEnum(SystemRoles).optional().default(SystemRoles.USER),
+  role: z.string().trim().min(1, 'Role is required').optional().default(SystemRoles.USER),
+});
+
+const adminUserRoleAssignSchema = z.object({
+  roleName: z.string().trim().min(1, 'roleName is required'),
 });
 
 const adminUserPlanAssignSchema = z.object({
@@ -146,6 +150,10 @@ type AppAwareRequest = Request & {
   config?: AppConfig;
 };
 
+type PrimaryAdminRecord = {
+  _id: mongoose.Types.ObjectId;
+};
+
 function normalizeUsername(email: string, username: string | null | undefined): string {
   const normalized = username?.trim().toLowerCase();
   if (normalized != null && normalized.length > 0) {
@@ -153,6 +161,10 @@ function normalizeUsername(email: string, username: string | null | undefined): 
   }
 
   return email.split('@')[0].trim().toLowerCase();
+}
+
+function normalizeRoleName(roleName: string): string {
+  return roleName.trim().toUpperCase();
 }
 
 function sanitizeUserListItem(user: AdminUserListItem) {
@@ -175,6 +187,11 @@ function sanitizeUserDetail(
   balance: IBalance | null,
   plan: AdminPlanSummaryRecord | null,
   provisioning: AdminUserProvisioningState,
+  roleManagement: {
+    isPrimaryAdminProtected: boolean;
+    canChangeRole: boolean;
+    canDelete: boolean;
+  },
 ) {
   const base = sanitizeUserListItem(user);
   return {
@@ -182,6 +199,7 @@ function sanitizeUserDetail(
     termsAccepted: user.termsAccepted ?? false,
     favoritesCount: user.favorites?.length ?? 0,
     plugins: user.plugins ?? [],
+    roleManagement,
     personalization: {
       memories: user.personalization?.memories ?? true,
     },
@@ -292,6 +310,7 @@ export async function getAdminUsers(req: Request, res: Response) {
 export async function createAdminUser(req: Request, res: Response) {
   try {
     const body = adminCreateUserSchema.parse(req.body);
+    const { roleName } = await getExistingRoleOrThrow(body.role);
     const email = body.email.trim().toLowerCase();
     const username = normalizeUsername(email, body.username);
     const existingUserQuery = [{ email }, { username }];
@@ -311,7 +330,7 @@ export async function createAdminUser(req: Request, res: Response) {
         username,
         name: body.name.trim(),
         avatar: null,
-        role: body.role,
+        role: roleName,
         emailVerified: body.emailVerified,
         password: bcrypt.hashSync(body.password, salt),
       },
@@ -339,7 +358,7 @@ export async function getAdminUser(req: Request, res: Response) {
       throw createStatusError(404, 'User not found');
     }
 
-    const [balance, plan, provisioning] = await Promise.all([
+    const [balance, plan, provisioning, isPrimaryAdminProtected] = await Promise.all([
       Balance.findOne({ user: userId }).lean(),
       user.adminPlanId
         ? User.db
@@ -352,9 +371,16 @@ export async function getAdminUser(req: Request, res: Response) {
         appConfig: (req as AppAwareRequest).config,
         userId,
       }),
+      isPrimaryAdminUser(userId),
     ]);
 
-    return res.status(200).json(sanitizeUserDetail(user, balance as IBalance | null, plan, provisioning));
+    return res.status(200).json(
+      sanitizeUserDetail(user, balance as IBalance | null, plan, provisioning, {
+        isPrimaryAdminProtected,
+        canChangeRole: !isPrimaryAdminProtected,
+        canDelete: !isPrimaryAdminProtected,
+      }),
+    );
   } catch (error) {
     return handleAdminError(error, res, '[getAdminUser]');
   }
@@ -386,6 +412,34 @@ async function getExistingPlanOrThrow(
   }
 
   return { planId, plan };
+}
+
+async function getExistingRoleOrThrow(
+  roleNameParam: string,
+): Promise<{ role: IRole; roleName: string }> {
+  const roleName = normalizeRoleName(roleNameParam);
+  const role = await Role.findOne({ name: roleName }).lean<IRole | null>();
+
+  if (!role) {
+    throw createStatusError(404, 'Role not found');
+  }
+
+  return { role, roleName };
+}
+
+async function getPrimaryAdminUserId(): Promise<mongoose.Types.ObjectId | null> {
+  const adminUsers = await User.find({ role: SystemRoles.ADMIN })
+    .select('_id')
+    .sort({ createdAt: 1, _id: 1 })
+    .limit(1)
+    .lean<PrimaryAdminRecord[]>();
+
+  return adminUsers[0]?._id ?? null;
+}
+
+async function isPrimaryAdminUser(userId: mongoose.Types.ObjectId): Promise<boolean> {
+  const primaryAdminUserId = await getPrimaryAdminUserId();
+  return primaryAdminUserId?.equals(userId) === true;
 }
 
 function sanitizePlanAssignment(
@@ -555,5 +609,54 @@ export async function applyAdminUserPlanStartingCredits(req: Request, res: Respo
     return res.status(200).json(result);
   } catch (error) {
     return handleAdminError(error, res, '[applyAdminUserPlanStartingCredits]');
+  }
+}
+
+export async function updateAdminUserRole(req: Request, res: Response) {
+  try {
+    const { roleName: roleNameParam } = adminUserRoleAssignSchema.parse(req.body);
+    const { userId } = await getExistingUserOrThrow(req.params.userId);
+    const { roleName } = await getExistingRoleOrThrow(roleNameParam);
+    const existingUser = await User.findById(userId)
+      .select('_id role')
+      .lean<{ _id: mongoose.Types.ObjectId; role?: string | null } | null>();
+
+    if (!existingUser) {
+      throw createStatusError(404, 'User not found');
+    }
+
+    if ((await isPrimaryAdminUser(userId)) && roleName !== SystemRoles.ADMIN) {
+      throw createStatusError(403, 'Cannot change the role of the primary ADMIN user');
+    }
+
+    if (existingUser.role === SystemRoles.ADMIN && roleName !== SystemRoles.ADMIN) {
+      const adminCount = await User.countDocuments({ role: SystemRoles.ADMIN });
+      if (adminCount <= 1) {
+        throw createStatusError(409, 'Cannot remove the last remaining ADMIN user');
+      }
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      {
+        $set: {
+          role: roleName,
+        },
+      },
+      { new: true },
+    )
+      .select('_id role')
+      .lean<{ _id: mongoose.Types.ObjectId; role?: string | null } | null>();
+
+    if (!updatedUser || !updatedUser.role) {
+      throw createStatusError(404, 'User not found');
+    }
+
+    return res.status(200).json({
+      userId: userId.toString(),
+      role: updatedUser.role,
+    });
+  } catch (error) {
+    return handleAdminError(error, res, '[updateAdminUserRole]');
   }
 }

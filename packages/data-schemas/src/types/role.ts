@@ -5,7 +5,20 @@ import { CursorPaginationParams } from '~/common';
 
 export interface IRole extends Document {
   name: string;
+  description?: string | null;
+  isSystem?: boolean;
+  isEditable?: boolean;
+  isDeletable?: boolean;
   permissions: {
+    [PermissionTypes.CHAT]?: {
+      [Permissions.USE]?: boolean;
+    };
+    [PermissionTypes.PARAMETERS]?: {
+      [Permissions.USE]?: boolean;
+    };
+    [PermissionTypes.FILE_UPLOADS]?: {
+      [Permissions.USE]?: boolean;
+    };
     [PermissionTypes.BOOKMARKS]?: {
       [Permissions.USE]?: boolean;
     };

@@ -1,16 +1,65 @@
-import { BarChart3, ArrowLeft, Blocks, Layers3, MessagesSquare, Shield, Users } from 'lucide-react';
+import {
+  BarChart3,
+  ArrowLeft,
+  Blocks,
+  Layers3,
+  MessagesSquare,
+  Shield,
+  Users,
+  ShieldCheck,
+} from 'lucide-react';
+import type { TranslationKeys } from '~/hooks/useLocalize';
 import { Link, NavLink, Navigate, Outlet } from 'react-router-dom';
 import { SystemRoles } from 'librechat-data-provider';
 import { useAuthContext, useLocalize } from '~/hooks';
 import { cn } from '~/utils';
 
+type NavItem = {
+  icon: typeof Users;
+  labelKey: TranslationKeys;
+  to: string;
+};
+
+type NavGroup = {
+  headingKey: TranslationKeys;
+  items: NavItem[];
+};
+
 const navItemClassName = ({ isActive }: { isActive: boolean }) =>
   cn(
-    'flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors',
+    'admin-nav-item flex items-center gap-3 rounded-xl border px-3 py-2.5 text-sm transition-colors',
     isActive
-      ? 'bg-surface-hover text-text-primary'
-      : 'text-text-secondary hover:bg-surface-hover hover:text-text-primary',
+      ? 'admin-nav-item-active text-text-primary'
+      : 'text-text-secondary hover:text-text-primary',
   );
+
+const navGroups: NavGroup[] = [
+  {
+    headingKey: 'com_ui_admin_people',
+    items: [
+      { icon: Users, labelKey: 'com_ui_admin_users', to: '/d/admin/users' },
+      { icon: ShieldCheck, labelKey: 'com_ui_admin_roles', to: '/d/admin/roles' },
+    ],
+  },
+  {
+    headingKey: 'com_ui_admin_access',
+    items: [
+      { icon: Layers3, labelKey: 'com_ui_admin_plans', to: '/d/admin/plans' },
+      { icon: Blocks, labelKey: 'com_ui_admin_channels', to: '/d/admin/channels' },
+    ],
+  },
+  {
+    headingKey: 'com_ui_admin_audit',
+    items: [
+      {
+        icon: MessagesSquare,
+        labelKey: 'com_ui_admin_conversations',
+        to: '/d/admin/conversations',
+      },
+      { icon: BarChart3, labelKey: 'com_ui_admin_usage', to: '/d/admin/usage' },
+    ],
+  },
+];
 
 export default function AdminView() {
   const localize = useLocalize();
@@ -25,50 +74,55 @@ export default function AdminView() {
   }
 
   return (
-    <div className="flex h-screen w-full flex-col bg-surface-primary p-4 lg:flex-row lg:gap-4">
-      <aside className="mb-4 w-full rounded-2xl border border-border-medium bg-surface-secondary p-4 lg:mb-0 lg:w-72 lg:flex-shrink-0">
-        <div className="mb-6 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-hover text-text-primary">
-            <Shield className="h-5 w-5" aria-hidden="true" />
-          </div>
-          <div>
+    <div className="admin-console admin-shell flex h-screen w-full flex-col p-4 lg:flex-row lg:gap-4">
+      <aside className="admin-sidebar mb-4 flex w-full flex-col rounded-3xl border p-4 lg:mb-0 lg:w-80 lg:flex-shrink-0">
+        <div className="admin-raised rounded-2xl border p-4">
+          <div className="flex items-center gap-3">
+            <div className="admin-subpanel flex h-10 w-10 items-center justify-center rounded-xl text-text-primary">
+              <Shield className="h-5 w-5" aria-hidden="true" />
+            </div>
             <div className="text-sm font-medium text-text-primary">
               {localize('com_ui_admin_console')}
             </div>
-            <div className="text-xs text-text-secondary">{localize('com_ui_admin')}</div>
           </div>
         </div>
-        <Link
-          to="/c/new"
-          className="mb-6 flex items-center gap-2 rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary transition-colors hover:bg-surface-hover"
+
+        <nav
+          className="mt-6 flex flex-1 flex-col gap-5"
+          aria-label={localize('com_ui_admin_console')}
         >
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          {localize('com_ui_admin_back_to_chat')}
-        </Link>
-        <nav className="flex flex-col gap-2" aria-label={localize('com_ui_admin_console')}>
-          <NavLink to="/d/admin/users" className={navItemClassName}>
-            <Users className="h-4 w-4" aria-hidden="true" />
-            {localize('com_ui_admin_users')}
-          </NavLink>
-          <NavLink to="/d/admin/plans" className={navItemClassName}>
-            <Layers3 className="h-4 w-4" aria-hidden="true" />
-            {localize('com_ui_admin_plans')}
-          </NavLink>
-          <NavLink to="/d/admin/channels" className={navItemClassName}>
-            <Blocks className="h-4 w-4" aria-hidden="true" />
-            {localize('com_ui_admin_channels')}
-          </NavLink>
-          <NavLink to="/d/admin/conversations" className={navItemClassName}>
-            <MessagesSquare className="h-4 w-4" aria-hidden="true" />
-            {localize('com_ui_admin_conversations')}
-          </NavLink>
-          <NavLink to="/d/admin/usage" className={navItemClassName}>
-            <BarChart3 className="h-4 w-4" aria-hidden="true" />
-            {localize('com_ui_admin_usage')}
-          </NavLink>
+          {navGroups.map((group) => (
+            <div key={group.headingKey} className="space-y-2">
+              <div className="px-1 text-xs font-medium uppercase tracking-[0.22em] text-text-secondary">
+                {localize(group.headingKey)}
+              </div>
+              <div className="flex flex-col gap-1.5">
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+
+                  return (
+                    <NavLink key={item.to} to={item.to} className={navItemClassName}>
+                      <Icon className="h-4 w-4" aria-hidden="true" />
+                      {localize(item.labelKey)}
+                    </NavLink>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
+
+        <div className="mt-6 border-t border-border-light pt-4">
+          <Link
+            to="/c/new"
+            className="admin-subpanel flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm text-text-primary transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            {localize('com_ui_admin_back_to_chat')}
+          </Link>
+        </div>
       </aside>
-      <main className="min-h-0 flex-1 overflow-auto rounded-2xl border border-border-medium bg-background p-6">
+      <main className="admin-main min-h-0 flex-1 overflow-auto rounded-3xl border p-6 lg:p-8">
         <Outlet />
       </main>
     </div>

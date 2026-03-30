@@ -1,5 +1,6 @@
 import type { AdminTransactionItem } from 'librechat-data-provider';
 import { useLocalize } from '~/hooks';
+import formatAdminDateTime from '../formatAdminDateTime';
 
 type AdminTransactionsTableProps = {
   isLoading: boolean;
@@ -29,11 +30,7 @@ export default function AdminTransactionsTable({
   const localize = useLocalize();
 
   if (errorMessage) {
-    return (
-      <div className="p-6 text-sm text-danger">
-        {errorMessage}
-      </div>
-    );
+    return <div className="text-danger p-6 text-sm">{errorMessage}</div>;
   }
 
   if (isLoading) {
@@ -63,27 +60,39 @@ export default function AdminTransactionsTable({
           <th className="px-4 py-3 font-medium">{localize('com_ui_admin_rate_detail')}</th>
           <th className="px-4 py-3 font-medium">{localize('com_ui_input')}</th>
           <th className="px-4 py-3 font-medium">{localize('com_ui_write')}</th>
-          <th className="px-4 py-3 font-medium">{localize('com_ui_read')}</th>
+          <th className="px-4 py-3 font-medium">
+            {localize('com_ui_admin_usage_summary_read_tokens')}
+          </th>
           <th className="px-4 py-3 font-medium">{localize('com_ui_conversation')}</th>
         </tr>
       </thead>
       <tbody>
         {transactions.map((transaction) => (
-          <tr key={transaction.id} className="border-b border-border-light">
-            <td className="px-4 py-3 text-text-primary">{transaction.createdAt ?? '-'}</td>
+          <tr key={transaction.id} className="border-b border-border-light align-top">
+            <td className="px-4 py-3 text-text-primary">
+              {formatAdminDateTime(transaction.createdAt)}
+            </td>
             <td className="px-4 py-3">
               <div className="font-medium text-text-primary">
                 {transaction.userName || transaction.userEmail || transaction.userId}
               </div>
-              <div className="text-xs text-text-secondary">{transaction.userEmail ?? transaction.userId}</div>
+              <div className="text-xs text-text-secondary">
+                {transaction.userEmail ?? transaction.userId}
+              </div>
             </td>
             <td className="px-4 py-3 text-text-primary">{transaction.model ?? '-'}</td>
             <td className="px-4 py-3 text-text-primary">{transaction.context ?? '-'}</td>
-            <td className="px-4 py-3 text-text-primary">{transaction.tokenType}</td>
+            <td className="px-4 py-3">
+              <span className="inline-flex rounded-full border border-border-light bg-surface-hover px-2.5 py-1 text-xs font-medium text-text-primary">
+                {transaction.tokenType}
+              </span>
+            </td>
             <td className="px-4 py-3 text-text-primary">{formatNumber(transaction.tokenValue)}</td>
             <td className="px-4 py-3 text-text-primary">{formatNumber(transaction.rawAmount)}</td>
             <td className="px-4 py-3 text-text-primary">{formatNumber(transaction.rate)}</td>
-            <td className="px-4 py-3 text-text-primary">{formatRateDetail(transaction.rateDetail)}</td>
+            <td className="px-4 py-3 text-text-primary">
+              {formatRateDetail(transaction.rateDetail)}
+            </td>
             <td className="px-4 py-3 text-text-primary">{formatNumber(transaction.inputTokens)}</td>
             <td className="px-4 py-3 text-text-primary">{formatNumber(transaction.writeTokens)}</td>
             <td className="px-4 py-3 text-text-primary">{formatNumber(transaction.readTokens)}</td>

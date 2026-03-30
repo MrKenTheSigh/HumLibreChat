@@ -12,7 +12,6 @@ import { useRecoilState } from 'recoil';
 import { useNavigate } from 'react-router-dom';
 import {
   apiBaseUrl,
-  SystemRoles,
   setTokenHeader,
   buildLoginRedirectUrl,
 } from 'librechat-data-provider';
@@ -45,12 +44,10 @@ const AuthContextProvider = ({
   const [token, setToken] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | undefined>(undefined);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const activeRoleName = user?.role ?? '';
 
-  const { data: userRole = null } = useGetRole(SystemRoles.USER, {
-    enabled: !!(isAuthenticated && (user?.role ?? '')),
-  });
-  const { data: adminRole = null } = useGetRole(SystemRoles.ADMIN, {
-    enabled: !!(isAuthenticated && user?.role === SystemRoles.ADMIN),
+  const { data: activeRole = null } = useGetRole(activeRoleName, {
+    enabled: isAuthenticated && activeRoleName.length > 0,
   });
 
   const navigate = useNavigate();
@@ -260,14 +257,11 @@ const AuthContextProvider = ({
       login,
       logout,
       setError,
-      roles: {
-        [SystemRoles.USER]: userRole,
-        [SystemRoles.ADMIN]: adminRole,
-      },
+      roles: activeRoleName.length > 0 ? { [activeRoleName]: activeRole } : {},
       isAuthenticated,
     }),
 
-    [user, error, isAuthenticated, token, userRole, adminRole],
+    [user, error, isAuthenticated, token, activeRole, activeRoleName],
   );
 
   return <AuthContext.Provider value={memoedValue}>{children}</AuthContext.Provider>;

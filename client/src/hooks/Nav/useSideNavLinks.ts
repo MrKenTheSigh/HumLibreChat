@@ -9,7 +9,7 @@ import {
   isAgentsEndpoint,
   isAssistantsEndpoint,
 } from 'librechat-data-provider';
-import type { TInterfaceConfig, TEndpointsConfig } from 'librechat-data-provider';
+import type { TEndpointsConfig } from 'librechat-data-provider';
 import MCPBuilderPanel from '~/components/SidePanel/MCPBuilder/MCPBuilderPanel';
 import type { NavLink } from '~/common';
 import AgentPanelSwitch from '~/components/SidePanel/Agents/AgentPanelSwitch';
@@ -26,18 +26,24 @@ export default function useSideNavLinks({
   keyProvided,
   endpoint,
   endpointType,
-  interfaceConfig,
   endpointsConfig,
 }: {
   hidePanel: () => void;
   keyProvided: boolean;
   endpoint?: EModelEndpoint | null;
   endpointType?: EModelEndpoint | null;
-  interfaceConfig: Partial<TInterfaceConfig>;
   endpointsConfig: TEndpointsConfig;
 }) {
   const hasAccessToPrompts = useHasAccess({
     permissionType: PermissionTypes.PROMPTS,
+    permission: Permissions.USE,
+  });
+  const hasAccessToParameters = useHasAccess({
+    permissionType: PermissionTypes.PARAMETERS,
+    permission: Permissions.USE,
+  });
+  const hasAccessToFileUploads = useHasAccess({
+    permissionType: PermissionTypes.FILE_UPLOADS,
     permission: Permissions.USE,
   });
   const hasAccessToBookmarks = useHasAccess({
@@ -55,10 +61,6 @@ export default function useSideNavLinks({
   const hasAccessToAgents = useHasAccess({
     permissionType: PermissionTypes.AGENTS,
     permission: Permissions.USE,
-  });
-  const hasAccessToCreateAgents = useHasAccess({
-    permissionType: PermissionTypes.AGENTS,
-    permission: Permissions.CREATE,
   });
   const hasAccessToUseMCPSettings = useHasAccess({
     permissionType: PermissionTypes.MCP_SERVERS,
@@ -91,12 +93,7 @@ export default function useSideNavLinks({
       });
     }
 
-    if (
-      endpointsConfig?.[EModelEndpoint.agents] &&
-      hasAccessToAgents &&
-      hasAccessToCreateAgents &&
-      endpointsConfig[EModelEndpoint.agents].disableBuilder !== true
-    ) {
+    if (hasAccessToAgents) {
       links.push({
         title: 'com_sidepanel_agent_builder',
         label: '',
@@ -127,7 +124,7 @@ export default function useSideNavLinks({
     }
 
     if (
-      interfaceConfig.parameters === true &&
+      hasAccessToParameters &&
       isParamEndpoint(endpoint ?? '', endpointType ?? '') === true &&
       !isAgentsEndpoint(endpoint) &&
       keyProvided
@@ -141,13 +138,15 @@ export default function useSideNavLinks({
       });
     }
 
-    links.push({
-      title: 'com_sidepanel_attach_files',
-      label: '',
-      icon: AttachmentIcon,
-      id: 'files',
-      Component: FilesPanel,
-    });
+    if (hasAccessToFileUploads) {
+      links.push({
+        title: 'com_sidepanel_attach_files',
+        label: '',
+        icon: AttachmentIcon,
+        id: 'files',
+        Component: FilesPanel,
+      });
+    }
 
     if (hasAccessToBookmarks) {
       links.push({
@@ -159,10 +158,7 @@ export default function useSideNavLinks({
       });
     }
 
-    if (
-      (hasAccessToUseMCPSettings && availableMCPServers && availableMCPServers.length > 0) ||
-      hasAccessToCreateMCP
-    ) {
+    if (hasAccessToUseMCPSettings || hasAccessToCreateMCP) {
       links.push({
         title: 'com_nav_setting_mcp',
         label: '',
@@ -186,11 +182,11 @@ export default function useSideNavLinks({
     endpointsConfig,
     keyProvided,
     hasAccessToAgents,
-    hasAccessToCreateAgents,
     hasAccessToPrompts,
+    hasAccessToParameters,
+    hasAccessToFileUploads,
     hasAccessToMemories,
     hasAccessToReadMemories,
-    interfaceConfig.parameters,
     endpointType,
     hasAccessToBookmarks,
     availableMCPServers,

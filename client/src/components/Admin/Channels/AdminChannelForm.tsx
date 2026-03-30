@@ -1,5 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Blocks } from 'lucide-react';
+import {
+  OGDialog,
+  OGDialogContent,
+  OGDialogOverlay,
+  OGDialogPortal,
+  OGDialogTitle,
+} from '@librechat/client';
+import { useNavigate, useParams } from 'react-router-dom';
 import type {
   AdminChannelHeader,
   AdminChannelModel,
@@ -15,7 +23,7 @@ import {
   useUpdateAdminChannelMutation,
 } from '~/data-provider/Admin';
 import { useLocalize } from '~/hooks';
-import AdminLayout from '../AdminLayout';
+import AdminHelpButton from '../AdminHelpButton';
 
 type HeaderFormState = AdminChannelHeader;
 
@@ -162,7 +170,7 @@ const emptyChannelState: ChannelFormState = {
   models: [createEmptyModelState()],
 };
 
-function toErrorMessage(error: TError | undefined): string | null {
+function toErrorMessage(error: TError | null | undefined): string | null {
   return error?.response?.data?.message ?? error?.message ?? null;
 }
 
@@ -280,6 +288,20 @@ function getSelectedSuggestionValue(
   }
 
   return modelSuggestionsMap.has(trimmedModel) ? trimmedModel : '';
+}
+
+function StatusBadge({ active, label }: { active: boolean; label: string }) {
+  return (
+    <span
+      className={
+        active
+          ? 'inline-flex rounded-full border border-border-medium bg-background px-3 py-1 text-xs font-medium text-text-primary'
+          : 'inline-flex rounded-full border border-border-light bg-surface-hover px-3 py-1 text-xs font-medium text-text-secondary'
+      }
+    >
+      {label}
+    </span>
+  );
 }
 
 export default function AdminChannelForm() {
@@ -408,884 +430,926 @@ export default function AdminChannelForm() {
     });
   };
 
-  if (!isCreateMode && channelQuery.isLoading) {
-    return (
-      <AdminLayout
-        title={localize('com_ui_admin_channel_details')}
-        description={localize('com_ui_admin_channel_details_description')}
-      >
-        <div className="text-sm text-text-secondary">{localize('com_ui_loading')}</div>
-      </AdminLayout>
-    );
-  }
-
-  if (!isCreateMode && !channelQuery.data) {
-    return (
-      <AdminLayout
-        title={localize('com_ui_admin_channel_details')}
-        description={localize('com_ui_admin_channel_details_description')}
-      >
-        <div className="space-y-4">
-          <Link className="text-sm text-text-secondary underline" to="/d/admin/channels">
-            {localize('com_ui_back')}
-          </Link>
-          <p className="text-sm text-text-secondary">{localize('com_ui_no_results_found')}</p>
-        </div>
-      </AdminLayout>
-    );
-  }
-
   const submitDisabled =
     createMutation.isLoading || updateMutation.isLoading || deleteMutation.isLoading;
+  const closeModal = () => navigate('/d/admin/channels');
+  const modelCount = form.models.filter((model) => model.model.trim().length > 0).length;
 
   return (
-    <AdminLayout
-      title={
-        isCreateMode
-          ? localize('com_ui_admin_create_channel')
-          : localize('com_ui_admin_channel_details')
-      }
-      description={localize('com_ui_admin_channel_details_description')}
-    >
-      <div className="flex h-full flex-col gap-6">
-        <div>
-          <Link className="text-sm text-text-secondary underline" to="/d/admin/channels">
-            {localize('com_ui_back')}
-          </Link>
-        </div>
-
-        <form
-          className="grid gap-6"
-          onSubmit={(event) => {
-            event.preventDefault();
-
-            if (form.models.every((model) => model.model.trim().length === 0)) {
-              setClientError(localize('com_ui_admin_channel_models_required'));
-              return;
-            }
-
-            setClientError(null);
-
-            const payload = {
-              name: form.name.trim(),
-              slug: form.slug.trim(),
-              providerType: form.providerType,
-              description: form.description.trim(),
-              enabled: form.enabled,
-              sortOrder: Number(form.sortOrder || '0'),
-              connection: {
-                runtimeEndpoint: form.connection.runtimeEndpoint.trim(),
-                baseURL: form.connection.baseURL.trim(),
-                instanceName: form.connection.instanceName.trim(),
-                apiVersion: form.connection.apiVersion.trim(),
-                region: form.connection.region.trim(),
-                modelFetch: form.connection.modelFetch,
-                headers: form.connection.headers
-                  .map((header) => ({
-                    key: header.key.trim(),
-                    value: header.value.trim(),
-                  }))
-                  .filter((header) => header.key.length > 0 && header.value.length > 0),
-              },
-              secrets: {
-                apiKey: form.secrets.apiKey.trim(),
-                apiKeyRef: form.secrets.apiKeyRef.trim(),
-                accessKeyId: form.secrets.accessKeyId.trim(),
-                accessKeyIdRef: form.secrets.accessKeyIdRef.trim(),
-                secretAccessKey: form.secrets.secretAccessKey.trim(),
-                secretAccessKeyRef: form.secrets.secretAccessKeyRef.trim(),
-                sessionToken: form.secrets.sessionToken.trim(),
-                sessionTokenRef: form.secrets.sessionTokenRef.trim(),
-              },
-              models: form.models
-                .map((model) => ({
-                  model: model.model.trim(),
-                  enabled: model.enabled,
-                  deploymentName: model.deploymentName.trim(),
-                  pricingOverride: toPricingOverride(model.pricingOverride),
-                }))
-                .filter((model) => model.model.length > 0),
-            };
-
-            if (isCreateMode) {
-              createMutation.mutate(payload, {
-                onSuccess: (channel) => {
-                  navigate(`/d/admin/channels/${channel.id}`);
-                },
-              });
-              return;
-            }
-
-            updateMutation.mutate(
-              {
-                channelId,
-                ...payload,
-              },
-              {
-                onSuccess: () => {
-                  navigate(`/d/admin/channels/${channelId}`);
-                },
-              },
-            );
-          }}
+    <OGDialog open={true} onOpenChange={(open) => !open && closeModal()}>
+      <OGDialogPortal>
+        <OGDialogOverlay className="bg-black/50 backdrop-blur-sm" />
+        <OGDialogContent
+          className="admin-console fixed left-1/2 top-1/2 z-50 flex max-h-[88vh] w-[min(1120px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-3xl border border-border-medium bg-surface-primary p-0 shadow-2xl focus:outline-none"
+          showCloseButton={true}
         >
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="flex flex-col gap-2 text-sm text-text-secondary">
-              {localize('com_ui_name')}
-              <input
-                required={true}
-                value={form.name}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, name: event.target.value }))
-                }
-                className="rounded-xl border border-border-medium bg-surface-primary px-3 py-2 text-sm text-text-primary"
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm text-text-secondary">
-              {localize('com_ui_admin_slug')}
-              <input
-                required={true}
-                value={form.slug}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, slug: event.target.value }))
-                }
-                className="rounded-xl border border-border-medium bg-surface-primary px-3 py-2 text-sm text-text-primary"
-              />
-            </label>
-          </div>
+          <OGDialogTitle className="sr-only">
+            {isCreateMode
+              ? localize('com_ui_admin_create_channel')
+              : localize('com_ui_admin_channel_details')}
+          </OGDialogTitle>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="flex flex-col gap-2 text-sm text-text-secondary">
-              {localize('com_ui_provider')}
-              <select
-                value={form.providerType}
-                onChange={(event) =>
-                  setForm((current) => {
-                    const nextProviderType = event.target.value as AdminChannelProviderType;
-                    const nextRuntimeEndpoint = getRuntimeEndpoint(nextProviderType);
-                    const nextBaseURL = getDefaultBaseUrl(nextProviderType);
-
-                    return {
-                      ...current,
-                      providerType: nextProviderType,
-                      connection: {
-                        ...current.connection,
-                        runtimeEndpoint: nextRuntimeEndpoint,
-                        baseURL:
-                          nextProviderType === 'ollama'
-                            ? nextBaseURL
-                            : current.connection.baseURL,
-                        modelFetch:
-                          nextProviderType === 'ollama'
-                            ? true
-                            : current.connection.modelFetch,
-                      },
-                      secrets:
-                        nextProviderType === 'ollama'
-                          ? {
-                              ...current.secrets,
-                              apiKey: '',
-                              apiKeyRef: '',
-                            }
-                          : current.secrets,
-                    };
-                  })
-                }
-                className="rounded-xl border border-border-medium bg-surface-primary px-3 py-2 text-sm text-text-primary"
-              >
-                <option value="azureOpenAI">
-                  {providerTypeLabel('azureOpenAI', localize)}
-                </option>
-                <option value="custom">{providerTypeLabel('custom', localize)}</option>
-                <option value="ollama">{providerTypeLabel('ollama', localize)}</option>
-                <option value="openAI">{providerTypeLabel('openAI', localize)}</option>
-                <option value="google">{providerTypeLabel('google', localize)}</option>
-                <option value="anthropic">{providerTypeLabel('anthropic', localize)}</option>
-                <option value="bedrock">{providerTypeLabel('bedrock', localize)}</option>
-              </select>
-            </label>
-            <label className="flex flex-col gap-2 text-sm text-text-secondary">
-              {localize('com_ui_admin_channel_runtime_endpoint')}
-              <input
-                required={true}
-                disabled={form.providerType !== 'custom'}
-                value={form.connection.runtimeEndpoint}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    connection: {
-                      ...current.connection,
-                      runtimeEndpoint: event.target.value,
-                    },
-                  }))
-                }
-                className="rounded-xl border border-border-medium bg-surface-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-60"
-              />
-            </label>
-          </div>
-
-          <label className="flex flex-col gap-2 text-sm text-text-secondary">
-            {localize('com_ui_description')}
-            <textarea
-              rows={3}
-              value={form.description}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, description: event.target.value }))
-              }
-              className="rounded-xl border border-border-medium bg-surface-primary px-3 py-2 text-sm text-text-primary"
-            />
-          </label>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="flex flex-col gap-2 text-sm text-text-secondary">
-              {localize('com_ui_admin_sort_order')}
-              <input
-                type="number"
-                value={form.sortOrder}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, sortOrder: event.target.value }))
-                }
-                className="rounded-xl border border-border-medium bg-surface-primary px-3 py-2 text-sm text-text-primary"
-              />
-            </label>
-            <label className="flex items-center gap-3 rounded-xl border border-border-medium bg-surface-primary px-4 py-3 text-sm text-text-primary">
-              <input
-                type="checkbox"
-                checked={form.enabled}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, enabled: event.target.checked }))
-                }
-              />
-              {localize('com_ui_admin_enabled')}
-            </label>
-          </div>
-
-          <div className="grid gap-4 rounded-2xl border border-border-medium bg-surface-primary p-4">
-            <div>
-              <div className="text-sm font-medium text-text-primary">
-                {localize('com_ui_admin_channel_connection')}
+          <div className="shrink-0 border-b border-border-light px-6 py-5">
+            {!isCreateMode && channelQuery.isLoading ? (
+              <div className="rounded-2xl border border-dashed border-border-medium bg-background p-6 text-sm text-text-secondary">
+                {localize('com_ui_loading')}
               </div>
-              <div className="text-xs text-text-secondary">
-                {localize('com_ui_admin_channel_connection_description')}
-              </div>
-            </div>
-
-            {usesBaseUrl(form.providerType) && (
-              <>
-                <label className="flex flex-col gap-2 text-sm text-text-secondary">
-                  {localize('com_ui_admin_channel_base_url')}
-                  <input
-                    value={form.connection.baseURL}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        connection: {
-                          ...current.connection,
-                          baseURL: event.target.value,
-                        },
-                      }))
-                    }
-                    className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
-                  />
-                </label>
-                {(form.providerType === 'custom' || form.providerType === 'ollama') && (
-                  <label className="flex items-center gap-3 rounded-xl border border-border-medium bg-background px-4 py-3 text-sm text-text-primary">
-                    <input
-                      type="checkbox"
-                      checked={form.connection.modelFetch}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          connection: {
-                            ...current.connection,
-                            modelFetch: event.target.checked,
-                          },
-                        }))
-                      }
-                    />
-                    {localize('com_ui_admin_channel_model_fetch')}
-                  </label>
-                )}
-              </>
-            )}
-
-            {form.providerType === 'azureOpenAI' && (
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="flex flex-col gap-2 text-sm text-text-secondary">
-                  {localize('com_ui_admin_channel_instance_name')}
-                  <input
-                    value={form.connection.instanceName}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        connection: {
-                          ...current.connection,
-                          instanceName: event.target.value,
-                        },
-                      }))
-                    }
-                    className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
-                  />
-                </label>
-                <label className="flex flex-col gap-2 text-sm text-text-secondary">
-                  {localize('com_ui_admin_channel_api_version')}
-                  <input
-                    value={form.connection.apiVersion}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        connection: {
-                          ...current.connection,
-                          apiVersion: event.target.value,
-                        },
-                      }))
-                    }
-                    className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
-                  />
-                </label>
+            ) : !isCreateMode && !channelQuery.data ? (
+              <p className="text-sm text-text-secondary">{localize('com_ui_no_results_found')}</p>
+            ) : (
+              <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-background text-text-primary">
+                    <Blocks className="h-5 w-5" aria-hidden="true" />
+                  </div>
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-2xl font-semibold text-text-primary">
+                        {isCreateMode
+                          ? localize('com_ui_admin_create_channel')
+                          : form.name || localize('com_ui_admin_channel_details')}
+                      </h2>
+                      <AdminHelpButton
+                        title="com_ui_admin_channel_details"
+                        description="com_ui_admin_channel_details_description"
+                      />
+                      <StatusBadge
+                        active={true}
+                        label={providerTypeLabel(form.providerType, localize)}
+                      />
+                      <StatusBadge
+                        active={form.enabled}
+                        label={
+                          form.enabled
+                            ? localize('com_ui_admin_enabled')
+                            : localize('com_ui_admin_disabled')
+                        }
+                      />
+                      <StatusBadge
+                        active={modelCount > 0}
+                        label={`${localize('com_ui_admin_channel_models')}: ${modelCount}`}
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
+          </div>
 
-            {form.providerType === 'bedrock' && (
-              <label className="flex flex-col gap-2 text-sm text-text-secondary">
-                {localize('com_ui_region')}
-                <input
-                  value={form.connection.region}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      connection: {
-                        ...current.connection,
-                        region: event.target.value,
-                      },
+          {!(!isCreateMode && (channelQuery.isLoading || !channelQuery.data)) && (
+            <form
+              className="flex min-h-0 flex-1 flex-col"
+              onSubmit={(event) => {
+                event.preventDefault();
+
+                if (form.models.every((model) => model.model.trim().length === 0)) {
+                  setClientError(localize('com_ui_admin_channel_models_required'));
+                  return;
+                }
+
+                setClientError(null);
+
+                const payload = {
+                  name: form.name.trim(),
+                  slug: form.slug.trim(),
+                  providerType: form.providerType,
+                  description: form.description.trim(),
+                  enabled: form.enabled,
+                  sortOrder: Number(form.sortOrder || '0'),
+                  connection: {
+                    runtimeEndpoint: form.connection.runtimeEndpoint.trim(),
+                    baseURL: form.connection.baseURL.trim(),
+                    instanceName: form.connection.instanceName.trim(),
+                    apiVersion: form.connection.apiVersion.trim(),
+                    region: form.connection.region.trim(),
+                    modelFetch: form.connection.modelFetch,
+                    headers: form.connection.headers
+                      .map((header) => ({
+                        key: header.key.trim(),
+                        value: header.value.trim(),
+                      }))
+                      .filter((header) => header.key.length > 0 && header.value.length > 0),
+                  },
+                  secrets: {
+                    apiKey: form.secrets.apiKey.trim(),
+                    apiKeyRef: form.secrets.apiKeyRef.trim(),
+                    accessKeyId: form.secrets.accessKeyId.trim(),
+                    accessKeyIdRef: form.secrets.accessKeyIdRef.trim(),
+                    secretAccessKey: form.secrets.secretAccessKey.trim(),
+                    secretAccessKeyRef: form.secrets.secretAccessKeyRef.trim(),
+                    sessionToken: form.secrets.sessionToken.trim(),
+                    sessionTokenRef: form.secrets.sessionTokenRef.trim(),
+                  },
+                  models: form.models
+                    .map((model) => ({
+                      model: model.model.trim(),
+                      enabled: model.enabled,
+                      deploymentName: model.deploymentName.trim(),
+                      pricingOverride: toPricingOverride(model.pricingOverride),
                     }))
-                  }
-                  className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
-                />
-              </label>
-            )}
-          </div>
+                    .filter((model) => model.model.length > 0),
+                };
 
-          <div className="grid gap-4 rounded-2xl border border-border-medium bg-surface-primary p-4">
-            <div>
-              <div className="text-sm font-medium text-text-primary">
-                {localize('com_ui_admin_channel_secrets')}
-              </div>
-              <div className="text-xs text-text-secondary">
-                {localize('com_ui_admin_channel_secrets_description')}
-              </div>
-            </div>
-            {usesApiKeySecrets(form.providerType) && (
-              <div className="grid gap-4">
-                <label className="flex flex-col gap-2 text-sm text-text-secondary">
-                  {localize('com_ui_api_key')}
-                  <div className="flex items-center gap-2">
-                    <input
-                      type={showApiKey ? 'text' : 'password'}
-                      value={form.secrets.apiKey}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          secrets: {
-                            ...current.secrets,
-                            apiKey: event.target.value,
-                          },
-                        }))
-                      }
-                      className="min-w-0 flex-1 rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
-                    />
-                    <button
-                      type="button"
-                      className="rounded-xl border border-border-medium px-3 py-2 text-sm text-text-primary"
-                      onClick={() => setShowApiKey((current) => !current)}
-                    >
-                      {showApiKey ? localize('com_ui_hide') : localize('com_ui_show')}
-                    </button>
-                  </div>
-                </label>
-              </div>
-            )}
-            {form.providerType === 'bedrock' && (
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="flex flex-col gap-2 text-sm text-text-secondary">
-                  {localize('com_ui_admin_channel_access_key_id')}
-                  <input
-                    value={form.secrets.accessKeyId}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        secrets: {
-                          ...current.secrets,
-                          accessKeyId: event.target.value,
-                        },
-                      }))
-                    }
-                    className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
-                  />
-                </label>
-                <label className="flex flex-col gap-2 text-sm text-text-secondary">
-                  {localize('com_ui_admin_channel_access_key_id_ref')}
-                  <input
-                    value={form.secrets.accessKeyIdRef}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        secrets: {
-                          ...current.secrets,
-                          accessKeyIdRef: event.target.value,
-                        },
-                      }))
-                    }
-                    className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
-                  />
-                </label>
-                <label className="flex flex-col gap-2 text-sm text-text-secondary">
-                  {localize('com_ui_admin_channel_secret_access_key')}
-                  <input
-                    value={form.secrets.secretAccessKey}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        secrets: {
-                          ...current.secrets,
-                          secretAccessKey: event.target.value,
-                        },
-                      }))
-                    }
-                    className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
-                  />
-                </label>
-                <label className="flex flex-col gap-2 text-sm text-text-secondary">
-                  {localize('com_ui_admin_channel_secret_access_key_ref')}
-                  <input
-                    value={form.secrets.secretAccessKeyRef}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        secrets: {
-                          ...current.secrets,
-                          secretAccessKeyRef: event.target.value,
-                        },
-                      }))
-                    }
-                    className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
-                  />
-                </label>
-                <label className="flex flex-col gap-2 text-sm text-text-secondary md:col-span-2">
-                  {localize('com_ui_admin_channel_session_token')}
-                  <input
-                    value={form.secrets.sessionToken}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        secrets: {
-                          ...current.secrets,
-                          sessionToken: event.target.value,
-                        },
-                      }))
-                    }
-                    className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
-                  />
-                </label>
-                <label className="flex flex-col gap-2 text-sm text-text-secondary md:col-span-2">
-                  {localize('com_ui_admin_channel_session_token_ref')}
-                  <input
-                    value={form.secrets.sessionTokenRef}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        secrets: {
-                          ...current.secrets,
-                          sessionTokenRef: event.target.value,
-                        },
-                      }))
-                    }
-                    className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
-                  />
-                </label>
-              </div>
-            )}
-          </div>
+                if (isCreateMode) {
+                  createMutation.mutate(payload, {
+                    onSuccess: (channel) => {
+                      navigate(`/d/admin/channels/${channel.id}`);
+                    },
+                  });
+                  return;
+                }
 
-          <div className="grid gap-4 rounded-2xl border border-border-medium bg-surface-primary p-4">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="text-sm font-medium text-text-primary">
-                  {localize('com_ui_admin_channel_models')}
-                </div>
-                <div className="text-xs text-text-secondary">
-                  {localize('com_ui_admin_channel_models_description')}
-                </div>
-                <div className="text-xs text-text-secondary">
-                  {localize('com_ui_admin_channel_models_manual_entry')}
-                </div>
-                {modelSuggestions.length > 0 && (
-                  <div className="text-xs text-text-secondary">
-                    {localize('com_ui_admin_channel_models_builtin_available')}
-                  </div>
-                )}
-              </div>
-              <button
-                type="button"
-                className="rounded-xl border border-border-medium px-4 py-2 text-sm font-medium text-text-primary"
-                onClick={() => {
-                  setClientError(null);
-                  setForm((current) => ({
-                    ...current,
-                    models: [...current.models, createEmptyModelState()],
-                  }));
-                }}
-              >
-                {localize('com_ui_add')}
-              </button>
-            </div>
+                updateMutation.mutate(
+                  {
+                    channelId,
+                    ...payload,
+                  },
+                  {
+                    onSuccess: () => {
+                      navigate(`/d/admin/channels/${channelId}`);
+                    },
+                  },
+                );
+              }}
+            >
+              <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+                <div className="grid gap-6">
+                  <section className="rounded-3xl border border-border-medium bg-surface-primary p-5">
+                    <div className="mb-4">
+                      <h2 className="text-sm font-medium text-text-primary">
+                        {localize('com_ui_admin_channel_identity_title')}
+                      </h2>
+                    </div>
 
-            <div className="grid gap-3">
-              {form.models.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-border-medium px-4 py-6 text-sm text-text-secondary">
-                  {localize('com_ui_admin_channel_models_required')}
-                </div>
-              ) : (
-                form.models.map((model, index) => (
-                  <div
-                    key={model.formId}
-                    className="grid gap-4 rounded-xl border border-border-medium bg-background p-4"
-                  >
                     <div className="grid gap-4 md:grid-cols-2">
                       <label className="flex flex-col gap-2 text-sm text-text-secondary">
-                        {localize('com_ui_admin_channel_builtin_model')}
+                        {localize('com_ui_name')}
+                        <input
+                          required={true}
+                          value={form.name}
+                          onChange={(event) =>
+                            setForm((current) => ({ ...current, name: event.target.value }))
+                          }
+                          className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-2 text-sm text-text-secondary">
+                        {localize('com_ui_admin_slug')}
+                        <input
+                          required={true}
+                          value={form.slug}
+                          onChange={(event) =>
+                            setForm((current) => ({ ...current, slug: event.target.value }))
+                          }
+                          className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
+                        />
+                      </label>
+                    </div>
+
+                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                      <label className="flex flex-col gap-2 text-sm text-text-secondary">
+                        {localize('com_ui_provider')}
                         <select
-                          disabled={modelSuggestions.length === 0}
-                          value={getSelectedSuggestionValue(model.model, modelSuggestionsMap)}
-                          onChange={(event) => updateModelAtIndex(index, event.target.value)}
-                          className="rounded-xl border border-border-medium bg-surface-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          <option value="">
-                            {modelSuggestions.length > 0
-                              ? localize('com_ui_admin_channel_builtin_model_empty')
-                              : localize('com_ui_admin_channel_builtin_model_none')}
-                          </option>
-                          {modelSuggestions.map((item) => (
-                            <option key={item.model} value={item.model}>
-                              {item.model}
-                            </option>
-                          ))}
-                        </select>
-                        <span className="text-xs text-text-secondary">
-                          {localize('com_ui_admin_channel_builtin_model_help')}
-                        </span>
-                      </label>
-                      <label className="flex flex-col gap-2 text-sm text-text-secondary">
-                        {localize('com_ui_model')}
-                        <input
-                          placeholder={localize('com_ui_admin_channel_model_placeholder')}
-                          value={model.model}
-                          onChange={(event) => updateModelAtIndex(index, event.target.value)}
-                          className="rounded-xl border border-border-medium bg-surface-primary px-3 py-2 text-sm text-text-primary"
-                        />
-                      </label>
-                      {form.providerType === 'azureOpenAI' && (
-                        <label className="flex flex-col gap-2 text-sm text-text-secondary">
-                          {localize('com_ui_admin_channel_deployment_name')}
-                          <input
-                            value={model.deploymentName}
-                            onChange={(event) =>
-                              setForm((current) => ({
+                          value={form.providerType}
+                          onChange={(event) =>
+                            setForm((current) => {
+                              const nextProviderType = event.target
+                                .value as AdminChannelProviderType;
+                              const nextRuntimeEndpoint = getRuntimeEndpoint(nextProviderType);
+                              const nextBaseURL = getDefaultBaseUrl(nextProviderType);
+
+                              return {
                                 ...current,
-                                models: current.models.map((currentModel, currentIndex) =>
-                                  currentIndex === index
-                                    ? { ...currentModel, deploymentName: event.target.value }
-                                    : currentModel,
-                                ),
-                              }))
-                            }
-                            className="rounded-xl border border-border-medium bg-surface-primary px-3 py-2 text-sm text-text-primary"
-                          />
-                        </label>
-                      )}
-                    </div>
-
-                    <div className="grid gap-4 md:grid-cols-4">
-                      <label className="flex flex-col gap-2 text-sm text-text-secondary">
-                        {localize('com_ui_admin_channel_rate_prompt')}
-                        <input
-                          type="number"
-                          step="any"
-                          placeholder={localize('com_ui_admin_channel_rate_placeholder')}
-                          value={model.pricingOverride.prompt}
-                          onChange={(event) =>
-                            setForm((current) => ({
-                              ...current,
-                              models: current.models.map((currentModel, currentIndex) =>
-                                currentIndex === index
-                                  ? {
-                                      ...currentModel,
-                                      pricingOverride: {
-                                        ...currentModel.pricingOverride,
-                                        prompt: event.target.value,
-                                      },
-                                    }
-                                  : currentModel,
-                              ),
-                            }))
+                                providerType: nextProviderType,
+                                connection: {
+                                  ...current.connection,
+                                  runtimeEndpoint: nextRuntimeEndpoint,
+                                  baseURL:
+                                    nextProviderType === 'ollama'
+                                      ? nextBaseURL
+                                      : current.connection.baseURL,
+                                  modelFetch:
+                                    nextProviderType === 'ollama'
+                                      ? true
+                                      : current.connection.modelFetch,
+                                },
+                                secrets:
+                                  nextProviderType === 'ollama'
+                                    ? {
+                                        ...current.secrets,
+                                        apiKey: '',
+                                        apiKeyRef: '',
+                                      }
+                                    : current.secrets,
+                              };
+                            })
                           }
-                          className="rounded-xl border border-border-medium bg-surface-primary px-3 py-2 text-sm text-text-primary"
-                        />
+                          className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
+                        >
+                          <option value="azureOpenAI">
+                            {providerTypeLabel('azureOpenAI', localize)}
+                          </option>
+                          <option value="custom">{providerTypeLabel('custom', localize)}</option>
+                          <option value="ollama">{providerTypeLabel('ollama', localize)}</option>
+                          <option value="openAI">{providerTypeLabel('openAI', localize)}</option>
+                          <option value="google">{providerTypeLabel('google', localize)}</option>
+                          <option value="anthropic">
+                            {providerTypeLabel('anthropic', localize)}
+                          </option>
+                          <option value="bedrock">{providerTypeLabel('bedrock', localize)}</option>
+                        </select>
                       </label>
                       <label className="flex flex-col gap-2 text-sm text-text-secondary">
-                        {localize('com_ui_admin_channel_rate_completion')}
+                        {localize('com_ui_admin_channel_runtime_endpoint')}
                         <input
-                          type="number"
-                          step="any"
-                          placeholder={localize('com_ui_admin_channel_rate_placeholder')}
-                          value={model.pricingOverride.completion}
+                          required={true}
+                          disabled={form.providerType !== 'custom'}
+                          value={form.connection.runtimeEndpoint}
                           onChange={(event) =>
                             setForm((current) => ({
                               ...current,
-                              models: current.models.map((currentModel, currentIndex) =>
-                                currentIndex === index
-                                  ? {
-                                      ...currentModel,
-                                      pricingOverride: {
-                                        ...currentModel.pricingOverride,
-                                        completion: event.target.value,
-                                      },
-                                    }
-                                  : currentModel,
-                              ),
+                              connection: {
+                                ...current.connection,
+                                runtimeEndpoint: event.target.value,
+                              },
                             }))
                           }
-                          className="rounded-xl border border-border-medium bg-surface-primary px-3 py-2 text-sm text-text-primary"
-                        />
-                      </label>
-                      <label className="flex flex-col gap-2 text-sm text-text-secondary">
-                        {localize('com_ui_admin_channel_rate_write')}
-                        <input
-                          type="number"
-                          step="any"
-                          placeholder={localize('com_ui_admin_channel_rate_placeholder')}
-                          value={model.pricingOverride.write}
-                          onChange={(event) =>
-                            setForm((current) => ({
-                              ...current,
-                              models: current.models.map((currentModel, currentIndex) =>
-                                currentIndex === index
-                                  ? {
-                                      ...currentModel,
-                                      pricingOverride: {
-                                        ...currentModel.pricingOverride,
-                                        write: event.target.value,
-                                      },
-                                    }
-                                  : currentModel,
-                              ),
-                            }))
-                          }
-                          className="rounded-xl border border-border-medium bg-surface-primary px-3 py-2 text-sm text-text-primary"
-                        />
-                      </label>
-                      <label className="flex flex-col gap-2 text-sm text-text-secondary">
-                        {localize('com_ui_admin_channel_rate_read')}
-                        <input
-                          type="number"
-                          step="any"
-                          placeholder={localize('com_ui_admin_channel_rate_placeholder')}
-                          value={model.pricingOverride.read}
-                          onChange={(event) =>
-                            setForm((current) => ({
-                              ...current,
-                              models: current.models.map((currentModel, currentIndex) =>
-                                currentIndex === index
-                                  ? {
-                                      ...currentModel,
-                                      pricingOverride: {
-                                        ...currentModel.pricingOverride,
-                                        read: event.target.value,
-                                      },
-                                    }
-                                  : currentModel,
-                              ),
-                            }))
-                          }
-                          className="rounded-xl border border-border-medium bg-surface-primary px-3 py-2 text-sm text-text-primary"
+                          className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-60"
                         />
                       </label>
                     </div>
 
-                    <div className="text-xs text-text-secondary">
-                      {localize('com_ui_admin_channel_rate_help')}
-                    </div>
+                    <label className="mt-4 flex flex-col gap-2 text-sm text-text-secondary">
+                      {localize('com_ui_description')}
+                      <textarea
+                        rows={3}
+                        value={form.description}
+                        onChange={(event) =>
+                          setForm((current) => ({ ...current, description: event.target.value }))
+                        }
+                        className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
+                      />
+                    </label>
 
-                    <div className="flex items-center justify-between gap-3">
-                      <label className="flex items-center gap-2 text-sm text-text-primary">
+                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                      <label className="flex flex-col gap-2 text-sm text-text-secondary">
+                        {localize('com_ui_admin_sort_order')}
+                        <input
+                          type="number"
+                          value={form.sortOrder}
+                          onChange={(event) =>
+                            setForm((current) => ({ ...current, sortOrder: event.target.value }))
+                          }
+                          className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
+                        />
+                      </label>
+                      <label className="flex items-center gap-3 rounded-xl border border-border-medium bg-background px-4 py-3 text-sm text-text-primary">
                         <input
                           type="checkbox"
-                          checked={model.enabled}
+                          checked={form.enabled}
                           onChange={(event) =>
-                            setForm((current) => ({
-                              ...current,
-                              models: current.models.map((currentModel, currentIndex) =>
-                                currentIndex === index
-                                  ? { ...currentModel, enabled: event.target.checked }
-                                  : currentModel,
-                              ),
-                            }))
+                            setForm((current) => ({ ...current, enabled: event.target.checked }))
                           }
                         />
                         {localize('com_ui_admin_enabled')}
                       </label>
+                    </div>
+                  </section>
+
+                  <section className="grid gap-4 rounded-3xl border border-border-medium bg-surface-primary p-5">
+                    <div>
+                      <div className="text-sm font-medium text-text-primary">
+                        {localize('com_ui_admin_channel_connection')}
+                      </div>
+                    </div>
+
+                    {usesBaseUrl(form.providerType) && (
+                      <>
+                        <label className="flex flex-col gap-2 text-sm text-text-secondary">
+                          {localize('com_ui_admin_channel_base_url')}
+                          <input
+                            value={form.connection.baseURL}
+                            onChange={(event) =>
+                              setForm((current) => ({
+                                ...current,
+                                connection: {
+                                  ...current.connection,
+                                  baseURL: event.target.value,
+                                },
+                              }))
+                            }
+                            className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
+                          />
+                        </label>
+                        {(form.providerType === 'custom' || form.providerType === 'ollama') && (
+                          <label className="flex items-center gap-3 rounded-xl border border-border-medium bg-background px-4 py-3 text-sm text-text-primary">
+                            <input
+                              type="checkbox"
+                              checked={form.connection.modelFetch}
+                              onChange={(event) =>
+                                setForm((current) => ({
+                                  ...current,
+                                  connection: {
+                                    ...current.connection,
+                                    modelFetch: event.target.checked,
+                                  },
+                                }))
+                              }
+                            />
+                            {localize('com_ui_admin_channel_model_fetch')}
+                          </label>
+                        )}
+                      </>
+                    )}
+
+                    {form.providerType === 'azureOpenAI' && (
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <label className="flex flex-col gap-2 text-sm text-text-secondary">
+                          {localize('com_ui_admin_channel_instance_name')}
+                          <input
+                            value={form.connection.instanceName}
+                            onChange={(event) =>
+                              setForm((current) => ({
+                                ...current,
+                                connection: {
+                                  ...current.connection,
+                                  instanceName: event.target.value,
+                                },
+                              }))
+                            }
+                            className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-2 text-sm text-text-secondary">
+                          {localize('com_ui_admin_channel_api_version')}
+                          <input
+                            value={form.connection.apiVersion}
+                            onChange={(event) =>
+                              setForm((current) => ({
+                                ...current,
+                                connection: {
+                                  ...current.connection,
+                                  apiVersion: event.target.value,
+                                },
+                              }))
+                            }
+                            className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
+                          />
+                        </label>
+                      </div>
+                    )}
+
+                    {form.providerType === 'bedrock' && (
+                      <label className="flex flex-col gap-2 text-sm text-text-secondary">
+                        {localize('com_ui_region')}
+                        <input
+                          value={form.connection.region}
+                          onChange={(event) =>
+                            setForm((current) => ({
+                              ...current,
+                              connection: {
+                                ...current.connection,
+                                region: event.target.value,
+                              },
+                            }))
+                          }
+                          className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
+                        />
+                      </label>
+                    )}
+                  </section>
+
+                  <section className="grid gap-4 rounded-3xl border border-border-medium bg-surface-primary p-5">
+                    <div>
+                      <div className="text-sm font-medium text-text-primary">
+                        {localize('com_ui_admin_channel_secrets')}
+                      </div>
+                    </div>
+                    {usesApiKeySecrets(form.providerType) && (
+                      <div className="grid gap-4">
+                        <label className="flex flex-col gap-2 text-sm text-text-secondary">
+                          {localize('com_ui_api_key')}
+                          <div className="flex items-center gap-2">
+                            <input
+                              type={showApiKey ? 'text' : 'password'}
+                              value={form.secrets.apiKey}
+                              onChange={(event) =>
+                                setForm((current) => ({
+                                  ...current,
+                                  secrets: {
+                                    ...current.secrets,
+                                    apiKey: event.target.value,
+                                  },
+                                }))
+                              }
+                              className="min-w-0 flex-1 rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
+                            />
+                            <button
+                              type="button"
+                              className="admin-button-secondary rounded-xl px-3 py-2 text-sm font-medium"
+                              onClick={() => setShowApiKey((current) => !current)}
+                            >
+                              {showApiKey ? localize('com_ui_hide') : localize('com_ui_show')}
+                            </button>
+                          </div>
+                        </label>
+                      </div>
+                    )}
+                    {form.providerType === 'bedrock' && (
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <label className="flex flex-col gap-2 text-sm text-text-secondary">
+                          {localize('com_ui_admin_channel_access_key_id')}
+                          <input
+                            value={form.secrets.accessKeyId}
+                            onChange={(event) =>
+                              setForm((current) => ({
+                                ...current,
+                                secrets: {
+                                  ...current.secrets,
+                                  accessKeyId: event.target.value,
+                                },
+                              }))
+                            }
+                            className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-2 text-sm text-text-secondary">
+                          {localize('com_ui_admin_channel_access_key_id_ref')}
+                          <input
+                            value={form.secrets.accessKeyIdRef}
+                            onChange={(event) =>
+                              setForm((current) => ({
+                                ...current,
+                                secrets: {
+                                  ...current.secrets,
+                                  accessKeyIdRef: event.target.value,
+                                },
+                              }))
+                            }
+                            className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-2 text-sm text-text-secondary">
+                          {localize('com_ui_admin_channel_secret_access_key')}
+                          <input
+                            value={form.secrets.secretAccessKey}
+                            onChange={(event) =>
+                              setForm((current) => ({
+                                ...current,
+                                secrets: {
+                                  ...current.secrets,
+                                  secretAccessKey: event.target.value,
+                                },
+                              }))
+                            }
+                            className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-2 text-sm text-text-secondary">
+                          {localize('com_ui_admin_channel_secret_access_key_ref')}
+                          <input
+                            value={form.secrets.secretAccessKeyRef}
+                            onChange={(event) =>
+                              setForm((current) => ({
+                                ...current,
+                                secrets: {
+                                  ...current.secrets,
+                                  secretAccessKeyRef: event.target.value,
+                                },
+                              }))
+                            }
+                            className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-2 text-sm text-text-secondary md:col-span-2">
+                          {localize('com_ui_admin_channel_session_token')}
+                          <input
+                            value={form.secrets.sessionToken}
+                            onChange={(event) =>
+                              setForm((current) => ({
+                                ...current,
+                                secrets: {
+                                  ...current.secrets,
+                                  sessionToken: event.target.value,
+                                },
+                              }))
+                            }
+                            className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-2 text-sm text-text-secondary md:col-span-2">
+                          {localize('com_ui_admin_channel_session_token_ref')}
+                          <input
+                            value={form.secrets.sessionTokenRef}
+                            onChange={(event) =>
+                              setForm((current) => ({
+                                ...current,
+                                secrets: {
+                                  ...current.secrets,
+                                  sessionTokenRef: event.target.value,
+                                },
+                              }))
+                            }
+                            className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
+                          />
+                        </label>
+                      </div>
+                    )}
+                  </section>
+
+                  <section className="grid gap-4 rounded-3xl border border-border-medium bg-surface-primary p-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <div className="text-sm font-medium text-text-primary">
+                          {localize('com_ui_admin_channel_models')}
+                        </div>
+                        {modelSuggestions.length > 0 && (
+                          <div className="text-xs text-text-secondary">
+                            {localize('com_ui_admin_channel_models_builtin_available')}
+                          </div>
+                        )}
+                      </div>
                       <button
                         type="button"
-                        className="text-sm text-red-500"
+                        className="admin-button-secondary rounded-xl px-4 py-2 text-sm font-medium"
                         onClick={() => {
                           setClientError(null);
                           setForm((current) => ({
                             ...current,
-                            models: current.models.filter((_, currentIndex) => currentIndex !== index),
+                            models: [...current.models, createEmptyModelState()],
                           }));
                         }}
                       >
-                        {localize('com_ui_remove')}
+                        {localize('com_ui_add')}
                       </button>
                     </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
 
-          <div className="grid gap-4 rounded-2xl border border-border-medium bg-surface-primary p-4">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="text-sm font-medium text-text-primary">
-                  {localize('com_ui_admin_channel_headers')}
-                </div>
-                <div className="text-xs text-text-secondary">
-                  {localize('com_ui_admin_channel_headers_description')}
+                    <div className="grid gap-3">
+                      {form.models.length === 0 ? (
+                        <div className="rounded-xl border border-dashed border-border-medium px-4 py-6 text-sm text-text-secondary">
+                          {localize('com_ui_admin_channel_models_required')}
+                        </div>
+                      ) : (
+                        form.models.map((model, index) => (
+                          <div
+                            key={model.formId}
+                            className="grid gap-4 rounded-xl border border-border-medium bg-background p-4"
+                          >
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <label className="flex flex-col gap-2 text-sm text-text-secondary">
+                                {localize('com_ui_admin_channel_builtin_model')}
+                                <select
+                                  disabled={modelSuggestions.length === 0}
+                                  value={getSelectedSuggestionValue(
+                                    model.model,
+                                    modelSuggestionsMap,
+                                  )}
+                                  onChange={(event) =>
+                                    updateModelAtIndex(index, event.target.value)
+                                  }
+                                  className="rounded-xl border border-border-medium bg-surface-primary px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  <option value="">
+                                    {modelSuggestions.length > 0
+                                      ? localize('com_ui_admin_channel_builtin_model_empty')
+                                      : localize('com_ui_admin_channel_builtin_model_none')}
+                                  </option>
+                                  {modelSuggestions.map((item) => (
+                                    <option key={item.model} value={item.model}>
+                                      {item.model}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label className="flex flex-col gap-2 text-sm text-text-secondary">
+                                {localize('com_ui_model')}
+                                <input
+                                  placeholder={localize('com_ui_admin_channel_model_placeholder')}
+                                  value={model.model}
+                                  onChange={(event) =>
+                                    updateModelAtIndex(index, event.target.value)
+                                  }
+                                  className="rounded-xl border border-border-medium bg-surface-primary px-3 py-2 text-sm text-text-primary"
+                                />
+                              </label>
+                              {form.providerType === 'azureOpenAI' && (
+                                <label className="flex flex-col gap-2 text-sm text-text-secondary">
+                                  {localize('com_ui_admin_channel_deployment_name')}
+                                  <input
+                                    value={model.deploymentName}
+                                    onChange={(event) =>
+                                      setForm((current) => ({
+                                        ...current,
+                                        models: current.models.map((currentModel, currentIndex) =>
+                                          currentIndex === index
+                                            ? {
+                                                ...currentModel,
+                                                deploymentName: event.target.value,
+                                              }
+                                            : currentModel,
+                                        ),
+                                      }))
+                                    }
+                                    className="rounded-xl border border-border-medium bg-surface-primary px-3 py-2 text-sm text-text-primary"
+                                  />
+                                </label>
+                              )}
+                            </div>
+
+                            <div className="grid gap-4 md:grid-cols-4">
+                              <label className="flex flex-col gap-2 text-sm text-text-secondary">
+                                {localize('com_ui_admin_channel_rate_prompt')}
+                                <input
+                                  type="number"
+                                  step="any"
+                                  placeholder={localize('com_ui_admin_channel_rate_placeholder')}
+                                  value={model.pricingOverride.prompt}
+                                  onChange={(event) =>
+                                    setForm((current) => ({
+                                      ...current,
+                                      models: current.models.map((currentModel, currentIndex) =>
+                                        currentIndex === index
+                                          ? {
+                                              ...currentModel,
+                                              pricingOverride: {
+                                                ...currentModel.pricingOverride,
+                                                prompt: event.target.value,
+                                              },
+                                            }
+                                          : currentModel,
+                                      ),
+                                    }))
+                                  }
+                                  className="rounded-xl border border-border-medium bg-surface-primary px-3 py-2 text-sm text-text-primary"
+                                />
+                              </label>
+                              <label className="flex flex-col gap-2 text-sm text-text-secondary">
+                                {localize('com_ui_admin_channel_rate_completion')}
+                                <input
+                                  type="number"
+                                  step="any"
+                                  placeholder={localize('com_ui_admin_channel_rate_placeholder')}
+                                  value={model.pricingOverride.completion}
+                                  onChange={(event) =>
+                                    setForm((current) => ({
+                                      ...current,
+                                      models: current.models.map((currentModel, currentIndex) =>
+                                        currentIndex === index
+                                          ? {
+                                              ...currentModel,
+                                              pricingOverride: {
+                                                ...currentModel.pricingOverride,
+                                                completion: event.target.value,
+                                              },
+                                            }
+                                          : currentModel,
+                                      ),
+                                    }))
+                                  }
+                                  className="rounded-xl border border-border-medium bg-surface-primary px-3 py-2 text-sm text-text-primary"
+                                />
+                              </label>
+                              <label className="flex flex-col gap-2 text-sm text-text-secondary">
+                                {localize('com_ui_admin_channel_rate_write')}
+                                <input
+                                  type="number"
+                                  step="any"
+                                  placeholder={localize('com_ui_admin_channel_rate_placeholder')}
+                                  value={model.pricingOverride.write}
+                                  onChange={(event) =>
+                                    setForm((current) => ({
+                                      ...current,
+                                      models: current.models.map((currentModel, currentIndex) =>
+                                        currentIndex === index
+                                          ? {
+                                              ...currentModel,
+                                              pricingOverride: {
+                                                ...currentModel.pricingOverride,
+                                                write: event.target.value,
+                                              },
+                                            }
+                                          : currentModel,
+                                      ),
+                                    }))
+                                  }
+                                  className="rounded-xl border border-border-medium bg-surface-primary px-3 py-2 text-sm text-text-primary"
+                                />
+                              </label>
+                              <label className="flex flex-col gap-2 text-sm text-text-secondary">
+                                {localize('com_ui_admin_channel_rate_read')}
+                                <input
+                                  type="number"
+                                  step="any"
+                                  placeholder={localize('com_ui_admin_channel_rate_placeholder')}
+                                  value={model.pricingOverride.read}
+                                  onChange={(event) =>
+                                    setForm((current) => ({
+                                      ...current,
+                                      models: current.models.map((currentModel, currentIndex) =>
+                                        currentIndex === index
+                                          ? {
+                                              ...currentModel,
+                                              pricingOverride: {
+                                                ...currentModel.pricingOverride,
+                                                read: event.target.value,
+                                              },
+                                            }
+                                          : currentModel,
+                                      ),
+                                    }))
+                                  }
+                                  className="rounded-xl border border-border-medium bg-surface-primary px-3 py-2 text-sm text-text-primary"
+                                />
+                              </label>
+                            </div>
+
+                            <div className="flex items-center justify-between gap-3">
+                              <label className="flex items-center gap-2 text-sm text-text-primary">
+                                <input
+                                  type="checkbox"
+                                  checked={model.enabled}
+                                  onChange={(event) =>
+                                    setForm((current) => ({
+                                      ...current,
+                                      models: current.models.map((currentModel, currentIndex) =>
+                                        currentIndex === index
+                                          ? { ...currentModel, enabled: event.target.checked }
+                                          : currentModel,
+                                      ),
+                                    }))
+                                  }
+                                />
+                                {localize('com_ui_admin_enabled')}
+                              </label>
+                              <button
+                                type="button"
+                                className="admin-button-danger rounded-xl px-3 py-1.5 text-sm font-medium"
+                                onClick={() => {
+                                  setClientError(null);
+                                  setForm((current) => ({
+                                    ...current,
+                                    models: current.models.filter(
+                                      (_, currentIndex) => currentIndex !== index,
+                                    ),
+                                  }));
+                                }}
+                              >
+                                {localize('com_ui_remove')}
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </section>
+
+                  <section className="grid gap-4 rounded-3xl border border-border-medium bg-surface-primary p-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <div className="text-sm font-medium text-text-primary">
+                          {localize('com_ui_admin_channel_headers')}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="admin-button-secondary rounded-xl px-4 py-2 text-sm font-medium"
+                        onClick={() =>
+                          setForm((current) => ({
+                            ...current,
+                            connection: {
+                              ...current.connection,
+                              headers: [...current.connection.headers, emptyHeaderState],
+                            },
+                          }))
+                        }
+                      >
+                        {localize('com_ui_add')}
+                      </button>
+                    </div>
+
+                    <div className="grid gap-3">
+                      {form.connection.headers.length === 0 ? (
+                        <div className="rounded-xl border border-dashed border-border-medium px-4 py-6 text-sm text-text-secondary">
+                          {localize('com_ui_admin_channel_headers_empty')}
+                        </div>
+                      ) : (
+                        form.connection.headers.map((header, index) => (
+                          <div
+                            key={`${header.key || 'header'}-${index}`}
+                            className="grid gap-3 rounded-xl border border-border-medium bg-background p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
+                          >
+                            <input
+                              placeholder={localize('com_ui_name')}
+                              value={header.key}
+                              onChange={(event) =>
+                                setForm((current) => ({
+                                  ...current,
+                                  connection: {
+                                    ...current.connection,
+                                    headers: current.connection.headers.map(
+                                      (currentHeader, currentIndex) =>
+                                        currentIndex === index
+                                          ? { ...currentHeader, key: event.target.value }
+                                          : currentHeader,
+                                    ),
+                                  },
+                                }))
+                              }
+                              className="rounded-xl border border-border-medium bg-surface-primary px-3 py-2 text-sm text-text-primary"
+                            />
+                            <input
+                              placeholder={localize('com_ui_value')}
+                              value={header.value}
+                              onChange={(event) =>
+                                setForm((current) => ({
+                                  ...current,
+                                  connection: {
+                                    ...current.connection,
+                                    headers: current.connection.headers.map(
+                                      (currentHeader, currentIndex) =>
+                                        currentIndex === index
+                                          ? { ...currentHeader, value: event.target.value }
+                                          : currentHeader,
+                                    ),
+                                  },
+                                }))
+                              }
+                              className="rounded-xl border border-border-medium bg-surface-primary px-3 py-2 text-sm text-text-primary"
+                            />
+                            <button
+                              type="button"
+                              className="admin-button-danger rounded-xl px-3 py-2 text-sm font-medium"
+                              onClick={() =>
+                                setForm((current) => ({
+                                  ...current,
+                                  connection: {
+                                    ...current.connection,
+                                    headers: current.connection.headers.filter(
+                                      (_, currentIndex) => currentIndex !== index,
+                                    ),
+                                  },
+                                }))
+                              }
+                            >
+                              {localize('com_ui_remove')}
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </section>
+
+                  {(clientError ?? mutationError) && (
+                    <p className="rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                      {clientError ?? mutationError}
+                    </p>
+                  )}
                 </div>
               </div>
-              <button
-                type="button"
-                className="rounded-xl border border-border-medium px-4 py-2 text-sm font-medium text-text-primary"
-                onClick={() =>
-                  setForm((current) => ({
-                    ...current,
-                    connection: {
-                      ...current.connection,
-                      headers: [...current.connection.headers, emptyHeaderState],
-                    },
-                  }))
-                }
-              >
-                {localize('com_ui_add')}
-              </button>
-            </div>
 
-            <div className="grid gap-3">
-              {form.connection.headers.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-border-medium px-4 py-6 text-sm text-text-secondary">
-                  {localize('com_ui_admin_channel_headers_empty')}
-                </div>
-              ) : (
-                form.connection.headers.map((header, index) => (
-                  <div
-                    key={`${header.key || 'header'}-${index}`}
-                    className="grid gap-3 rounded-xl border border-border-medium bg-background p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
+              <div className="shrink-0 border-t border-border-light px-6 py-5">
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="submit"
+                    disabled={submitDisabled}
+                    className="admin-button-secondary rounded-xl px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    <input
-                      placeholder={localize('com_ui_name')}
-                      value={header.key}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          connection: {
-                            ...current.connection,
-                            headers: current.connection.headers.map((currentHeader, currentIndex) =>
-                              currentIndex === index
-                                ? { ...currentHeader, key: event.target.value }
-                                : currentHeader,
-                            ),
-                          },
-                        }))
-                      }
-                      className="rounded-xl border border-border-medium bg-surface-primary px-3 py-2 text-sm text-text-primary"
-                    />
-                    <input
-                      placeholder={localize('com_ui_value')}
-                      value={header.value}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          connection: {
-                            ...current.connection,
-                            headers: current.connection.headers.map((currentHeader, currentIndex) =>
-                              currentIndex === index
-                                ? { ...currentHeader, value: event.target.value }
-                                : currentHeader,
-                            ),
-                          },
-                        }))
-                      }
-                      className="rounded-xl border border-border-medium bg-surface-primary px-3 py-2 text-sm text-text-primary"
-                    />
+                    {isCreateMode ? localize('com_ui_create') : localize('com_ui_save_changes')}
+                  </button>
+                  {!isCreateMode && (
                     <button
                       type="button"
-                      className="text-sm text-red-500"
-                      onClick={() =>
-                        setForm((current) => ({
-                          ...current,
-                          connection: {
-                            ...current.connection,
-                            headers: current.connection.headers.filter(
-                              (_, currentIndex) => currentIndex !== index,
-                            ),
+                      disabled={submitDisabled}
+                      className="admin-button-danger rounded-xl px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
+                      onClick={() => {
+                        if (!window.confirm(localize('com_ui_admin_delete_channel_confirm'))) {
+                          return;
+                        }
+
+                        deleteMutation.mutate(channelId, {
+                          onSuccess: () => {
+                            closeModal();
                           },
-                        }))
-                      }
+                        });
+                      }}
                     >
-                      {localize('com_ui_remove')}
+                      {localize('com_ui_delete')}
                     </button>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          {(clientError ?? mutationError) && (
-            <p className="text-sm text-red-500">{clientError ?? mutationError}</p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    disabled={submitDisabled}
+                    className="admin-button-secondary rounded-xl px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {localize('com_ui_cancel')}
+                  </button>
+                </div>
+              </div>
+            </form>
           )}
-
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="submit"
-              disabled={submitDisabled}
-              className="rounded-xl bg-surface-hover px-4 py-2 text-sm font-medium text-text-primary disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isCreateMode ? localize('com_ui_create') : localize('com_ui_save_changes')}
-            </button>
-            {!isCreateMode && (
-              <button
-                type="button"
-                disabled={submitDisabled}
-                className="rounded-xl border border-red-400 px-4 py-2 text-sm font-medium text-red-500 disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={() => {
-                  if (!window.confirm(localize('com_ui_admin_delete_channel_confirm'))) {
-                    return;
-                  }
-
-                  deleteMutation.mutate(channelId, {
-                    onSuccess: () => {
-                      navigate('/d/admin/channels');
-                    },
-                  });
-                }}
-              >
-                {localize('com_ui_delete')}
-              </button>
-            )}
-          </div>
-        </form>
-      </div>
-    </AdminLayout>
+        </OGDialogContent>
+      </OGDialogPortal>
+    </OGDialog>
   );
 }

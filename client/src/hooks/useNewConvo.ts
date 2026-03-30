@@ -66,6 +66,10 @@ const useNewConvo = (index = 0) => {
     permissionType: PermissionTypes.AGENTS,
     permission: Permissions.USE,
   });
+  const hasChatAccess = useHasAccess({
+    permissionType: PermissionTypes.CHAT,
+    permission: Permissions.USE,
+  });
 
   const modelsQuery = useGetModelsQuery();
   const assistantsListMap = useAssistantListMap();
@@ -142,9 +146,18 @@ const useNewConvo = (index = 0) => {
             ) as EModelEndpoint | undefined;
           }
 
+          if (defaultEndpoint && !isAgentsEndpoint(defaultEndpoint) && !hasChatAccess) {
+            defaultEndpoint = Object.keys(endpointsConfig ?? {}).find((ep) => {
+              return isAgentsEndpoint(ep as EModelEndpoint) && hasAgentAccess && endpointsConfig?.[ep];
+            }) as EModelEndpoint | undefined;
+          }
+
           if (!defaultEndpoint) {
             // Find first available endpoint that's not agents (if no access) or any endpoint
             defaultEndpoint = Object.keys(endpointsConfig ?? {}).find((ep) => {
+              if (!isAgentsEndpoint(ep as EModelEndpoint) && !hasChatAccess) {
+                return false;
+              }
               if (
                 isAgentsEndpoint(ep as EModelEndpoint) &&
                 !hasAgentAccess &&
@@ -157,6 +170,9 @@ const useNewConvo = (index = 0) => {
           }
 
           const availableEndpoints = Object.keys(endpointsConfig ?? {}).filter((ep) => {
+            if (!isAgentsEndpoint(ep as EModelEndpoint) && !hasChatAccess) {
+              return false;
+            }
             if (
               isAgentsEndpoint(ep as EModelEndpoint) &&
               !hasAgentAccess &&
@@ -283,7 +299,15 @@ const useNewConvo = (index = 0) => {
           state: disableFocus ? {} : { focusChat: true },
         });
       },
-    [endpointsConfig, defaultPreset, assistantsListMap, modelsQuery.data, hasAgentAccess, entitlements],
+    [
+      endpointsConfig,
+      defaultPreset,
+      assistantsListMap,
+      modelsQuery.data,
+      hasAgentAccess,
+      hasChatAccess,
+      entitlements,
+    ],
   );
 
   const newConversation = useCallback(

@@ -19,6 +19,8 @@ import {
   Providers,
   EToolResources,
   EModelEndpoint,
+  Permissions,
+  PermissionTypes,
   defaultAgentCapabilities,
   bedrockDocumentExtensions,
   isDocumentSupportedProvider,
@@ -29,6 +31,7 @@ import {
   useAgentCapabilities,
   useGetAgentsConfig,
   useFileHandling,
+  useHasAccess,
   useLocalize,
 } from '~/hooks';
 import useSharePointFileHandling from '~/hooks/Files/useSharePointFileHandling';
@@ -66,6 +69,10 @@ const AttachFileMenu = ({
 }: AttachFileMenuProps) => {
   const localize = useLocalize();
   const isUploadDisabled = disabled ?? false;
+  const canUseFileUploads = useHasAccess({
+    permissionType: PermissionTypes.FILE_UPLOADS,
+    permission: Permissions.USE,
+  });
   const inputRef = useRef<HTMLInputElement>(null);
   const [isPopoverActive, setIsPopoverActive] = useState(false);
   const [ephemeralAgent, setEphemeralAgent] = useRecoilState(
@@ -269,6 +276,10 @@ const AttachFileMenu = ({
       console.error('SharePoint file processing error:', error);
     }
   };
+
+  if (!canUseFileUploads) {
+    return null;
+  }
 
   return (
     <>

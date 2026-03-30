@@ -2,12 +2,38 @@ const {
   CacheKeys,
   SystemRoles,
   roleDefaults,
+  PermissionTypes,
   permissionsSchema,
   removeNullishValues,
 } = require('librechat-data-provider');
 const { logger } = require('@librechat/data-schemas');
 const getLogStores = require('~/cache/getLogStores');
 const { Role } = require('~/db/models');
+
+const mergeRolePermissions = (role) => {
+  if (!role) {
+    return role;
+  }
+
+  const defaultRole = roleDefaults[role.name];
+  const fallbackRoleDefaults = defaultRole || roleDefaults[SystemRoles.USER];
+  const mergedPermissions = {};
+
+  for (const permissionType of Object.keys(permissionsSchema.shape || {})) {
+    mergedPermissions[permissionType] = {
+      ...(fallbackRoleDefaults.permissions?.[permissionType] || {}),
+      ...(role.permissions?.[permissionType] || {}),
+    };
+  }
+
+  return {
+    ...role,
+    isSystem: defaultRole?.isSystem ?? role.isSystem,
+    isEditable: defaultRole?.isEditable ?? role.isEditable,
+    isDeletable: defaultRole?.isDeletable ?? role.isDeletable,
+    permissions: mergedPermissions,
+  };
+};
 
 /**
  * Retrieve a role by name and convert the found role document to a plain object.
@@ -33,13 +59,27 @@ const getRoleByName = async function (roleName, fieldsToSelect = null) {
 
     if (!role && SystemRoles[roleName]) {
       role = await new Role(roleDefaults[roleName]).save();
-      await cache.set(roleName, role);
-      return role.toObject();
+      const normalizedRole = mergeRolePermissions(role.toObject());
+      await cache.set(roleName, normalizedRole);
+      return normalizedRole;
     }
-    await cache.set(roleName, role);
-    return role;
+    const normalizedRole = mergeRolePermissions(role);
+    await cache.set(roleName, normalizedRole);
+    return normalizedRole;
   } catch (error) {
     throw new Error(`Failed to retrieve or create role: ${error.message}`);
+  }
+};
+
+const getRoles = async function (fieldsToSelect = 'name') {
+  try {
+    let query = Role.find({});
+    if (fieldsToSelect) {
+      query = query.select(fieldsToSelect);
+    }
+    return await query.lean().exec();
+  } catch (error) {
+    throw new Error(`Failed to retrieve roles: ${error.message}`);
   }
 };
 
@@ -297,6 +337,7 @@ const migrateRoleSchema = async function (roleName) {
 };
 
 module.exports = {
+  getRoles,
   getRoleByName,
   updateRoleByName,
   migrateRoleSchema,

@@ -3,6 +3,7 @@ import type * as p from '../accessPermissions';
 import type * as a from '../types/agents';
 import type * as s from '../schemas';
 import type * as t from '../types';
+import type * as r from '../roles';
 
 export type Conversation = {
   id: string;
@@ -46,6 +47,29 @@ export type AdminUsersListParams = {
   emailVerified?: boolean;
 };
 
+export type AdminRole = r.TRole;
+
+export type AdminRolesListResponse = {
+  roles: AdminRole[];
+};
+
+export type AdminRoleCreateRequest = {
+  name: string;
+  description?: string | null;
+  permissions: r.TRole['permissions'];
+};
+
+export type AdminRoleUpdateRequest = {
+  roleName: string;
+  description?: string | null;
+  permissions?: r.TRole['permissions'];
+};
+
+export type AdminRoleDeleteResponse = {
+  deleted: boolean;
+  roleName: string;
+};
+
 export type AdminUserSummary = {
   id: string;
   name: string | null;
@@ -70,7 +94,7 @@ export type AdminUserCreateRequest = {
   email: string;
   password: string;
   emailVerified?: boolean;
-  role?: 'ADMIN' | 'USER';
+  role?: string;
 };
 
 export type AdminUserCreateResponse = AdminUserSummary;
@@ -79,6 +103,11 @@ export type AdminUserDetail = AdminUserSummary & {
   termsAccepted: boolean;
   favoritesCount: number;
   plugins: string[];
+  roleManagement: {
+    isPrimaryAdminProtected: boolean;
+    canChangeRole: boolean;
+    canDelete: boolean;
+  };
   personalization: {
     memories: boolean;
   };
@@ -151,6 +180,16 @@ export type AdminApplyStartingCreditsResponse = {
     | 'plan_has_no_starting_credits';
   tokenCredits: number;
   provisioning: AdminUserProvisioningState;
+};
+
+export type AdminUserRoleAssignmentRequest = {
+  userId: string;
+  roleName: string;
+};
+
+export type AdminUserRoleAssignmentResponse = {
+  userId: string;
+  role: string;
 };
 
 export type AdminTransactionsListParams = {

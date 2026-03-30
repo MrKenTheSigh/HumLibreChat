@@ -2,6 +2,8 @@
 
 This directory is the entry point for the HumLibreChat admin backoffice planning set.
 
+Related admin-surface UI/UX planning docs now live in `../ui-ux/admin/`.
+
 ## Phase Directories
 
 - `phase-1/`: admin foundation, users, balance actions, and conversation audit
@@ -10,6 +12,7 @@ This directory is the entry point for the HumLibreChat admin backoffice planning
 - `phase-4/`: plan-linked balance provisioning and credit policy
 - `phase-5/`: usage reporting based on existing transaction data
 - `phase-6/`: managed runtime channels and plan-to-model migration
+- `phase-7/`: custom role management and dynamic role assignment
 
 ## Locked Decisions
 
@@ -23,7 +26,7 @@ This directory is the entry point for the HumLibreChat admin backoffice planning
 
 ## Current Readiness
 
-Phase 5 is complete. Phase 6 is complete.
+Phase 5 is complete. Phase 6 is complete. Phase 7 is in progress.
 
 What is already in place:
 
@@ -56,6 +59,7 @@ What is still deferred:
 - CSV export and scheduled reporting
 - endpoint- or channel-level reporting that requires data not currently stored in `Transaction`
 - richer model-level policy UX such as templated "weakest model from every enabled channel" assignment
+- phase-7 permission UX polish beyond the initial role catalog and assignment flows
 
 What is now in place for Phase 6 slice 1:
 
@@ -100,6 +104,43 @@ What is now in place for Phase 6 slice 5:
 - the admin plan form now edits model entitlements by selecting models under each channel
 - legacy plans can be migrated incrementally because channel-based fallback remains available until a plan is resaved with model entitlements
 
+## Phase 7 Direction
+
+Phase 7 should replace the remaining hard-coded `ADMIN`/`USER` assumptions with a database-backed role catalog while preserving one immutable `ADMIN` role.
+
+The immediate goal is not a second RBAC system. The goal is to let admins:
+
+- create and edit named roles
+- assign those roles to users
+- keep the existing permission matrix model
+- prevent deletion of the built-in `ADMIN` role
+
+What is now in place for Phase 7:
+
+- `Role` metadata now supports system/editable/deletable state and seeded descriptions
+- admin roles API exists for list, get, create, update, and delete
+- the built-in `ADMIN` role remains non-deletable
+- auth/client role loading now resolves the signed-in user's actual role document
+- admin settings dialogs can switch across the dynamic role catalog
+- admin users can be created with any existing role and reassigned later
+- interface permission sync now applies to custom roles using the `USER` role as the fallback template
+- right-side control panel visibility for `Parameters`, `Attach files`, `Agents`, and `MCP Servers` is now driven by role permissions first
+
+What is still deferred for Phase 7:
+
+- panel-internal availability rules for `Agents` and `MCP Servers`
+- reconciling role-based visibility with builder disablement, empty-state behavior, and available-server discovery
+
+The main constraint is that the current system does not only hard-code roles in the UI. It also hard-codes them in:
+
+- role initialization and default seeding
+- user creation defaults
+- auth context role loading
+- admin permission dialogs that only switch between `USER` and `ADMIN`
+- some middleware and login strategies that demote or default users to `USER`
+
+That means Phase 7 must change the role-loading path end to end, not just add a CRUD page.
+
 ## Target Outcomes
 
 The target is to add an admin-only area that can do the following:
@@ -113,6 +154,7 @@ The target is to add an admin-only area that can do the following:
 7. Apply plan-based credit provisioning without replacing HumLibreChat's balance model.
 8. Manage provider-backed channels from the admin UI without hand-editing runtime config files.
 9. Move plan restrictions from channel-level to model-level entitlements.
+10. Manage custom roles from the admin UI and assign them to users.
 
 ## Architecture Direction
 
@@ -218,6 +260,26 @@ Do not add a permanent banned flag in MongoDB for the first pass.
 Initial implementation should use existing `Transaction` records.
 
 - No new usage ledger in the first phase.
+
+### 6. Managed Role
+
+Purpose: become the editable role object used by users, permission checks, and admin tooling.
+
+Suggested fields:
+
+- `name`
+- `description`
+- `permissions`
+- `isSystem`
+- `isEditable`
+- `isDeletable`
+
+Key rules:
+
+- `ADMIN` must always exist.
+- `ADMIN` must not be deletable.
+- The system should keep one fallback role for newly created users.
+- Existing permission semantics should stay unchanged; Phase 7 changes who can own a role, not how permission bits behave.
 - If reporting proves insufficient later, add a summary collection after the admin surface is already working.
 
 ## Phase Plan

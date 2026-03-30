@@ -138,7 +138,6 @@ const SidePanelGroup = memo(
               setCollapsedSize={setCollapsedSize}
               fullCollapse={fullCollapse}
               setFullCollapse={setFullCollapse}
-              interfaceConfig={interfaceConfig}
               hasArtifacts={shouldRenderArtifacts}
               defaultSize={currentLayout[currentLayout.length - 1]}
             />

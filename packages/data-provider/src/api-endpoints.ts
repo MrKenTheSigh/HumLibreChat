@@ -52,10 +52,16 @@ const adminChannelInventoryRoot = `${adminRoot}/channel-inventory`;
 const adminChannelsRoot = `${adminRoot}/channels`;
 const adminPlansRoot = `${adminRoot}/plans`;
 const adminUsageRoot = `${adminRoot}/usage`;
+const adminRolesRoot = `${adminRoot}/roles`;
 
 export const adminUsers = (params: q.AdminUsersListParams) => {
   return `${adminUsersRoot}${buildQuery(params)}`;
 };
+
+export const adminRoles = () => adminRolesRoot;
+
+export const adminRole = (roleName: string) =>
+  `${adminRolesRoot}/${encodeURIComponent(roleName)}`;
 
 export const createAdminUser = () => adminUsersRoot;
 
@@ -66,6 +72,9 @@ export const adminUserBalanceAdd = (userId: string) =>
 
 export const adminUserBalanceSet = (userId: string) =>
   `${adminUsersRoot}/${encodeURIComponent(userId)}/balance/set`;
+
+export const adminUserRole = (userId: string) =>
+  `${adminUsersRoot}/${encodeURIComponent(userId)}/role`;
 
 export const adminUserPlan = (userId: string) =>
   `${adminUsersRoot}/${encodeURIComponent(userId)}/plan`;

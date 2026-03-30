@@ -15,6 +15,7 @@ import {
 } from '@librechat/client';
 import type { Control, UseFormSetValue, UseFormGetValues } from 'react-hook-form';
 import { useUpdatePeoplePickerPermissionsMutation } from '~/data-provider';
+import { useGetAdminRolesQuery } from '~/data-provider/Admin';
 import { useLocalize, useAuthContext } from '~/hooks';
 
 type FormValues = {
@@ -71,6 +72,9 @@ const PeoplePickerAdminSettings = () => {
   const localize = useLocalize();
   const { showToast } = useToastContext();
   const { user, roles } = useAuthContext();
+  const adminRolesQuery = useGetAdminRolesQuery({
+    enabled: user?.role === SystemRoles.ADMIN,
+  });
   const { mutate, isLoading } = useUpdatePeoplePickerPermissionsMutation({
     onSuccess: () => {
       showToast({ status: 'success', message: localize('com_ui_saved') });
@@ -81,15 +85,37 @@ const PeoplePickerAdminSettings = () => {
   });
 
   const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<SystemRoles>(SystemRoles.USER);
+  const [selectedRole, setSelectedRole] = useState<string>(SystemRoles.USER);
+  const availableRoles = useMemo(() => {
+    if (adminRolesQuery.data?.roles != null && adminRolesQuery.data.roles.length > 0) {
+      return adminRolesQuery.data.roles;
+    }
+
+    return [roleDefaults[SystemRoles.USER], roleDefaults[SystemRoles.ADMIN]];
+  }, [adminRolesQuery.data]);
+  const availableRoleMap = useMemo(
+    () => Object.fromEntries(availableRoles.map((role) => [role.name, role])),
+    [availableRoles],
+  );
+  const defaultSelectedRole = useMemo(
+    () =>
+      availableRoles.find((role) => role.name === SystemRoles.USER)?.name ??
+      availableRoles[0]?.name ??
+      SystemRoles.USER,
+    [availableRoles],
+  );
 
   const defaultValues = useMemo(() => {
     const rolePerms = roles?.[selectedRole]?.permissions;
     if (rolePerms) {
       return rolePerms[PermissionTypes.PEOPLE_PICKER];
     }
-    return roleDefaults[selectedRole].permissions[PermissionTypes.PEOPLE_PICKER];
-  }, [roles, selectedRole]);
+    return (
+      availableRoleMap[selectedRole]?.permissions?.[PermissionTypes.PEOPLE_PICKER] ??
+      roleDefaults[selectedRole as SystemRoles]?.permissions?.[PermissionTypes.PEOPLE_PICKER] ??
+      {}
+    );
+  }, [availableRoleMap, roles, selectedRole]);
 
   const {
     reset,
@@ -104,13 +130,23 @@ const PeoplePickerAdminSettings = () => {
   });
 
   useEffect(() => {
+    if (availableRoleMap[selectedRole] == null) {
+      setSelectedRole(defaultSelectedRole);
+    }
+  }, [availableRoleMap, defaultSelectedRole, selectedRole]);
+
+  useEffect(() => {
     const value = roles?.[selectedRole]?.permissions?.[PermissionTypes.PEOPLE_PICKER];
     if (value) {
       reset(value);
     } else {
-      reset(roleDefaults[selectedRole].permissions[PermissionTypes.PEOPLE_PICKER]);
+      reset(
+        availableRoleMap[selectedRole]?.permissions?.[PermissionTypes.PEOPLE_PICKER] ??
+          roleDefaults[selectedRole as SystemRoles]?.permissions?.[PermissionTypes.PEOPLE_PICKER] ??
+          {},
+      );
     }
-  }, [roles, selectedRole, reset]);
+  }, [availableRoleMap, roles, selectedRole, reset]);
 
   if (user?.role !== SystemRoles.ADMIN) {
     return null;
@@ -138,20 +174,12 @@ const PeoplePickerAdminSettings = () => {
     mutate({ roleName: selectedRole, updates: data });
   };
 
-  const roleDropdownItems = [
-    {
-      label: SystemRoles.USER,
-      onClick: () => {
-        setSelectedRole(SystemRoles.USER);
-      },
+  const roleDropdownItems = availableRoles.map((role) => ({
+    label: role.name,
+    onClick: () => {
+      setSelectedRole(role.name);
     },
-    {
-      label: SystemRoles.ADMIN,
-      onClick: () => {
-        setSelectedRole(SystemRoles.ADMIN);
-      },
-    },
-  ];
+  }));
 
   return (
     <OGDialog>

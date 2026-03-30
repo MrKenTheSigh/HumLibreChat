@@ -14,6 +14,7 @@ import {
 } from '@librechat/client';
 import type { Control, UseFormSetValue, UseFormGetValues } from 'react-hook-form';
 import type { TranslationKeys } from '~/hooks/useLocalize';
+import { useGetAdminRolesQuery } from '~/data-provider/Admin';
 import { useLocalize, useAuthContext } from '~/hooks';
 
 type FormValues = Record<Permissions, boolean>;
@@ -34,7 +35,7 @@ export interface AdminSettingsDialogProps {
   menuId: string;
   /** Mutation function and loading state from the permission update hook */
   mutation: {
-    mutate: (data: { roleName: SystemRoles; updates: Record<Permissions, boolean> }) => void;
+    mutate: (data: { roleName: string; updates: Record<Permissions, boolean> }) => void;
     isLoading: boolean;
   };
   /** Whether to show the admin access warning when ADMIN role and USE permission is displayed (default: true) */
@@ -110,16 +111,41 @@ const AdminSettingsDialog: React.FC<AdminSettingsDialogProps> = ({
   const localize = useLocalize();
   const { user, roles } = useAuthContext();
   const { mutate, isLoading } = mutation;
+  const adminRolesQuery = useGetAdminRolesQuery({
+    enabled: user?.role === SystemRoles.ADMIN,
+  });
 
   const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<SystemRoles>(SystemRoles.USER);
+  const [selectedRole, setSelectedRole] = useState<string>(SystemRoles.USER);
+  const availableRoles = useMemo(() => {
+    if (adminRolesQuery.data?.roles != null && adminRolesQuery.data.roles.length > 0) {
+      return adminRolesQuery.data.roles;
+    }
+
+    return [roleDefaults[SystemRoles.USER], roleDefaults[SystemRoles.ADMIN]];
+  }, [adminRolesQuery.data]);
+  const availableRoleMap = useMemo(
+    () => Object.fromEntries(availableRoles.map((role) => [role.name, role])),
+    [availableRoles],
+  );
+  const defaultSelectedRole = useMemo(
+    () =>
+      availableRoles.find((role) => role.name === SystemRoles.USER)?.name ??
+      availableRoles[0]?.name ??
+      SystemRoles.USER,
+    [availableRoles],
+  );
 
   const defaultValues = useMemo(() => {
     if (roles?.[selectedRole]?.permissions) {
       return roles[selectedRole]?.permissions[permissionType];
     }
-    return roleDefaults[selectedRole].permissions[permissionType];
-  }, [roles, selectedRole, permissionType]);
+    return (
+      availableRoleMap[selectedRole]?.permissions?.[permissionType] ??
+      roleDefaults[selectedRole as SystemRoles]?.permissions?.[permissionType] ??
+      {}
+    );
+  }, [availableRoleMap, roles, selectedRole, permissionType]);
 
   const {
     reset,
@@ -134,12 +160,22 @@ const AdminSettingsDialog: React.FC<AdminSettingsDialogProps> = ({
   });
 
   useEffect(() => {
+    if (availableRoleMap[selectedRole] == null) {
+      setSelectedRole(defaultSelectedRole);
+    }
+  }, [availableRoleMap, defaultSelectedRole, selectedRole]);
+
+  useEffect(() => {
     if (roles?.[selectedRole]?.permissions?.[permissionType]) {
       reset(roles[selectedRole]?.permissions[permissionType]);
     } else {
-      reset(roleDefaults[selectedRole].permissions[permissionType]);
+      reset(
+        availableRoleMap[selectedRole]?.permissions?.[permissionType] ??
+          roleDefaults[selectedRole as SystemRoles]?.permissions?.[permissionType] ??
+          {},
+      );
     }
-  }, [roles, selectedRole, reset, permissionType]);
+  }, [availableRoleMap, roles, selectedRole, reset, permissionType]);
 
   if (user?.role !== SystemRoles.ADMIN) {
     return null;
@@ -149,20 +185,12 @@ const AdminSettingsDialog: React.FC<AdminSettingsDialogProps> = ({
     mutate({ roleName: selectedRole, updates: data });
   };
 
-  const roleDropdownItems = [
-    {
-      label: SystemRoles.USER,
-      onClick: () => {
-        setSelectedRole(SystemRoles.USER);
-      },
+  const roleDropdownItems = availableRoles.map((role) => ({
+    label: role.name,
+    onClick: () => {
+      setSelectedRole(role.name);
     },
-    {
-      label: SystemRoles.ADMIN,
-      onClick: () => {
-        setSelectedRole(SystemRoles.ADMIN);
-      },
-    },
-  ];
+  }));
 
   const defaultTrigger = (
     <Button

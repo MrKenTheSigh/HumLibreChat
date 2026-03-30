@@ -50,6 +50,10 @@ export const useEndpoints = ({
     permissionType: PermissionTypes.AGENTS,
     permission: Permissions.USE,
   });
+  const hasChatAccess = useHasAccess({
+    permissionType: PermissionTypes.CHAT,
+    permission: Permissions.USE,
+  });
 
   const assistants: Assistant[] = useMemo(
     () => Object.values(assistantsMap?.[EModelEndpoint.assistants] ?? {}),
@@ -70,6 +74,9 @@ export const useEndpoints = ({
       if (endpoints[i] === EModelEndpoint.agents && !hasAgentAccess) {
         continue;
       }
+      if (endpoints[i] !== EModelEndpoint.agents && !hasChatAccess) {
+        continue;
+      }
       if (
         entitlementLookup.isRestricted === true &&
         entitlementLookup.allowedEndpoints.has(endpoints[i]) !== true
@@ -88,6 +95,7 @@ export const useEndpoints = ({
     entitlementLookup.allowedEndpoints,
     entitlementLookup.isRestricted,
     hasAgentAccess,
+    hasChatAccess,
     includedEndpoints,
     interfaceConfig.modelSelect,
   ]);
