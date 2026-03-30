@@ -763,6 +763,7 @@ export type TTurnstileConfig = z.infer<typeof turnstileSchema>;
 
 export type TStartupConfig = {
   appTitle: string;
+  appIcon?: string;
   socialLogins?: string[];
   interface?: TInterfaceConfig;
   turnstile?: TTurnstileConfig;
@@ -1821,6 +1822,8 @@ export enum Constants {
 export enum LocalStorageKeys {
   /** Key for the admin defined App Title */
   APP_TITLE = 'appTitle',
+  /** Key for the admin defined App Icon. */
+  APP_ICON = 'appIcon',
   /** Key for the last conversation setup. */
   LAST_CONVO_SETUP = 'lastConversationSetup',
   /** Key for the last selected model. */

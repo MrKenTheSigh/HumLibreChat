@@ -1,10 +1,11 @@
 import { useEffect } from 'react';
 import { useRecoilState } from 'recoil';
 import TagManager from 'react-gtm-module';
-import { LocalStorageKeys, PermissionTypes, Permissions } from 'librechat-data-provider';
+import { PermissionTypes, Permissions } from 'librechat-data-provider';
 import type { TStartupConfig, TUser } from 'librechat-data-provider';
 import { useMCPToolsQuery, useMCPServersQuery } from '~/data-provider';
 import { cleanupTimestampedStorage } from '~/utils/timestamps';
+import { applyAppIcon, applyAppTitle } from '~/utils/appMetadata';
 import useSpeechSettingsInit from './useSpeechSettingsInit';
 import { useHasAccess } from '~/hooks';
 import store from '~/store';
@@ -43,13 +44,13 @@ export default function useAppStartup({
 
   /** Set the app title */
   useEffect(() => {
-    const appTitle = startupConfig?.appTitle ?? '';
-    if (!appTitle) {
-      return;
-    }
-    document.title = appTitle;
-    localStorage.setItem(LocalStorageKeys.APP_TITLE, appTitle);
-  }, [startupConfig]);
+    applyAppTitle(startupConfig?.appTitle);
+  }, [startupConfig?.appTitle]);
+
+  /** Set the app icon */
+  useEffect(() => {
+    applyAppIcon(startupConfig?.appIcon);
+  }, [startupConfig?.appIcon]);
 
   /** Set the default spec's preset as default */
   useEffect(() => {

@@ -41,8 +41,15 @@ export default function Root() {
   const fileMap = useFileMap({ isAuthenticated });
 
   const { data: config } = useGetStartupConfig();
+  const termsConfig = config?.interface?.termsOfService;
+  const hasTermsModalContent =
+    (typeof termsConfig?.modalContent === 'string' && termsConfig.modalContent.trim().length > 0) ||
+    (Array.isArray(termsConfig?.modalContent) &&
+      termsConfig.modalContent.some((entry) => entry.trim().length > 0));
+  const shouldShowTermsModal =
+    isAuthenticated && termsConfig?.modalAcceptance === true && hasTermsModalContent;
   const { data: termsData } = useUserTermsQuery({
-    enabled: isAuthenticated && config?.interface?.termsOfService?.modalAcceptance === true,
+    enabled: shouldShowTermsModal,
   });
 
   useSearchEnabled(isAuthenticated);
@@ -97,14 +104,14 @@ export default function Root() {
               </div>
             </PromptGroupsProvider>
           </AgentsMapContext.Provider>
-          {config?.interface?.termsOfService?.modalAcceptance === true && (
+          {shouldShowTermsModal && (
             <TermsAndConditionsModal
               open={showTerms}
               onOpenChange={setShowTerms}
               onAccept={handleAcceptTerms}
               onDecline={handleDeclineTerms}
-              title={config.interface.termsOfService.modalTitle}
-              modalContent={config.interface.termsOfService.modalContent}
+              title={termsConfig?.modalTitle}
+              modalContent={termsConfig?.modalContent}
             />
           )}
         </AssistantsMapContext.Provider>

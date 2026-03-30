@@ -10,5 +10,6 @@ This directory holds planning notes that are not all at the same maturity level.
   Standalone notes for future work that is not yet scheduled into a specific phase.
 - `ui-ux/`
   Cross-phase UI and UX planning documents grouped by product surface.
+  This also includes cross-surface localization notes when the issue is primarily user-facing consistency rather than backend behavior.
 
 Use `backlog/` for ideas, verification passes, and follow-up work that should be remembered but are not ready to enter the active phase plan yet.

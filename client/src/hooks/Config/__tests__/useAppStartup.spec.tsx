@@ -1,7 +1,7 @@
 import React from 'react';
 import { RecoilRoot } from 'recoil';
 import { renderHook } from '@testing-library/react';
-import { PermissionTypes, Permissions } from 'librechat-data-provider';
+import { LocalStorageKeys, PermissionTypes, Permissions } from 'librechat-data-provider';
 import type { TUser } from 'librechat-data-provider';
 
 const mockUseHasAccess = jest.fn();
@@ -52,6 +52,12 @@ const wrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 
 describe('useAppStartup — MCP permission gating', () => {
   beforeEach(() => {
+    localStorage.clear();
+    document.title = 'LibreChat';
+    document.head.innerHTML = `
+      <link rel="icon" href="assets/favicon-32x32.png" />
+      <link rel="apple-touch-icon" href="assets/apple-touch-icon-180x180.png" />
+    `;
     mockUseMCPServersQuery.mockReturnValue({ data: undefined, isLoading: false });
     mockUseMCPToolsQuery.mockReturnValue({ data: undefined, isLoading: false });
   });
@@ -119,5 +125,51 @@ describe('useAppStartup — MCP permission gating', () => {
     renderHook(() => useAppStartup({ startupConfig: undefined, user: mockUser }), { wrapper });
 
     expect(mockUseMCPToolsQuery).toHaveBeenCalledWith({ enabled: false });
+  });
+
+  it('applies app title and app icon from startup config', () => {
+    mockUseHasAccess.mockReturnValue(false);
+
+    renderHook(
+      () =>
+        useAppStartup({
+          startupConfig: {
+            appTitle: 'HumLibreChat',
+            appIcon: '/assets/hum-icon.png',
+            discordLoginEnabled: false,
+            facebookLoginEnabled: false,
+            githubLoginEnabled: false,
+            googleLoginEnabled: false,
+            openidLoginEnabled: false,
+            appleLoginEnabled: false,
+            samlLoginEnabled: false,
+            openidLabel: 'Continue with OpenID',
+            openidImageUrl: '',
+            openidAutoRedirect: false,
+            samlLabel: '',
+            samlImageUrl: '',
+            serverDomain: 'http://localhost:3080',
+            emailLoginEnabled: true,
+            registrationEnabled: true,
+            socialLoginEnabled: false,
+            passwordResetEnabled: true,
+            emailEnabled: false,
+            showBirthdayIcon: false,
+            helpAndFaqURL: 'https://librechat.ai',
+          },
+          user: mockUser,
+        }),
+      { wrapper },
+    );
+
+    expect(document.title).toBe('HumLibreChat');
+    expect(localStorage.getItem(LocalStorageKeys.APP_TITLE)).toBe('HumLibreChat');
+    expect(localStorage.getItem(LocalStorageKeys.APP_ICON)).toBe('/assets/hum-icon.png');
+    expect(document.querySelector('link[rel="icon"]')?.getAttribute('href')).toBe(
+      'http://localhost/assets/hum-icon.png',
+    );
+    expect(document.querySelector('link[rel="apple-touch-icon"]')?.getAttribute('href')).toBe(
+      'http://localhost/assets/hum-icon.png',
+    );
   });
 });

@@ -5,7 +5,6 @@ import { TranslationKeys, useLocalize } from '~/hooks';
 import SocialLoginRender from './SocialLoginRender';
 import { BlinkAnimation } from './BlinkAnimation';
 import { Banner } from '../Banners';
-import Footer from './Footer';
 
 function AuthLayout({
   children,
@@ -62,7 +61,7 @@ function AuthLayout({
       <BlinkAnimation active={isFetching}>
         <div className="mt-6 h-10 w-full bg-cover">
           <img
-            src="assets/logo.svg"
+            src="assets/icon-192x192.png"
             className="h-full w-full object-contain"
             alt={localize('com_ui_logo', { 0: startupConfig?.appTitle ?? 'LibreChat' })}
           />
@@ -90,7 +89,6 @@ function AuthLayout({
             )}
         </div>
       </main>
-      <Footer startupConfig={startupConfig} />
     </div>
   );
 }

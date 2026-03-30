@@ -4,6 +4,7 @@ import type { TStartupConfig } from 'librechat-data-provider';
 import { TranslationKeys, useLocalize } from '~/hooks';
 import { useGetStartupConfig } from '~/data-provider';
 import AuthLayout from '~/components/Auth/AuthLayout';
+import { applyAppIcon, applyAppTitle } from '~/utils/appMetadata';
 import { REDIRECT_PARAM, SESSION_KEY } from '~/utils';
 
 const headerMap: Record<string, TranslationKeys> = {
@@ -44,8 +45,12 @@ export default function StartupLayout({ isAuthenticated }: { isAuthenticated?: b
   }, [isAuthenticated, navigate, data]);
 
   useEffect(() => {
-    document.title = startupConfig?.appTitle || 'LibreChat';
+    applyAppTitle(startupConfig?.appTitle || 'LibreChat');
   }, [startupConfig?.appTitle]);
+
+  useEffect(() => {
+    applyAppIcon(startupConfig?.appIcon);
+  }, [startupConfig?.appIcon]);
 
   useEffect(() => {
     setError(null);
