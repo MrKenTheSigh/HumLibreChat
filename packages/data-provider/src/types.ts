@@ -676,4 +676,11 @@ export type TBalanceResponse = {
   refillIntervalUnit?: 'seconds' | 'minutes' | 'hours' | 'days' | 'weeks' | 'months';
   lastRefill?: Date;
   refillAmount?: number;
+  quota?: {
+    periodTotalCredits: number;
+    periodUsedCredits: number;
+    periodRemainingCredits: number;
+    usageRatio: number;
+    resetAt?: string | null;
+  };
 };

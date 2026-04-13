@@ -2,6 +2,7 @@ module.exports = {
   testEnvironment: 'node',
   clearMocks: true,
   roots: ['<rootDir>'],
+  cacheDirectory: '<rootDir>/.jest-cache',
   coverageDirectory: 'coverage',
   maxWorkers: '50%',
   testTimeout: 30000, // 30 seconds timeout for all tests

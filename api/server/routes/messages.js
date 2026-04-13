@@ -9,8 +9,10 @@ const {
   saveMessage,
   getMessages,
   updateMessage,
+  attachCreditUsageToMessages,
   deleteMessages,
 } = require('~/models');
+const { getMessageUsageDetail } = require('~/models/Transaction');
 const { findAllArtifacts, replaceArtifactContent } = require('~/server/services/Artifacts/update');
 const { requireJwtAuth, validateMessageReq } = require('~/server/middleware');
 const { getConvosQueried } = require('~/models/Conversation');
@@ -45,7 +47,11 @@ router.get('/', async (req, res) => {
         messageId,
         user: user,
       }).lean();
-      response = { messages: message ? [message] : [], nextCursor: null };
+      const messages = await attachCreditUsageToMessages({
+        user,
+        messages: message ? [message] : [],
+      });
+      response = { messages, nextCursor: null };
     } else if (conversationId) {
       const filter = { conversationId, user: user };
       if (cursor) {
@@ -61,7 +67,11 @@ router.get('/', async (req, res) => {
         // Create cursor from the last RETURNED item (not the popped one)
         nextCursor = messages[messages.length - 1][sortField];
       }
-      response = { messages, nextCursor };
+      const enrichedMessages = await attachCreditUsageToMessages({
+        user,
+        messages,
+      });
+      response = { messages: enrichedMessages, nextCursor };
     } else if (search) {
       const searchResults = await Message.meiliSearch(search, { filter: `user = "${user}"` }, true);
 
@@ -283,8 +293,15 @@ router.post('/artifact/:messageId', async (req, res) => {
 router.get('/:conversationId', validateMessageReq, async (req, res) => {
   try {
     const { conversationId } = req.params;
-    const messages = await getMessages({ conversationId }, '-_id -__v -user');
-    res.status(200).json(messages);
+    const messages = await getMessages(
+      { conversationId, user: req.user.id },
+      '-_id -__v -user',
+    );
+    const enrichedMessages = await attachCreditUsageToMessages({
+      user: req.user.id,
+      messages,
+    });
+    res.status(200).json(enrichedMessages);
   } catch (error) {
     logger.error('Error fetching messages:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -313,14 +330,42 @@ router.post('/:conversationId', validateMessageReq, async (req, res) => {
 router.get('/:conversationId/:messageId', validateMessageReq, async (req, res) => {
   try {
     const { conversationId, messageId } = req.params;
-    const message = await getMessages({ conversationId, messageId }, '-_id -__v -user');
-    if (!message) {
+    const message = await getMessages(
+      { conversationId, messageId, user: req.user.id },
+      '-_id -__v -user',
+    );
+    const enrichedMessage = await attachCreditUsageToMessages({
+      user: req.user.id,
+      messages: message,
+    });
+    if (!message || message.length === 0) {
       return res.status(404).json({ error: 'Message not found' });
     }
-    res.status(200).json(message);
+    res.status(200).json(enrichedMessage);
   } catch (error) {
     logger.error('Error fetching message:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.get('/:conversationId/:messageId/usage', validateMessageReq, async (req, res) => {
+  try {
+    const { conversationId, messageId } = req.params;
+    const message = await getMessage({ user: req.user.id, messageId });
+
+    if (!message || message.conversationId !== conversationId) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+
+    const usageDetail = await getMessageUsageDetail({
+      user: req.user.id,
+      messageId,
+    });
+
+    return res.status(200).json(usageDetail);
+  } catch (error) {
+    logger.error('Error fetching message usage detail:', error);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 });
 

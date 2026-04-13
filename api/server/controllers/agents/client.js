@@ -621,6 +621,7 @@ class AgentClient extends BaseClient {
    * @param {AppConfig['balance']} [params.balance]
    * @param {AppConfig['transactions']} [params.transactions]
    * @param {UsageMetadata[]} [params.collectedUsage=this.collectedUsage]
+   * @param {boolean} [params.deferWrite=false]
    */
   async recordCollectedUsage({
     model,
@@ -628,26 +629,73 @@ class AgentClient extends BaseClient {
     transactions,
     context = 'message',
     collectedUsage = this.collectedUsage,
+    deferWrite = false,
   }) {
-    const result = await recordCollectedUsage(
-      {
-        spendTokens,
-        spendStructuredTokens,
-        pricing: { getMultiplier, getCacheMultiplier },
-        bulkWriteOps: { insertMany: bulkInsertTransactions, updateBalance },
-      },
-      {
-        user: this.user ?? this.options.req.user?.id,
-        conversationId: this.conversationId,
-        collectedUsage,
-        model: model ?? this.model ?? this.options.agent.model_parameters.model,
-        context,
-        messageId: this.responseMessageId,
-        balance,
-        transactions,
-        endpointTokenConfig: this.options.endpointTokenConfig,
-      },
-    );
+    const previewStartedAt = Date.now();
+    const deps = {
+      spendTokens,
+      spendStructuredTokens,
+      pricing: { getMultiplier, getCacheMultiplier },
+      bulkWriteOps: { insertMany: bulkInsertTransactions, updateBalance },
+    };
+    const params = {
+      user: this.user ?? this.options.req.user?.id,
+      conversationId: this.conversationId,
+      collectedUsage,
+      model: model ?? this.model ?? this.options.agent.model_parameters.model,
+      context,
+      messageId: this.responseMessageId,
+      balance,
+      transactions,
+      endpointTokenConfig: this.options.endpointTokenConfig,
+    };
+
+    const preview = await recordCollectedUsage(deps, {
+      ...params,
+      persist: false,
+    });
+    logger.info('[AgentClient] recordCollectedUsage preview computed', {
+      messageId: this.responseMessageId,
+      conversationId: this.conversationId,
+      durationMs: Date.now() - previewStartedAt,
+      hasCreditUsage: preview?.creditUsage != null,
+    });
+
+    if (preview) {
+      this.usage = preview;
+    }
+
+    if (deferWrite) {
+      const persistStartedAt = Date.now();
+      recordCollectedUsage(deps, params)
+        .then((result) => {
+          if (result) {
+            this.usage = result;
+          }
+          logger.info('[AgentClient] recordCollectedUsage deferred persist completed', {
+            messageId: this.responseMessageId,
+            conversationId: this.conversationId,
+            durationMs: Date.now() - persistStartedAt,
+            hasCreditUsage: result?.creditUsage != null,
+          });
+        })
+        .catch((err) => {
+          logger.error(
+            '[api/server/controllers/agents/client.js #recordCollectedUsage] Deferred write failed',
+            err,
+          );
+        });
+      return;
+    }
+
+    const persistStartedAt = Date.now();
+    const result = await recordCollectedUsage(deps, params);
+    logger.info('[AgentClient] recordCollectedUsage persisted', {
+      messageId: this.responseMessageId,
+      conversationId: this.conversationId,
+      durationMs: Date.now() - persistStartedAt,
+      hasCreditUsage: result?.creditUsage != null,
+    });
 
     if (result) {
       this.usage = result;
@@ -889,6 +937,7 @@ class AgentClient extends BaseClient {
             context: 'message',
             balance: balanceConfig,
             transactions: transactionsConfig,
+            deferWrite: true,
           });
         } else {
           logger.debug(

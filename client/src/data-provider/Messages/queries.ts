@@ -40,3 +40,22 @@ export const useGetMessagesByConvoId = <TData = t.TMessage[]>(
     },
   );
 };
+
+export const useGetMessageUsageDetail = (
+  params: t.GetMessageUsageDetailParams,
+  config?: UseQueryOptions<t.MessageUsageDetailResponse>,
+): QueryObserverResult<t.MessageUsageDetailResponse> => {
+  const { conversationId, messageId } = params;
+
+  return useQuery<t.MessageUsageDetailResponse>(
+    [QueryKeys.messages, conversationId, messageId, 'usage'],
+    () => dataService.getMessageUsageDetail(params),
+    {
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      refetchOnMount: false,
+      enabled: !!conversationId && !!messageId && (config?.enabled ?? true) === true,
+      ...config,
+    },
+  );
+};

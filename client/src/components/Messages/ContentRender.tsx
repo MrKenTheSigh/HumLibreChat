@@ -10,6 +10,7 @@ import PlaceholderRow from '~/components/Chat/Messages/ui/PlaceholderRow';
 import SiblingSwitch from '~/components/Chat/Messages/SiblingSwitch';
 import HoverButtons from '~/components/Chat/Messages/HoverButtons';
 import MessageIcon from '~/components/Chat/Messages/MessageIcon';
+import MessageCreditUsage from '~/components/Chat/Messages/MessageCreditUsage';
 import SubRow from '~/components/Chat/Messages/SubRow';
 import { fontSizeAtom } from '~/store/fontSize';
 import store from '~/store';
@@ -172,6 +173,10 @@ const ContentRender = memo(function ContentRender({
                 siblingIdx={siblingIdx}
                 siblingCount={siblingCount}
                 setSiblingIdx={setSiblingIdx}
+              />
+              <MessageCreditUsage
+                message={msg}
+                conversationId={conversation?.conversationId ?? msg.conversationId}
               />
               <HoverButtons
                 index={index}

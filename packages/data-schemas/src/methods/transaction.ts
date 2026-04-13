@@ -4,7 +4,12 @@ import logger from '~/config/winston';
 interface UpdateBalanceParams {
   user: string;
   incrementValue: number;
-  setValues?: Partial<Pick<IBalance, 'tokenCredits' | 'lastRefill'>>;
+  setValues?: Partial<
+    Pick<
+      IBalance,
+      'tokenCredits' | 'tokenCreditsLimit' | 'planTokenCredits' | 'planTokenCreditsLimit' | 'lastRefill'
+    >
+  >;
 }
 
 export function createTransactionMethods(mongoose: typeof import('mongoose')) {
@@ -18,11 +23,15 @@ export function createTransactionMethods(mongoose: typeof import('mongoose')) {
       try {
         const currentBalanceDoc = await Balance.findOne({ user }).lean<IBalance>();
         const currentCredits = currentBalanceDoc?.tokenCredits ?? 0;
+        const currentPlanCredits = currentBalanceDoc?.planTokenCredits ?? 0;
         const newCredits = Math.max(0, currentCredits + incrementValue);
+        const spentCredits = incrementValue < 0 ? currentCredits - newCredits : 0;
+        const nextPlanCredits = Math.max(0, currentPlanCredits - spentCredits);
 
         const updatePayload = {
           $set: {
             tokenCredits: newCredits,
+            planTokenCredits: nextPlanCredits,
             ...(setValues ?? {}),
           },
         };

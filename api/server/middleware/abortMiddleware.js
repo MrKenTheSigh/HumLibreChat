@@ -9,6 +9,7 @@ const {
 } = require('@librechat/api');
 const { isAssistantsEndpoint, ErrorTypes } = require('librechat-data-provider');
 const { saveMessage, getConvo, updateBalance, bulkInsertTransactions } = require('~/models');
+const { syncMessageCreditUsage } = require('~/models/messageCreditUsage');
 const { spendTokens, spendStructuredTokens } = require('~/models/spendTokens');
 const { truncateText, smartTruncateText } = require('~/app/clients/prompts');
 const { getMultiplier, getCacheMultiplier } = require('~/models/tx');
@@ -58,6 +59,8 @@ async function spendCollectedUsage({
       model: fallbackModel,
     },
   );
+
+  await syncMessageCreditUsage({ user: userId, messageId });
 
   // Clear the array to prevent double-spending from the AgentClient finally block.
   // The collectedUsage array is shared by reference with AgentClient.collectedUsage,

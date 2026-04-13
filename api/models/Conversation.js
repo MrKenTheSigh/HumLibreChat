@@ -92,7 +92,14 @@ module.exports = {
         logger.debug(`[saveConvo] ${metadata.context}`);
       }
 
+      const startedAt = Date.now();
+      const getMessagesStartedAt = Date.now();
       const messages = await getMessages({ conversationId }, '_id');
+      logger.info('[saveConvo] message ids loaded', {
+        conversationId,
+        durationMs: Date.now() - getMessagesStartedAt,
+        messageCount: Array.isArray(messages) ? messages.length : 0,
+      });
       const update = { ...convo, messages, user: req.user.id };
 
       if (newConversationId) {
@@ -119,6 +126,7 @@ module.exports = {
       }
 
       /** Note: the resulting Model object is necessary for Meilisearch operations */
+      const updateStartedAt = Date.now();
       const conversation = await Conversation.findOneAndUpdate(
         { conversationId, user: req.user.id },
         updateOperation,
@@ -127,6 +135,11 @@ module.exports = {
           upsert: metadata?.noUpsert !== true,
         },
       );
+      logger.info('[saveConvo] conversation updated', {
+        conversationId,
+        durationMs: Date.now() - updateStartedAt,
+        totalDurationMs: Date.now() - startedAt,
+      });
 
       if (!conversation) {
         logger.debug('[saveConvo] Conversation not found, skipping update');

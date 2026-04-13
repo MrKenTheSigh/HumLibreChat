@@ -1,11 +1,12 @@
 const mongoose = require('mongoose');
 const { v4: uuidv4 } = require('uuid');
-const { messageSchema } = require('@librechat/data-schemas');
+const { createModels, messageSchema } = require('@librechat/data-schemas');
 const { MongoMemoryServer } = require('mongodb-memory-server');
 
 const {
   saveMessage,
   getMessages,
+  attachCreditUsageToMessages,
   updateMessage,
   deleteMessages,
   bulkSaveMessages,
@@ -19,6 +20,7 @@ jest.mock('~/server/services/Config/app');
  * @type {import('mongoose').Model<import('@librechat/data-schemas').IMessage>}
  */
 let Message;
+let Transaction;
 
 describe('Message Operations', () => {
   let mongoServer;
@@ -29,6 +31,7 @@ describe('Message Operations', () => {
     mongoServer = await MongoMemoryServer.create();
     const mongoUri = mongoServer.getUri();
     Message = mongoose.models.Message || mongoose.model('Message', messageSchema);
+    ({ Transaction } = createModels(mongoose));
     await mongoose.connect(mongoUri);
   });
 
@@ -40,6 +43,7 @@ describe('Message Operations', () => {
   beforeEach(async () => {
     // Clear database
     await Message.deleteMany({});
+    await Transaction.deleteMany({});
 
     mockReq = {
       user: { id: 'user123' },
@@ -81,6 +85,50 @@ describe('Message Operations', () => {
       mockMessageData.conversationId = 'invalid-id';
       const result = await saveMessage(mockReq, mockMessageData);
       expect(result).toBeUndefined();
+    });
+  });
+
+  describe('attachCreditUsageToMessages', () => {
+    it('should append computed credit usage for assistant messages with matching transactions', async () => {
+      const conversationId = uuidv4();
+      const userId = new mongoose.Types.ObjectId();
+
+      await Message.create({
+        messageId: 'assistant-1',
+        conversationId,
+        text: 'Assistant response',
+        user: userId.toString(),
+        isCreatedByUser: false,
+      });
+
+      await Transaction.create([
+        {
+          user: userId,
+          messageId: 'assistant-1',
+          tokenType: 'prompt',
+          tokenValue: -12.5,
+          rawAmount: -5,
+        },
+        {
+          user: userId,
+          messageId: 'assistant-1',
+          tokenType: 'completion',
+          tokenValue: -7.5,
+          rawAmount: -3,
+        },
+      ]);
+
+      const messages = await Message.find({ conversationId }).lean();
+      const enrichedMessages = await attachCreditUsageToMessages({
+        user: userId.toString(),
+        messages,
+      });
+
+      expect(enrichedMessages).toHaveLength(1);
+      expect(enrichedMessages[0].creditUsage).toEqual({
+        spentCredits: 20,
+        status: 'final',
+      });
     });
   });
 

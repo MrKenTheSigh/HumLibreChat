@@ -11,7 +11,7 @@ function createLoaders(overrides?: Partial<MockLoaders>): MockLoaders {
     getUserById: jest.fn(),
     getPlanById: jest.fn(),
     getBalanceByUserId: jest.fn(),
-    updateBalance: jest.fn(),
+    replacePlanBalance: jest.fn(),
     updateUserProvisioningMetadata: jest.fn().mockResolvedValue(undefined),
     createTransaction: jest.fn().mockResolvedValue(undefined),
     ...overrides,
@@ -84,8 +84,13 @@ describe('admin provisioning helper', () => {
       getBalanceByUserId: jest
         .fn()
         .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce({ tokenCredits: 5000 }),
-      updateBalance: jest.fn().mockResolvedValue({ tokenCredits: 5000 }),
+        .mockResolvedValueOnce({
+          tokenCredits: 5000,
+          tokenCreditsLimit: 5000,
+          planTokenCredits: 5000,
+          planTokenCreditsLimit: 5000,
+        }),
+      replacePlanBalance: jest.fn().mockResolvedValue({ tokenCredits: 5000 }),
     });
 
     const result = await createApplyStartingCredits(loaders)({
@@ -95,9 +100,9 @@ describe('admin provisioning helper', () => {
       onlyIfNoBalanceRecord: true,
     });
 
-    expect(loaders.updateBalance).toHaveBeenCalledWith({
-      user: userId.toString(),
-      incrementValue: 5000,
+    expect(loaders.replacePlanBalance).toHaveBeenCalledWith({
+      userId,
+      nextPlanCredits: 5000,
     });
     expect(loaders.updateUserProvisioningMetadata).toHaveBeenCalledWith({
       userId,
@@ -141,7 +146,7 @@ describe('admin provisioning helper', () => {
         startingCredits: 5000,
       }),
       getBalanceByUserId: jest.fn().mockResolvedValue({ tokenCredits: 2000 }),
-      updateBalance: jest.fn(),
+      replacePlanBalance: jest.fn(),
     });
 
     const result = await createApplyStartingCredits(loaders)({
@@ -156,7 +161,7 @@ describe('admin provisioning helper', () => {
       reason: 'existing_balance_record',
       tokenCredits: 2000,
     });
-    expect(loaders.updateBalance).not.toHaveBeenCalled();
+    expect(loaders.replacePlanBalance).not.toHaveBeenCalled();
     expect(loaders.updateUserProvisioningMetadata).not.toHaveBeenCalled();
   });
 
@@ -196,10 +201,25 @@ describe('admin provisioning helper', () => {
       }),
       getBalanceByUserId: jest
         .fn()
-        .mockResolvedValueOnce({ tokenCredits: 7000 })
-        .mockResolvedValueOnce({ tokenCredits: 10000 })
-        .mockResolvedValueOnce({ tokenCredits: 10000 }),
-      updateBalance: jest.fn().mockResolvedValue({ tokenCredits: 10000 }),
+        .mockResolvedValueOnce({
+          tokenCredits: 7000,
+          tokenCreditsLimit: 7000,
+          planTokenCredits: 0,
+          planTokenCreditsLimit: 0,
+        })
+        .mockResolvedValueOnce({
+          tokenCredits: 10000,
+          tokenCreditsLimit: 10000,
+          planTokenCredits: 3000,
+          planTokenCreditsLimit: 3000,
+        })
+        .mockResolvedValueOnce({
+          tokenCredits: 10000,
+          tokenCreditsLimit: 10000,
+          planTokenCredits: 3000,
+          planTokenCreditsLimit: 3000,
+        }),
+      replacePlanBalance: jest.fn().mockResolvedValue({ tokenCredits: 10000 }),
     });
     const applyStartingCredits = createApplyStartingCredits(loaders);
 
@@ -226,6 +246,6 @@ describe('admin provisioning helper', () => {
       reason: 'already_applied_for_current_plan',
       tokenCredits: 10000,
     });
-    expect(loaders.updateBalance).toHaveBeenCalledTimes(1);
+    expect(loaders.replacePlanBalance).toHaveBeenCalledTimes(1);
   });
 });

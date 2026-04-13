@@ -1,6 +1,7 @@
 /** v0.8.4 */
 module.exports = {
   roots: ['<rootDir>/src'],
+  cacheDirectory: '<rootDir>/.jest-cache',
   testEnvironment: 'jsdom',
   testEnvironmentOptions: {
     url: 'http://localhost:3080',

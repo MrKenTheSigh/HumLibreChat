@@ -563,7 +563,11 @@ describe('recordCollectedUsage', () => {
       expect(mockInsertMany).toHaveBeenCalledTimes(1);
       expect(mockSpendTokens).not.toHaveBeenCalled();
       expect(mockSpendStructuredTokens).not.toHaveBeenCalled();
-      expect(result).toEqual({ input_tokens: 100, output_tokens: 50 });
+      expect(result).toEqual({
+        input_tokens: 100,
+        output_tokens: 50,
+        creditUsage: { spentCredits: 150, status: 'final' },
+      });
     });
 
     it('should batch all entries into a single insertMany call', async () => {
@@ -715,7 +719,11 @@ describe('recordCollectedUsage', () => {
         collectedUsage,
       });
 
-      expect(result).toEqual({ input_tokens: 100, output_tokens: 50 });
+      expect(result).toEqual({
+        input_tokens: 100,
+        output_tokens: 50,
+        creditUsage: { spentCredits: 150, status: 'final' },
+      });
     });
   });
 });

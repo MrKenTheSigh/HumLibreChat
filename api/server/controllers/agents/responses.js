@@ -200,6 +200,7 @@ async function saveResponseOutput(req, conversationId, responseId, response, age
       model: agentId,
       finish_reason: response.status === 'completed' ? 'stop' : response.status,
       tokenCount: response.usage?.output_tokens,
+      creditUsage: response.creditUsage,
     },
     { context: 'Responses API - save assistant response' },
   );
@@ -523,6 +524,56 @@ const createResponse = async (req, res) => {
       // Record token usage against balance
       const balanceConfig = getBalanceConfig(req.config);
       const transactionsConfig = getTransactionsConfig(req.config);
+      const finalResponse = buildResponse(context, tracker, 'completed');
+
+      try {
+        const usageResult = await recordCollectedUsage(
+          {
+            spendTokens,
+            spendStructuredTokens,
+            pricing: { getMultiplier, getCacheMultiplier },
+            bulkWriteOps: { insertMany: db.bulkInsertTransactions, updateBalance: db.updateBalance },
+          },
+          {
+            user: userId,
+            conversationId,
+            collectedUsage,
+            context: 'message',
+            messageId: responseId,
+            balance: balanceConfig,
+            transactions: transactionsConfig,
+            model: primaryConfig.model || agent.model_parameters?.model,
+            persist: false,
+          },
+        );
+
+        if (usageResult?.creditUsage != null) {
+          finalResponse.creditUsage = usageResult.creditUsage;
+        }
+      } catch (err) {
+        logger.error('[Responses API] Error recording usage:', err);
+      }
+
+      // Save to database if store: true
+      if (request.store === true) {
+        try {
+          // Save conversation
+          await saveConversation(req, conversationId, agentId, agent);
+
+          // Save input messages
+          await saveInputMessages(req, conversationId, inputMessages, agentId);
+
+          await saveResponseOutput(req, conversationId, responseId, finalResponse, agentId);
+
+          logger.debug(
+            `[Responses API] Stored response ${responseId} in conversation ${conversationId}`,
+          );
+        } catch (saveError) {
+          logger.error('[Responses API] Error saving response:', saveError);
+          // Don't fail the request if saving fails
+        }
+      }
+
       recordCollectedUsage(
         {
           spendTokens,
@@ -550,28 +601,6 @@ const createResponse = async (req, res) => {
 
       const duration = Date.now() - requestStartTime;
       logger.debug(`[Responses API] Request ${responseId} completed in ${duration}ms (streaming)`);
-
-      // Save to database if store: true
-      if (request.store === true) {
-        try {
-          // Save conversation
-          await saveConversation(req, conversationId, agentId, agent);
-
-          // Save input messages
-          await saveInputMessages(req, conversationId, inputMessages, agentId);
-
-          // Build response for saving (use tracker with buildResponse for streaming)
-          const finalResponse = buildResponse(context, tracker, 'completed');
-          await saveResponseOutput(req, conversationId, responseId, finalResponse, agentId);
-
-          logger.debug(
-            `[Responses API] Stored response ${responseId} in conversation ${conversationId}`,
-          );
-        } catch (saveError) {
-          logger.error('[Responses API] Error saving response:', saveError);
-          // Don't fail the request if saving fails
-        }
-      }
 
       // Wait for artifact processing after response ends (non-blocking)
       if (artifactPromises.length > 0) {
@@ -675,9 +704,62 @@ const createResponse = async (req, res) => {
         },
       });
 
-      // Record token usage against balance
+      if (artifactPromises.length > 0) {
+        try {
+          await Promise.all(artifactPromises);
+        } catch (artifactError) {
+          logger.warn('[Responses API] Error processing artifacts:', artifactError);
+        }
+      }
+
+      const response = buildAggregatedResponse(context, aggregator);
       const balanceConfig = getBalanceConfig(req.config);
       const transactionsConfig = getTransactionsConfig(req.config);
+
+      try {
+        const usageResult = await recordCollectedUsage(
+          {
+            spendTokens,
+            spendStructuredTokens,
+            pricing: { getMultiplier, getCacheMultiplier },
+            bulkWriteOps: { insertMany: db.bulkInsertTransactions, updateBalance: db.updateBalance },
+          },
+          {
+            user: userId,
+            conversationId,
+            collectedUsage,
+            context: 'message',
+            messageId: responseId,
+            balance: balanceConfig,
+            transactions: transactionsConfig,
+            model: primaryConfig.model || agent.model_parameters?.model,
+            persist: false,
+          },
+        );
+        if (usageResult?.creditUsage != null) {
+          response.creditUsage = usageResult.creditUsage;
+        }
+      } catch (err) {
+        logger.error('[Responses API] Error recording usage:', err);
+      }
+
+      if (request.store === true) {
+        try {
+          await saveConversation(req, conversationId, agentId, agent);
+
+          await saveInputMessages(req, conversationId, inputMessages, agentId);
+
+          await saveResponseOutput(req, conversationId, responseId, response, agentId);
+
+          logger.debug(
+            `[Responses API] Stored response ${responseId} in conversation ${conversationId}`,
+          );
+        } catch (saveError) {
+          logger.error('[Responses API] Error saving response:', saveError);
+          // Don't fail the request if saving fails
+        }
+      }
+
       recordCollectedUsage(
         {
           spendTokens,
@@ -698,33 +780,6 @@ const createResponse = async (req, res) => {
       ).catch((err) => {
         logger.error('[Responses API] Error recording usage:', err);
       });
-
-      if (artifactPromises.length > 0) {
-        try {
-          await Promise.all(artifactPromises);
-        } catch (artifactError) {
-          logger.warn('[Responses API] Error processing artifacts:', artifactError);
-        }
-      }
-
-      const response = buildAggregatedResponse(context, aggregator);
-
-      if (request.store === true) {
-        try {
-          await saveConversation(req, conversationId, agentId, agent);
-
-          await saveInputMessages(req, conversationId, inputMessages, agentId);
-
-          await saveResponseOutput(req, conversationId, responseId, response, agentId);
-
-          logger.debug(
-            `[Responses API] Stored response ${responseId} in conversation ${conversationId}`,
-          );
-        } catch (saveError) {
-          logger.error('[Responses API] Error saving response:', saveError);
-          // Don't fail the request if saving fails
-        }
-      }
 
       res.json(response);
 

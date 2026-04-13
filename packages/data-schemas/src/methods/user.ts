@@ -78,7 +78,7 @@ export function createUserMethods(mongoose: typeof import('mongoose')) {
     // If balance is enabled, create or update a balance record for the user
     if (balanceConfig?.enabled && balanceConfig?.startBalance) {
       const update: {
-        $inc: { tokenCredits: number };
+        $inc: { tokenCredits: number; tokenCreditsLimit: number };
         $set?: {
           autoRefillEnabled: boolean;
           refillIntervalValue: number;
@@ -86,7 +86,10 @@ export function createUserMethods(mongoose: typeof import('mongoose')) {
           refillAmount: number;
         };
       } = {
-        $inc: { tokenCredits: balanceConfig.startBalance },
+        $inc: {
+          tokenCredits: balanceConfig.startBalance,
+          tokenCreditsLimit: balanceConfig.startBalance,
+        },
       };
 
       if (

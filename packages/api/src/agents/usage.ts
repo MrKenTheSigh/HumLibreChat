@@ -39,11 +39,16 @@ export interface RecordUsageParams {
   balance?: Partial<TCustomConfig['balance']> | null;
   transactions?: Partial<TTransactionsConfig>;
   endpointTokenConfig?: EndpointTokenConfig;
+  persist?: boolean;
 }
 
 export interface RecordUsageResult {
   input_tokens: number;
   output_tokens: number;
+  creditUsage?: {
+    spentCredits: number;
+    status: 'final';
+  };
 }
 
 /**
@@ -67,6 +72,7 @@ export async function recordCollectedUsage(
     collectedUsage,
     endpointTokenConfig,
     context = 'message',
+    persist = true,
   } = params;
 
   if (!collectedUsage || !collectedUsage.length) {
@@ -172,15 +178,37 @@ export async function recordCollectedUsage(
   }
 
   if (useBulk && allDocs.length > 0) {
-    try {
-      await bulkWriteTransactions({ user, docs: allDocs }, bulkWriteOps);
-    } catch (err) {
-      logger.error('[packages/api #recordCollectedUsage] Error in bulk write', err);
+    if (persist) {
+      try {
+        await bulkWriteTransactions({ user, docs: allDocs }, bulkWriteOps);
+      } catch (err) {
+        logger.error('[packages/api #recordCollectedUsage] Error in bulk write', err);
+      }
     }
   }
+
+  const spentCredits = allDocs.reduce((total, entry) => {
+    const tokenType = entry.doc.tokenType;
+    if (
+      (tokenType === 'prompt' || tokenType === 'completion') &&
+      typeof entry.tokenValue === 'number'
+    ) {
+      return total + Math.abs(entry.tokenValue);
+    }
+
+    return total;
+  }, 0);
 
   return {
     input_tokens,
     output_tokens: total_output_tokens,
+    ...(spentCredits > 0
+      ? {
+          creditUsage: {
+            spentCredits,
+            status: 'final' as const,
+          },
+        }
+      : {}),
   };
 }

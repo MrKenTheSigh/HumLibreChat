@@ -13,6 +13,18 @@ const balanceSchema = new Schema<t.IBalance>({
     type: Number,
     default: 0,
   },
+  tokenCreditsLimit: {
+    type: Number,
+    default: 0,
+  },
+  planTokenCredits: {
+    type: Number,
+    default: 0,
+  },
+  planTokenCreditsLimit: {
+    type: Number,
+    default: 0,
+  },
   // Automatic refill settings
   autoRefillEnabled: {
     type: Boolean,

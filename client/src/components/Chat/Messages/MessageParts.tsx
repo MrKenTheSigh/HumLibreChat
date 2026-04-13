@@ -11,6 +11,7 @@ import { fontSizeAtom } from '~/store/fontSize';
 import SiblingSwitch from './SiblingSwitch';
 import MultiMessage from './MultiMessage';
 import HoverButtons from './HoverButtons';
+import MessageCreditUsage from './MessageCreditUsage';
 import SubRow from './SubRow';
 import store from '~/store';
 
@@ -157,6 +158,10 @@ export default function Message(props: TMessageProps) {
                       siblingIdx={siblingIdx}
                       siblingCount={siblingCount}
                       setSiblingIdx={setSiblingIdx}
+                    />
+                    <MessageCreditUsage
+                      message={message}
+                      conversationId={conversation?.conversationId ?? message.conversationId}
                     />
                     <HoverButtons
                       index={index}

@@ -622,6 +622,12 @@ export const tMessageSchema = z.object({
     .string()
     .optional()
     .default(() => new Date().toISOString()),
+  creditUsage: z
+    .object({
+      spentCredits: z.number(),
+      status: z.enum(['final', 'estimated', 'unavailable']),
+    })
+    .optional(),
   current: z.boolean().optional(),
   unfinished: z.boolean().optional(),
   searchResult: z.boolean().optional(),

@@ -8,6 +8,7 @@ import { MyFilesModal } from '~/components/Chat/Input/Files/MyFilesModal';
 import { useGetStartupConfig, useGetUserBalance } from '~/data-provider';
 import { useAuthContext } from '~/hooks/AuthContext';
 import { useLocalize } from '~/hooks';
+import QuotaBar from './QuotaBar';
 import Settings from './Settings';
 
 function AccountSettings() {
@@ -55,10 +56,19 @@ function AccountSettings() {
         <DropdownMenuSeparator />
         {startupConfig?.balance?.enabled === true && balanceQuery.data != null && (
           <>
-            <div className="text-token-text-secondary ml-3 mr-2 py-2 text-sm" role="note">
-              {localize('com_nav_balance')}:{' '}
-              {new Intl.NumberFormat().format(Math.round(balanceQuery.data.tokenCredits))}
-            </div>
+            {balanceQuery.data.quota != null ? (
+              <QuotaBar
+                periodTotalCredits={balanceQuery.data.quota.periodTotalCredits}
+                periodUsedCredits={balanceQuery.data.quota.periodUsedCredits}
+                periodRemainingCredits={balanceQuery.data.quota.periodRemainingCredits}
+                usageRatio={balanceQuery.data.quota.usageRatio}
+              />
+            ) : (
+              <div className="text-token-text-secondary ml-3 mr-2 py-2 text-sm" role="note">
+                {localize('com_nav_balance')}:{' '}
+                {new Intl.NumberFormat().format(Math.round(balanceQuery.data.tokenCredits))}
+              </div>
+            )}
             <DropdownMenuSeparator />
           </>
         )}

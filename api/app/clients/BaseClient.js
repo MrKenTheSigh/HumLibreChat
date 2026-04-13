@@ -686,7 +686,9 @@ class BaseClient {
         }
         delete userMessage.image_urls;
       }
-      userMessagePromise = this.saveMessageToDatabase(userMessage, saveOptions, user);
+      userMessagePromise = this.saveMessageToDatabase(userMessage, saveOptions, user, {
+        deferConversationSave: true,
+      });
       this.savedMessageIds.add(userMessage.messageId);
       if (typeof opts?.getReqData === 'function') {
         opts.getReqData({
@@ -827,11 +829,9 @@ class BaseClient {
       }
     }
 
-    responseMessage.databasePromise = this.saveMessageToDatabase(
-      responseMessage,
-      saveOptions,
-      user,
-    );
+    responseMessage.databasePromise = this.saveMessageToDatabase(responseMessage, saveOptions, user, {
+      deferConversationSave: true,
+    });
     this.savedMessageIds.add(responseMessage.messageId);
     delete responseMessage.tokenCount;
     return responseMessage;
@@ -959,12 +959,14 @@ class BaseClient {
    * @param {Partial<TConversation>} endpointOptions
    * @param {string | null} user
    */
-  async saveMessageToDatabase(message, endpointOptions, user = null) {
+  async saveMessageToDatabase(message, endpointOptions, user = null, options = {}) {
     if (this.user && user !== this.user) {
       throw new Error('User mismatch.');
     }
 
+    const { deferConversationSave = false } = options;
     const hasAddedConvo = this.options?.req?.body?.addedConvo != null;
+    const saveMessageStartedAt = Date.now();
     const savedMessage = await saveMessage(
       this.options?.req,
       {
@@ -976,6 +978,11 @@ class BaseClient {
       },
       { context: 'api/app/clients/BaseClient.js - saveMessageToDatabase #saveMessage' },
     );
+    logger.info('[BaseClient] saveMessageToDatabase message saved', {
+      messageId: message.messageId,
+      conversationId: message.conversationId,
+      durationMs: Date.now() - saveMessageStartedAt,
+    });
 
     if (this.skipSaveConvo) {
       return { message: savedMessage };
@@ -1018,9 +1025,49 @@ class BaseClient {
       }
     }
 
-    const conversation = await saveConvo(this.options?.req, fieldsToKeep, {
+    const persistedConversation =
+      existingConvo != null
+        ? {
+            ...existingConvo,
+            ...fieldsToKeep,
+            user: this.options?.req?.user?.id,
+          }
+        : {
+            ...fieldsToKeep,
+            user: this.options?.req?.user?.id,
+          };
+
+    const conversationPromise = saveConvo(this.options?.req, fieldsToKeep, {
       context: 'api/app/clients/BaseClient.js - saveMessageToDatabase #saveConvo',
       unsetFields,
+    });
+    if (deferConversationSave) {
+      conversationPromise
+        .then(() => {
+          logger.info('[BaseClient] saveMessageToDatabase conversation saved', {
+            messageId: message.messageId,
+            conversationId: message.conversationId,
+            durationMs: Date.now() - saveMessageStartedAt,
+            deferred: true,
+          });
+        })
+        .catch((error) => {
+          logger.error('[BaseClient] saveMessageToDatabase deferred conversation save failed', {
+            messageId: message.messageId,
+            conversationId: message.conversationId,
+            errorMessage: error?.message,
+            stack: error?.stack,
+          });
+        });
+
+      return { message: savedMessage, conversation: persistedConversation };
+    }
+
+    const conversation = await conversationPromise;
+    logger.info('[BaseClient] saveMessageToDatabase conversation saved', {
+      messageId: message.messageId,
+      conversationId: message.conversationId,
+      durationMs: Date.now() - saveMessageStartedAt,
     });
 
     return { message: savedMessage, conversation };

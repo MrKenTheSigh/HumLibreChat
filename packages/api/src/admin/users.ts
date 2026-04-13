@@ -18,7 +18,7 @@ import {
 } from './utils';
 
 const { User, Balance, Transaction, Role } = createModels(mongoose);
-const { createUser, updateBalance } = createMethods(mongoose);
+const { createUser } = createMethods(mongoose);
 
 const MIN_PASSWORD_LENGTH = parseInt(process.env.MIN_PASSWORD_LENGTH ?? '', 10) || 8;
 const allowedCharactersRegex = new RegExp(
@@ -137,6 +137,9 @@ type AdminUserDetailRecord = AdminUserListItem & {
 
 type AdminBalanceRecord = {
   tokenCredits: number;
+  tokenCreditsLimit?: number;
+  planTokenCredits?: number;
+  planTokenCreditsLimit?: number;
 };
 
 type AdminPlanSummaryRecord = {
@@ -231,6 +234,30 @@ function extractTokenCredits(balance: unknown): number {
   }
 
   throw createStatusError(500, 'Failed to read updated balance');
+}
+
+function getBalanceNumber(value: number | null | undefined): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+function buildPlanBalanceUpdate(params: {
+  balance: AdminBalanceRecord | null;
+  nextPlanCredits: number;
+}) {
+  const currentTokenCredits = getBalanceNumber(params.balance?.tokenCredits);
+  const currentTokenCreditsLimit = getBalanceNumber(params.balance?.tokenCreditsLimit);
+  const currentPlanCredits = getBalanceNumber(params.balance?.planTokenCredits);
+  const currentPlanCreditsLimit = getBalanceNumber(params.balance?.planTokenCreditsLimit);
+  const nextPlanCredits = Math.max(params.nextPlanCredits, 0);
+  const tokenCreditsDelta = nextPlanCredits - currentPlanCredits;
+  const tokenCreditsLimitDelta = nextPlanCredits - currentPlanCreditsLimit;
+
+  return {
+    tokenCredits: Math.max(0, currentTokenCredits + tokenCreditsDelta),
+    tokenCreditsLimit: Math.max(0, currentTokenCreditsLimit + tokenCreditsLimitDelta),
+    planTokenCredits: nextPlanCredits,
+    planTokenCreditsLimit: nextPlanCredits,
+  };
 }
 
 function handleAdminError(error: unknown, res: Response, context: string) {
@@ -404,7 +431,7 @@ async function getExistingPlanOrThrow(
   const plan = await User.db
     .model('AdminPlan')
     .findById(planId)
-    .select('_id name slug')
+    .select('_id name slug startingCredits')
     .lean<AdminPlanSummaryRecord | null>();
 
   if (!plan) {
@@ -482,17 +509,25 @@ export async function addAdminUserBalance(req: Request, res: Response) {
   try {
     const { amount } = adminBalanceAddSchema.parse(req.body);
     const { userId } = await getExistingUserOrThrow(req.params.userId);
-
-    const updatedBalance = await updateBalance({
-      user: userId.toString(),
-      incrementValue: amount,
-    });
+    const currentBalance = await Balance.findOne({ user: userId }).lean<AdminBalanceRecord | null>();
+    const nextBalance = await Balance.findOneAndUpdate(
+      { user: userId },
+      {
+        $set: {
+          tokenCredits: getBalanceNumber(currentBalance?.tokenCredits) + amount,
+          tokenCreditsLimit: getBalanceNumber(currentBalance?.tokenCreditsLimit) + amount,
+          planTokenCredits: getBalanceNumber(currentBalance?.planTokenCredits),
+          planTokenCreditsLimit: getBalanceNumber(currentBalance?.planTokenCreditsLimit),
+        },
+      },
+      { new: true, upsert: true },
+    ).lean<AdminBalanceRecord | null>();
 
     await createAdminBalanceTransaction(userId, amount, 'admin_add');
 
     return res.status(200).json({
       userId: userId.toString(),
-      tokenCredits: extractTokenCredits(updatedBalance),
+      tokenCredits: extractTokenCredits(nextBalance),
       updatedAt: null,
     });
   } catch (error) {
@@ -508,10 +543,18 @@ export async function setAdminUserBalance(req: Request, res: Response) {
     const currentBalance = (await Balance.findOne({ user: userId }).lean()) as IBalance | null;
     const currentCredits = currentBalance?.tokenCredits ?? 0;
     const delta = amount - currentCredits;
+    const currentLimit = getBalanceNumber(currentBalance?.tokenCreditsLimit);
+    const nextLimit = Math.max(currentLimit, amount);
 
     const updatedBalance = await Balance.findOneAndUpdate(
       { user: userId },
-      { $set: { tokenCredits: amount } },
+      {
+        $set: {
+          tokenCredits: amount,
+          tokenCreditsLimit: nextLimit,
+          planTokenCredits: Math.min(getBalanceNumber(currentBalance?.planTokenCredits), amount),
+        },
+      },
       { upsert: true, new: true },
     ).lean<AdminBalanceRecord | null>();
 
@@ -537,6 +580,18 @@ export async function assignAdminUserPlan(req: Request, res: Response) {
     const { userId } = await getExistingUserOrThrow(req.params.userId);
     const { planId, plan } = await getExistingPlanOrThrow(planIdParam);
     const assignedAt = new Date();
+    const [existingUser, currentBalance] = await Promise.all([
+      User.findById(userId).select('_id adminPlanId').lean<{ _id: mongoose.Types.ObjectId; adminPlanId?: mongoose.Types.ObjectId | null } | null>(),
+      Balance.findOne({ user: userId }).lean<AdminBalanceRecord | null>(),
+    ]);
+
+    if (!existingUser) {
+      throw createStatusError(404, 'User not found');
+    }
+
+    const existingPlanId = existingUser.adminPlanId?.toString() ?? null;
+    const nextPlanCredits = typeof plan.startingCredits === 'number' ? Math.max(plan.startingCredits, 0) : 0;
+    const shouldReplacePlanBalance = existingPlanId == null || existingPlanId !== planId.toString();
 
     const updatedUser = await User.findByIdAndUpdate(
       userId,
@@ -555,12 +610,20 @@ export async function assignAdminUserPlan(req: Request, res: Response) {
       throw createStatusError(404, 'User not found');
     }
 
-    await applyStartingCredits({
-      appConfig: (req as AppAwareRequest).config,
-      userId,
-      source: 'plan_assignment_auto_seed',
-      onlyIfNoBalanceRecord: true,
-    });
+    if (shouldReplacePlanBalance) {
+      const nextBalanceState = buildPlanBalanceUpdate({
+        balance: currentBalance,
+        nextPlanCredits,
+      });
+
+      await Balance.findOneAndUpdate(
+        { user: userId },
+        {
+          $set: nextBalanceState,
+        },
+        { upsert: true, new: true },
+      ).lean<AdminBalanceRecord | null>();
+    }
 
     return res
       .status(200)
@@ -573,6 +636,12 @@ export async function assignAdminUserPlan(req: Request, res: Response) {
 export async function clearAdminUserPlan(req: Request, res: Response) {
   try {
     const { userId } = await getExistingUserOrThrow(req.params.userId);
+    const currentBalance = await Balance.findOne({ user: userId }).lean<AdminBalanceRecord | null>();
+    const nextBalanceState = buildPlanBalanceUpdate({
+      balance: currentBalance,
+      nextPlanCredits: 0,
+    });
+
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       {
@@ -589,6 +658,14 @@ export async function clearAdminUserPlan(req: Request, res: Response) {
     if (!updatedUser) {
       throw createStatusError(404, 'User not found');
     }
+
+    await Balance.findOneAndUpdate(
+      { user: userId },
+      {
+        $set: nextBalanceState,
+      },
+      { upsert: true, new: true },
+    ).lean<AdminBalanceRecord | null>();
 
     return res.status(200).json(sanitizePlanAssignment(userId, null, null));
   } catch (error) {

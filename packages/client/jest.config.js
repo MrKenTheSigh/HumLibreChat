@@ -1,4 +1,5 @@
 export default {
+  cacheDirectory: '<rootDir>/.jest-cache',
   collectCoverageFrom: ['src/**/*.{js,jsx,ts,tsx}', '!<rootDir>/node_modules/'],
   coveragePathIgnorePatterns: ['/node_modules/', '/dist/'],
   coverageReporters: ['text', 'cobertura'],

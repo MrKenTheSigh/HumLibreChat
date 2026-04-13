@@ -11,6 +11,7 @@ const {
 } = require('@librechat/api');
 const { disposeClient, clientRegistry, requestDataMap } = require('~/server/cleanup');
 const { handleAbortError } = require('~/server/middleware');
+const { saveMessageCreditUsage, syncMessageCreditUsage } = require('~/models/messageCreditUsage');
 const { logViolation } = require('~/cache');
 const { saveMessage } = require('~/models');
 
@@ -30,6 +31,13 @@ function createCloseHandler(abortController) {
     abortController.abort();
     logger.debug('[AgentController] Request aborted on close');
   };
+}
+
+function logTiming(label, startedAt, extra = {}) {
+  logger.info(label, {
+    durationMs: Date.now() - startedAt,
+    ...extra,
+  });
 }
 
 /**
@@ -239,15 +247,25 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
         };
 
         const response = await client.sendMessage(text, messageOptions);
+        const responseReadyAt = Date.now();
 
         const messageId = response.messageId;
         const endpoint = endpointOption.endpoint;
         response.endpoint = endpoint;
+        const previewCreditUsage = client.getStreamUsage?.()?.creditUsage ?? null;
+        if (previewCreditUsage != null) {
+          response.creditUsage = previewCreditUsage;
+        }
 
         const databasePromise = response.databasePromise;
         delete response.databasePromise;
 
+        const databasePromiseStartedAt = Date.now();
         const { conversation: convoData = {} } = await databasePromise;
+        logTiming('[ResumableAgentController] databasePromise resolved', databasePromiseStartedAt, {
+          streamId,
+          messageId,
+        });
         const conversation = { ...convoData };
         conversation.title =
           conversation && !conversation.title ? null : conversation?.title || 'New Chat';
@@ -272,8 +290,13 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
         // Save user message BEFORE sending final event to avoid race condition
         // where client refetch happens before database is updated
         if (!client.skipSaveUserMessage && userMessage) {
+          const saveUserStartedAt = Date.now();
           await saveMessage(req, userMessage, {
             context: 'api/server/controllers/agents/request.js - resumable user message',
+          });
+          logTiming('[ResumableAgentController] user message saved', saveUserStartedAt, {
+            streamId,
+            messageId: userMessage.messageId,
           });
         }
 
@@ -281,11 +304,50 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
         // This prevents race conditions where the client sends a follow-up message
         // before the response is saved to the database, causing orphaned parentMessageIds.
         if (client.savedMessageIds && !client.savedMessageIds.has(messageId)) {
+          const saveResponseStartedAt = Date.now();
           await saveMessage(
             req,
             { ...response, user: userId, unfinished: wasAbortedBeforeComplete },
             { context: 'api/server/controllers/agents/request.js - resumable response end' },
           );
+          logTiming('[ResumableAgentController] response message saved', saveResponseStartedAt, {
+            streamId,
+            messageId,
+          });
+        }
+
+        if (previewCreditUsage != null) {
+          if (client.savedMessageIds && client.savedMessageIds.has(messageId)) {
+            const saveCreditUsageStartedAt = Date.now();
+            await saveMessageCreditUsage({
+              user: userId,
+              messageId,
+              creditUsage: previewCreditUsage,
+            });
+            logTiming(
+              '[ResumableAgentController] preview credit usage saved',
+              saveCreditUsageStartedAt,
+              {
+                streamId,
+                messageId,
+              },
+            );
+          }
+        } else {
+          const syncCreditUsageStartedAt = Date.now();
+          const syncedCreditUsage = await syncMessageCreditUsage({ user: userId, messageId });
+          logTiming(
+            '[ResumableAgentController] fallback credit usage synced',
+            syncCreditUsageStartedAt,
+            {
+              streamId,
+              messageId,
+              found: syncedCreditUsage != null,
+            },
+          );
+          if (syncedCreditUsage != null) {
+            response.creditUsage = syncedCreditUsage;
+          }
         }
 
         // Check if our job was replaced by a new request before emitting
@@ -319,6 +381,7 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
             userMessageId: userMessage?.messageId,
             responseMessageId: response?.messageId,
             conversationId: conversation?.conversationId,
+            postResponseReadyMs: Date.now() - responseReadyAt,
           });
 
           await GenerationJobManager.emitDone(streamId, finalEvent);
@@ -620,18 +683,27 @@ const _LegacyAgentController = async (req, res, next, initializeClient, addTitle
     };
 
     let response = await client.sendMessage(text, messageOptions);
+    const responseReadyAt = Date.now();
 
     // Extract what we need and immediately break reference
     const messageId = response.messageId;
     const endpoint = endpointOption.endpoint;
     response.endpoint = endpoint;
+    const previewCreditUsage = client.getStreamUsage?.()?.creditUsage ?? null;
+    if (previewCreditUsage != null) {
+      response.creditUsage = previewCreditUsage;
+    }
 
     // Store database promise locally
     const databasePromise = response.databasePromise;
     delete response.databasePromise;
 
     // Resolve database-related data
+    const databasePromiseStartedAt = Date.now();
     const { conversation: convoData = {} } = await databasePromise;
+    logTiming('[AgentController] databasePromise resolved', databasePromiseStartedAt, {
+      messageId,
+    });
     const conversation = { ...convoData };
     conversation.title =
       conversation && !conversation.title ? null : conversation?.title || 'New Chat';
@@ -646,26 +718,56 @@ const _LegacyAgentController = async (req, res, next, initializeClient, addTitle
 
     // Only send if not aborted
     if (!job.abortController.signal.aborted) {
-      // Create a new response object with minimal copies
-      const finalResponse = { ...response };
+      // Save the message if needed
+      if (client.savedMessageIds && !client.savedMessageIds.has(messageId)) {
+        const saveResponseStartedAt = Date.now();
+        await saveMessage(
+          req,
+          { ...response, user: userId },
+          { context: 'api/server/controllers/agents/request.js - response end' },
+        );
+        logTiming('[AgentController] response message saved', saveResponseStartedAt, {
+          messageId,
+        });
+      }
 
+      if (previewCreditUsage != null) {
+        if (client.savedMessageIds && client.savedMessageIds.has(messageId)) {
+          const saveCreditUsageStartedAt = Date.now();
+          await saveMessageCreditUsage({
+            user: userId,
+            messageId,
+            creditUsage: previewCreditUsage,
+          });
+          logTiming('[AgentController] preview credit usage saved', saveCreditUsageStartedAt, {
+            messageId,
+          });
+        }
+      } else {
+        const syncCreditUsageStartedAt = Date.now();
+        const syncedCreditUsage = await syncMessageCreditUsage({ user: userId, messageId });
+        logTiming('[AgentController] fallback credit usage synced', syncCreditUsageStartedAt, {
+          messageId,
+          found: syncedCreditUsage != null,
+        });
+        if (syncedCreditUsage != null) {
+          response.creditUsage = syncedCreditUsage;
+        }
+      }
+
+      logger.info('[AgentController] Sending FINAL event', {
+        messageId,
+        conversationId: conversation?.conversationId,
+        postResponseReadyMs: Date.now() - responseReadyAt,
+      });
       sendEvent(res, {
         final: true,
         conversation,
         title: conversation.title,
         requestMessage: sanitizeMessageForTransmit(userMessage),
-        responseMessage: finalResponse,
+        responseMessage: { ...response },
       });
       res.end();
-
-      // Save the message if needed
-      if (client.savedMessageIds && !client.savedMessageIds.has(messageId)) {
-        await saveMessage(
-          req,
-          { ...finalResponse, user: userId },
-          { context: 'api/server/controllers/agents/request.js - response end' },
-        );
-      }
     }
     // Edge case: sendMessage completed but abort happened during sendCompletion
     // We need to ensure a final event is sent

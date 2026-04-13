@@ -1,7 +1,8 @@
 const { z } = require('zod');
+const mongoose = require('mongoose');
 const { logger } = require('@librechat/data-schemas');
 const { createTempChatExpirationDate } = require('@librechat/api');
-const { Message } = require('~/db/models');
+const { Message, Transaction } = require('~/db/models');
 
 const idSchema = z.string().uuid();
 
@@ -321,6 +322,92 @@ async function getMessages(filter, select) {
   }
 }
 
+function normalizeTransactionUser(user) {
+  if (!user) {
+    return null;
+  }
+
+  if (user instanceof mongoose.Types.ObjectId) {
+    return user;
+  }
+
+  if (typeof user === 'string' && mongoose.Types.ObjectId.isValid(user)) {
+    return new mongoose.Types.ObjectId(user);
+  }
+
+  return null;
+}
+
+async function attachCreditUsageToMessages({ user, messages }) {
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return messages;
+  }
+
+  const transactionUser = normalizeTransactionUser(user);
+  if (!transactionUser) {
+    return messages;
+  }
+
+  const unresolvedMessages = messages.filter(
+    (message) =>
+      !message?.isCreatedByUser &&
+      message?.messageId != null &&
+      message?.creditUsage == null,
+  );
+
+  if (unresolvedMessages.length === 0) {
+    return messages;
+  }
+
+  const messageIds = unresolvedMessages.map((message) => message.messageId);
+  const summaries = await Transaction.aggregate([
+    {
+      $match: {
+        user: transactionUser,
+        messageId: { $in: messageIds },
+        tokenType: { $in: ['prompt', 'completion'] },
+        tokenValue: { $type: 'number' },
+      },
+    },
+    {
+      $group: {
+        _id: '$messageId',
+        netTokenValue: { $sum: '$tokenValue' },
+      },
+    },
+  ]);
+
+  if (summaries.length === 0) {
+    return messages;
+  }
+
+  const summaryMap = new Map(
+    summaries.map((summary) => [
+      summary._id,
+      {
+        spentCredits: Math.max(-summary.netTokenValue, 0),
+        status: 'final',
+      },
+    ]),
+  );
+
+  return messages.map((message) => {
+    if (message?.creditUsage != null || message?.isCreatedByUser || message?.messageId == null) {
+      return message;
+    }
+
+    const creditUsage = summaryMap.get(message.messageId);
+    if (!creditUsage) {
+      return message;
+    }
+
+    return {
+      ...message,
+      creditUsage,
+    };
+  });
+}
+
 /**
  * Retrieves a single message from the database.
  * @async
@@ -368,5 +455,6 @@ module.exports = {
   deleteMessagesSince,
   getMessages,
   getMessage,
+  attachCreditUsageToMessages,
   deleteMessages,
 };

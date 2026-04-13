@@ -11,6 +11,7 @@ import { useAddedResponse, useResumeOnLoad, useAdaptiveSSE, useChatHelpers } fro
 import ConversationStarters from './Input/ConversationStarters';
 import { useGetMessagesByConvoId } from '~/data-provider';
 import MessagesView from './Messages/MessagesView';
+import ChatQuotaBar from './ChatQuotaBar';
 import Presentation from './Presentation';
 import ChatForm from './Input/ChatForm';
 import Landing from './Landing';
@@ -92,6 +93,7 @@ function ChatView({ index = 0 }: { index?: number }) {
                       : 'h-full overflow-y-auto',
                   )}
                 >
+                  {!isLandingPage && <ChatQuotaBar />}
                   {content}
                   <div
                     className={cn(

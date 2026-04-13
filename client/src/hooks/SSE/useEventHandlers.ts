@@ -18,6 +18,7 @@ import type {
   TConversation,
   EventSubmission,
   TStartupConfig,
+  TBalanceResponse,
 } from 'librechat-data-provider';
 import type { TResData, TFinalResData, ConvoGenerator } from '~/common';
 import type { InfiniteData } from '@tanstack/react-query';
@@ -553,6 +554,46 @@ export default function useEventHandlers({
           queryClient.setQueryData<TMessage[]>(
             [QueryKeys.messages, conversation.conversationId],
             [...currentMessages],
+          );
+        }
+
+        const spentCredits = responseMessage?.creditUsage?.spentCredits;
+        if (typeof spentCredits === 'number' && spentCredits > 0) {
+          queryClient.setQueryData<TBalanceResponse | undefined>(
+            [QueryKeys.balance],
+            (currentBalance) => {
+              if (!currentBalance) {
+                return currentBalance;
+              }
+
+              const nextTokenCredits = Math.max(0, currentBalance.tokenCredits - spentCredits);
+              const quota = currentBalance.quota;
+
+              if (!quota) {
+                return {
+                  ...currentBalance,
+                  tokenCredits: nextTokenCredits,
+                };
+              }
+
+              const nextRemainingCredits = Math.max(0, quota.periodRemainingCredits - spentCredits);
+              const nextUsedCredits = Math.max(0, quota.periodUsedCredits + spentCredits);
+              const nextUsageRatio =
+                quota.periodTotalCredits > 0
+                  ? Math.min(nextUsedCredits / quota.periodTotalCredits, 1)
+                  : quota.usageRatio;
+
+              return {
+                ...currentBalance,
+                tokenCredits: nextTokenCredits,
+                quota: {
+                  ...quota,
+                  periodRemainingCredits: nextRemainingCredits,
+                  periodUsedCredits: nextUsedCredits,
+                  usageRatio: nextUsageRatio,
+                },
+              };
+            },
           );
         }
 

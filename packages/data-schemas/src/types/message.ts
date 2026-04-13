@@ -6,6 +6,10 @@ export interface IMessage extends Document {
   messageId: string;
   conversationId: string;
   user: string;
+  creditUsage?: {
+    spentCredits: number;
+    status: 'final' | 'estimated' | 'unavailable';
+  };
   model?: string;
   endpoint?: string;
   conversationSignature?: string;

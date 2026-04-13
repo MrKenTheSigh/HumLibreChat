@@ -559,6 +559,27 @@ export type VerifyToolAuthResponse = {
 export type GetToolCallParams = { conversationId: string };
 export type ToolCallResults = a.ToolCallResult[];
 
+export type GetMessageUsageDetailParams = {
+  conversationId: string;
+  messageId: string;
+};
+
+export type MessageUsageDetailResponse = {
+  spentCredits: number;
+  transactions: Array<{
+    tokenType: 'prompt' | 'completion' | 'credits';
+    context: string | null;
+    model: string | null;
+    rawAmount: number | null;
+    tokenValue: number | null;
+    rate: number | null;
+    inputTokens: number | null;
+    writeTokens: number | null;
+    readTokens: number | null;
+    createdAt: string | null;
+  }>;
+};
+
 /* Memories */
 export type TUserMemory = {
   key: string;

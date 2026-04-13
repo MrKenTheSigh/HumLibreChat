@@ -23,6 +23,21 @@ const messageSchema: Schema<IMessage> = new Schema(
       default: null,
       meiliIndex: true,
     },
+    creditUsage: {
+      type: {
+        spentCredits: {
+          type: Number,
+          required: true,
+        },
+        status: {
+          type: String,
+          enum: ['final', 'estimated', 'unavailable'],
+          required: true,
+        },
+      },
+      default: undefined,
+      required: false,
+    },
     model: {
       type: String,
       default: null,

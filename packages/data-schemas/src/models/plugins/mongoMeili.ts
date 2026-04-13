@@ -90,6 +90,14 @@ const getSyncConfig = () => ({
   delayMs: parseInt(process.env.MEILI_SYNC_DELAY_MS || '100', 10),
 });
 
+const isFetchFailedError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return error.message.toLowerCase().includes('fetch failed');
+};
+
 /**
  * Validates the required options for configuring the mongoMeili plugin.
  */
@@ -425,6 +433,10 @@ const createMeiliMongooseModel = ({
           await index.addDocuments([object]);
           break;
         } catch (error) {
+          if (isFetchFailedError(error)) {
+            logger.error('[addObjectToMeili] Meili unavailable, skipping document add:', error);
+            return next();
+          }
           retryCount++;
           if (retryCount >= maxRetries) {
             logger.error('[addObjectToMeili] Error adding document to Meili after retries:', error);

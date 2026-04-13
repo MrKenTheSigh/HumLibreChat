@@ -328,7 +328,18 @@ describe('admin users handlers', () => {
       );
       mockBalanceFindOne.mockReturnValue(
         createSelectLeanQuery({
+          tokenCredits: 500,
+          tokenCreditsLimit: 900,
+          planTokenCredits: 200,
+          planTokenCreditsLimit: 200,
+        }),
+      );
+      mockBalanceFindOneAndUpdate.mockReturnValue(
+        createSelectLeanQuery({
           tokenCredits: 12345,
+          tokenCreditsLimit: 20000,
+          planTokenCredits: 0,
+          planTokenCreditsLimit: 0,
         }),
       );
       mockAdminPlanFindById.mockReturnValue(
@@ -368,7 +379,7 @@ describe('admin users handlers', () => {
           startingCredits: null,
         },
         planAssignedAt: '2026-03-25T02:00:00.000Z',
-        balance: { tokenCredits: 12345, updatedAt: null },
+        balance: { tokenCredits: 500, updatedAt: null },
         provisioning: {
           balanceEnabled: true,
           hasBalanceRecord: true,
@@ -435,6 +446,22 @@ describe('admin users handlers', () => {
       mockUpdateBalance.mockResolvedValue({
         tokenCredits: 600,
       });
+      mockBalanceFindOne.mockReturnValue(
+        createSelectLeanQuery({
+          tokenCredits: 500,
+          tokenCreditsLimit: 1000,
+          planTokenCredits: 200,
+          planTokenCreditsLimit: 200,
+        }),
+      );
+      mockBalanceFindOneAndUpdate.mockReturnValue(
+        createSelectLeanQuery({
+          tokenCredits: 600,
+          tokenCreditsLimit: 1100,
+          planTokenCredits: 200,
+          planTokenCreditsLimit: 200,
+        }),
+      );
 
       const req = {
         params: {
@@ -448,10 +475,18 @@ describe('admin users handlers', () => {
 
       await addAdminUserBalance(req, res);
 
-      expect(mockUpdateBalance).toHaveBeenCalledWith({
-        user: userId.toString(),
-        incrementValue: 100,
-      });
+      expect(mockBalanceFindOneAndUpdate).toHaveBeenCalledWith(
+        { user: userId },
+        {
+          $set: {
+            tokenCredits: 600,
+            tokenCreditsLimit: 1100,
+            planTokenCredits: 200,
+            planTokenCreditsLimit: 200,
+          },
+        },
+        { new: true, upsert: true },
+      );
       expect(mockTransactionCreate).toHaveBeenCalledWith({
         user: userId,
         tokenType: 'credits',
@@ -500,6 +535,9 @@ describe('admin users handlers', () => {
       mockBalanceFindOne.mockReturnValue(
         createSelectLeanQuery({
           tokenCredits: 150,
+          tokenCreditsLimit: 300,
+          planTokenCredits: 50,
+          planTokenCreditsLimit: 50,
         }),
       );
       mockBalanceFindOneAndUpdate.mockReturnValue(
@@ -522,7 +560,7 @@ describe('admin users handlers', () => {
 
       expect(mockBalanceFindOneAndUpdate).toHaveBeenCalledWith(
         { user: userId },
-        { $set: { tokenCredits: 500 } },
+        { $set: { tokenCredits: 500, tokenCreditsLimit: 500, planTokenCredits: 50 } },
         { upsert: true, new: true },
       );
       expect(mockTransactionCreate).toHaveBeenCalledWith({
@@ -556,12 +594,29 @@ describe('admin users handlers', () => {
           _id: planId,
           name: 'Pro',
           slug: 'pro',
+          startingCredits: 5000,
+        }),
+      );
+      mockBalanceFindOne.mockReturnValue(
+        createSelectLeanQuery({
+          tokenCredits: 900,
+          tokenCreditsLimit: 1200,
+          planTokenCredits: 0,
+          planTokenCreditsLimit: 0,
         }),
       );
       mockUserFindByIdAndUpdate.mockReturnValue(
         createSelectLeanQuery({
           _id: userId,
           adminPlanAssignedAt: new Date('2026-03-26T03:00:00.000Z'),
+        }),
+      );
+      mockBalanceFindOneAndUpdate.mockReturnValue(
+        createSelectLeanQuery({
+          tokenCredits: 5900,
+          tokenCreditsLimit: 6200,
+          planTokenCredits: 5000,
+          planTokenCreditsLimit: 5000,
         }),
       );
 
@@ -577,12 +632,19 @@ describe('admin users handlers', () => {
 
       await assignAdminUserPlan(req, res);
 
-      expect(mockApplyStartingCredits).toHaveBeenCalledWith({
-        appConfig: undefined,
-        userId,
-        source: 'plan_assignment_auto_seed',
-        onlyIfNoBalanceRecord: true,
-      });
+      expect(mockBalanceFindOneAndUpdate).toHaveBeenCalledWith(
+        { user: userId },
+        {
+          $set: {
+            tokenCredits: 5900,
+            tokenCreditsLimit: 6200,
+            planTokenCredits: 5000,
+            planTokenCreditsLimit: 5000,
+          },
+        },
+        { upsert: true, new: true },
+      );
+      expect(mockApplyStartingCredits).not.toHaveBeenCalled();
       expect(mockUserFindByIdAndUpdate).toHaveBeenCalled();
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith({
@@ -632,6 +694,14 @@ describe('admin users handlers', () => {
           email: 'user@example.com',
         }),
       );
+      mockBalanceFindOne.mockReturnValue(
+        createSelectLeanQuery({
+          tokenCredits: 3400,
+          tokenCreditsLimit: 8000,
+          planTokenCredits: 3000,
+          planTokenCreditsLimit: 3000,
+        }),
+      );
       mockUserFindByIdAndUpdate.mockReturnValue(
         createSelectLeanQuery({
           _id: userId,
@@ -647,6 +717,18 @@ describe('admin users handlers', () => {
 
       await clearAdminUserPlan(req, res);
 
+      expect(mockBalanceFindOneAndUpdate).toHaveBeenCalledWith(
+        { user: userId },
+        {
+          $set: {
+            tokenCredits: 400,
+            tokenCreditsLimit: 5000,
+            planTokenCredits: 0,
+            planTokenCreditsLimit: 0,
+          },
+        },
+        { upsert: true, new: true },
+      );
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith({
         userId: userId.toString(),

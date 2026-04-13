@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const { MongoMemoryServer } = require('mongodb-memory-server');
 const { createTransaction, createAutoRefillTransaction } = require('./Transaction');
+const { getMessageCreditUsage } = require('./messageCreditUsage');
 const { tokenValues, premiumTokenValues, getCacheMultiplier } = require('./tx');
 const { spendTokens, spendStructuredTokens } = require('./spendTokens');
 
@@ -18,6 +19,7 @@ describe('spendTokens', () => {
   let userId;
   let Transaction;
   let Balance;
+  let Message;
 
   beforeAll(async () => {
     mongoServer = await MongoMemoryServer.create();
@@ -25,6 +27,7 @@ describe('spendTokens', () => {
 
     Transaction = mongoose.model('Transaction');
     Balance = mongoose.model('Balance');
+    Message = mongoose.model('Message');
   });
 
   afterAll(async () => {
@@ -36,11 +39,54 @@ describe('spendTokens', () => {
     // Clear collections before each test
     await Transaction.deleteMany({});
     await Balance.deleteMany({});
+    await Message.deleteMany({});
 
     // Create a new user ID for each test
     userId = new mongoose.Types.ObjectId();
 
     // Balance config is now passed directly in txData
+  });
+
+  it('should aggregate message credit usage from stored transactions', async () => {
+    const messageId = 'msg-credit-usage';
+    const conversationId = new mongoose.Types.ObjectId().toString();
+
+    await Balance.create({
+      user: userId,
+      tokenCredits: 10000,
+    });
+
+    await Message.create({
+      messageId,
+      conversationId,
+      user: userId.toString(),
+      text: 'Assistant response',
+      isCreatedByUser: false,
+    });
+
+    await spendTokens(
+      {
+        user: userId,
+        messageId,
+        conversationId,
+        model: 'gpt-3.5-turbo',
+        context: 'test',
+        balance: { enabled: true },
+      },
+      {
+        promptTokens: 100,
+        completionTokens: 50,
+      },
+    );
+
+    const transactions = await Transaction.find({ user: userId, messageId }).lean();
+    expect(transactions).toHaveLength(2);
+
+    const creditUsage = await getMessageCreditUsage({ user: userId, messageId });
+    expect(creditUsage).toBeDefined();
+    expect(creditUsage?.status).toBe('final');
+    expect(creditUsage?.spentCredits).toBeGreaterThan(0);
+
   });
 
   it('should create transactions for both prompt and completion tokens', async () => {

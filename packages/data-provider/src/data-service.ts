@@ -931,6 +931,14 @@ export const branchMessage = async (
   return request.post(endpoints.messagesBranch(), payload);
 };
 
+export function getMessageUsageDetail(
+  payload: q.GetMessageUsageDetailParams,
+): Promise<q.MessageUsageDetailResponse> {
+  const { conversationId, messageId } = payload;
+
+  return request.get(endpoints.messageUsage(conversationId, messageId));
+}
+
 export function getMessagesByConvoId(conversationId: string): Promise<s.TMessage[]> {
   if (
     conversationId === config.Constants.NEW_CONVO ||

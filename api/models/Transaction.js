@@ -215,8 +215,44 @@ async function getTransactions(filter) {
   }
 }
 
+async function getMessageUsageDetail({ user, messageId }) {
+  const transactions = await getTransactions({
+    user,
+    messageId,
+    tokenType: { $in: ['prompt', 'completion', 'credits'] },
+  });
+
+  const spentCredits = transactions.reduce((total, transaction) => {
+    if (
+      (transaction.tokenType === 'prompt' || transaction.tokenType === 'completion') &&
+      typeof transaction.tokenValue === 'number'
+    ) {
+      return total + Math.abs(transaction.tokenValue);
+    }
+
+    return total;
+  }, 0);
+
+  return {
+    spentCredits,
+    transactions: transactions.map((transaction) => ({
+      tokenType: transaction.tokenType,
+      context: transaction.context ?? null,
+      model: transaction.model ?? null,
+      rawAmount: transaction.rawAmount ?? null,
+      tokenValue: transaction.tokenValue ?? null,
+      rate: transaction.rate ?? null,
+      inputTokens: transaction.inputTokens ?? null,
+      writeTokens: transaction.writeTokens ?? null,
+      readTokens: transaction.readTokens ?? null,
+      createdAt: transaction.createdAt?.toISOString?.() ?? null,
+    })),
+  };
+}
+
 module.exports = {
   getTransactions,
+  getMessageUsageDetail,
   createTransaction,
   createAutoRefillTransaction,
   createStructuredTransaction,

@@ -1,11 +1,10 @@
 import mongoose from 'mongoose';
-import { createMethods, createModels } from '@librechat/data-schemas';
+import { createModels } from '@librechat/data-schemas';
 import type { AppConfig, IBalance } from '@librechat/data-schemas';
 import { getBalanceConfig } from '~/app/config';
 import { createStatusError } from './utils';
 
 const { User, AdminPlan, Balance, Transaction } = createModels(mongoose);
-const { updateBalance } = createMethods(mongoose);
 
 export type ProvisioningSource = 'plan_assignment_auto_seed' | 'admin_manual_apply';
 
@@ -56,6 +55,9 @@ type BalanceUpdateRecord = {
 
 type BalanceLike = {
   tokenCredits?: number;
+  tokenCreditsLimit?: number;
+  planTokenCredits?: number;
+  planTokenCreditsLimit?: number;
 } | null;
 
 type ProvisioningLoaders = {
@@ -68,9 +70,9 @@ type ProvisioningLoaders = {
   getBalanceByUserId: (
     userId: mongoose.Types.ObjectId | string,
   ) => Promise<IBalance | null>;
-  updateBalance: (params: {
-    user: string;
-    incrementValue: number;
+  replacePlanBalance: (params: {
+    userId: mongoose.Types.ObjectId | string;
+    nextPlanCredits: number;
   }) => Promise<BalanceUpdateRecord | null>;
   updateUserProvisioningMetadata: (params: {
     userId: mongoose.Types.ObjectId | string;
@@ -107,8 +109,32 @@ function createDefaultLoaders(): ProvisioningLoaders {
     getPlanById: async (planId) =>
       AdminPlan.findById(planId).select('_id startingCredits').lean<ProvisioningPlanRecord | null>(),
     getBalanceByUserId: async (userId) => Balance.findOne({ user: userId }).lean<IBalance | null>(),
-    updateBalance: async ({ user, incrementValue }) => {
-      const balance = await updateBalance({ user, incrementValue });
+    replacePlanBalance: async ({ userId, nextPlanCredits }) => {
+      const currentBalance = await Balance.findOne({ user: userId }).lean<IBalance | null>();
+      const currentTokenCredits = getBalanceNumber(currentBalance?.tokenCredits);
+      const currentTokenCreditsLimit = getBalanceNumber(currentBalance?.tokenCreditsLimit);
+      const currentPlanCredits = getBalanceNumber(currentBalance?.planTokenCredits);
+      const currentPlanCreditsLimit = getBalanceNumber(currentBalance?.planTokenCreditsLimit);
+      const safeNextPlanCredits = Math.max(nextPlanCredits, 0);
+      const balance = await Balance.findOneAndUpdate(
+        { user: userId },
+        {
+          $set: {
+            tokenCredits: Math.max(
+              0,
+              currentTokenCredits + (safeNextPlanCredits - currentPlanCredits),
+            ),
+            tokenCreditsLimit: Math.max(
+              0,
+              currentTokenCreditsLimit + (safeNextPlanCredits - currentPlanCreditsLimit),
+            ),
+            planTokenCredits: safeNextPlanCredits,
+            planTokenCreditsLimit: safeNextPlanCredits,
+          },
+        },
+        { new: true, upsert: true },
+      ).lean<IBalance | null>();
+
       return {
         tokenCredits: getUpdatedTokenCredits(balance as BalanceLike),
       };
@@ -160,6 +186,10 @@ function getBalanceEnabled(appConfig?: AppConfig): boolean {
 
 function getTokenCredits(balance: IBalance | null): number {
   return balance?.tokenCredits ?? 0;
+}
+
+function getBalanceNumber(value: number | null | undefined): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
 function getUpdatedTokenCredits(balance: BalanceLike): number {
@@ -299,9 +329,9 @@ export function createApplyStartingCredits(loaders: ProvisioningLoaders = create
 
     const appliedAt = new Date();
     const amount = initialState.currentPlanStartingCredits;
-    const updatedBalance = await loaders.updateBalance({
-      user: toIdString(user._id) ?? '',
-      incrementValue: amount,
+    const updatedBalance = await loaders.replacePlanBalance({
+      userId: user._id,
+      nextPlanCredits: amount,
     });
 
     await Promise.all([
