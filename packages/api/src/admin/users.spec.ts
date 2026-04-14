@@ -70,6 +70,7 @@ const {
   getAdminUser,
   getAdminUsers,
   setAdminUserBalance,
+  updateAdminUser,
   updateAdminUserRole,
 } = require('./users');
 
@@ -411,6 +412,64 @@ describe('admin users handlers', () => {
 
       expect(res.status).toHaveBeenCalledWith(404);
       expect(res.json).toHaveBeenCalledWith({ message: 'User not found' });
+    });
+  });
+
+  describe('updateAdminUser', () => {
+    it('updates the user name and returns a sanitized summary', async () => {
+      const userId = new mongoose.Types.ObjectId();
+      mockUserFindById.mockReturnValue(
+        createSelectLeanQuery({
+          _id: userId,
+          email: 'tester@example.com',
+        }),
+      );
+      mockUserFindByIdAndUpdate.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        lean: jest.fn().mockResolvedValue({
+          _id: userId,
+          name: 'Renamed User',
+          username: 'tester',
+          email: 'tester@example.com',
+          role: 'USER',
+          provider: 'local',
+          emailVerified: true,
+          twoFactorEnabled: false,
+          createdAt: new Date('2026-03-25T00:00:00.000Z'),
+          updatedAt: new Date('2026-03-26T00:00:00.000Z'),
+        }),
+      });
+
+      const req = {
+        params: {
+          userId: userId.toString(),
+        },
+        body: {
+          name: 'Renamed User',
+        },
+      } as unknown as Request;
+      const res = createMockResponse();
+
+      await updateAdminUser(req, res);
+
+      expect(mockUserFindByIdAndUpdate).toHaveBeenCalledWith(
+        userId,
+        { $set: { name: 'Renamed User' } },
+        { new: true },
+      );
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({
+        id: userId.toString(),
+        name: 'Renamed User',
+        username: 'tester',
+        email: 'tester@example.com',
+        role: 'USER',
+        provider: 'local',
+        emailVerified: true,
+        twoFactorEnabled: false,
+        createdAt: '2026-03-25T00:00:00.000Z',
+        updatedAt: '2026-03-26T00:00:00.000Z',
+      });
     });
   });
 

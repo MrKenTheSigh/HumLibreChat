@@ -79,6 +79,14 @@ const adminCreateUserSchema = z.object({
   role: z.string().trim().min(1, 'Role is required').optional().default(SystemRoles.USER),
 });
 
+const adminUpdateUserSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(3, 'Name must be at least 3 characters')
+    .max(80, 'Name must be less than 80 characters'),
+});
+
 const adminUserRoleAssignSchema = z.object({
   roleName: z.string().trim().min(1, 'roleName is required'),
 });
@@ -410,6 +418,31 @@ export async function getAdminUser(req: Request, res: Response) {
     );
   } catch (error) {
     return handleAdminError(error, res, '[getAdminUser]');
+  }
+}
+
+export async function updateAdminUser(req: Request, res: Response) {
+  try {
+    const { userId } = await getExistingUserOrThrow(req.params.userId);
+    const body = adminUpdateUserSchema.parse(req.body);
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { $set: { name: body.name.trim() } },
+      { new: true },
+    )
+      .select(
+        '_id name username email role provider emailVerified twoFactorEnabled createdAt updatedAt',
+      )
+      .lean<AdminUserListItem | null>();
+
+    if (!updatedUser) {
+      throw createStatusError(404, 'User not found');
+    }
+
+    return res.status(200).json(sanitizeUserListItem(updatedUser));
+  } catch (error) {
+    return handleAdminError(error, res, '[updateAdminUser]');
   }
 }
 

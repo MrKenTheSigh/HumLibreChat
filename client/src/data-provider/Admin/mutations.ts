@@ -34,6 +34,22 @@ export const useCreateAdminUserMutation = (): UseMutationResult<
   });
 };
 
+export const useUpdateAdminUserMutation = (): UseMutationResult<
+  t.AdminUserUpdateResponse,
+  t.TError | undefined,
+  t.AdminUserUpdateRequest,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+
+  return useMutation((variables) => dataService.updateAdminUser(variables), {
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries([QueryKeys.adminUser, variables.userId]);
+      queryClient.invalidateQueries([QueryKeys.adminUsers]);
+    },
+  });
+};
+
 export const useCreateAdminRoleMutation = (): UseMutationResult<
   t.AdminRole,
   t.TError | undefined,

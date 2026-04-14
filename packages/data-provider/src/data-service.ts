@@ -158,6 +158,13 @@ export function createAdminUser(
   return request.post(endpoints.createAdminUser(), payload);
 }
 
+export function updateAdminUser(
+  payload: q.AdminUserUpdateRequest,
+): Promise<q.AdminUserUpdateResponse> {
+  const { userId, ...body } = payload;
+  return request.patch(endpoints.updateAdminUser(userId), body);
+}
+
 export function getAdminUser(userId: string): Promise<q.AdminUserDetail> {
   return request.get(endpoints.adminUser(userId));
 }

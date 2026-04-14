@@ -12,6 +12,7 @@ import { useGetAdminUserQuery } from '~/data-provider/Admin';
 import { useLocalize } from '~/hooks';
 import formatAdminDateTime from '../formatAdminDateTime';
 import AdminUserBalanceCard from './AdminUserBalanceCard';
+import AdminUserIdentityCard from './AdminUserIdentityCard';
 import AdminUserPlanCard from './AdminUserPlanCard';
 import AdminUserProvisioningCard from './AdminUserProvisioningCard';
 import AdminUserRoleCard from './AdminUserRoleCard';
@@ -143,6 +144,13 @@ export default function AdminUserDetail() {
 
           <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
             <div className="flex flex-col gap-6">
+              <AdminUserIdentityCard
+                userId={user.id}
+                name={user.name}
+                username={user.username}
+                email={user.email}
+              />
+
               <AdminUserRoleCard
                 userId={user.id}
                 currentRole={user.role}

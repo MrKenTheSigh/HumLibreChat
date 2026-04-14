@@ -8,6 +8,7 @@ const {
   createAdminUser,
   getAdminUsers,
   getAdminUser,
+  updateAdminUser,
   addAdminUserBalance,
   applyAdminUserPlanStartingCredits,
   assignAdminUserPlan,
@@ -23,6 +24,7 @@ router.use(requireJwtAuth, requireAdmin);
 router.get('/', getAdminUsers);
 router.post('/', configMiddleware, createAdminUser);
 router.get('/:userId', configMiddleware, getAdminUser);
+router.patch('/:userId', updateAdminUser);
 router.post('/:userId/balance/add', addAdminUserBalance);
 router.post('/:userId/balance/set', setAdminUserBalance);
 router.post('/:userId/role', updateAdminUserRole);

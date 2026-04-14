@@ -67,6 +67,8 @@ export const createAdminUser = () => adminUsersRoot;
 
 export const adminUser = (userId: string) => `${adminUsersRoot}/${encodeURIComponent(userId)}`;
 
+export const updateAdminUser = (userId: string) => adminUser(userId);
+
 export const adminUserBalanceAdd = (userId: string) =>
   `${adminUsersRoot}/${encodeURIComponent(userId)}/balance/add`;
 

@@ -99,6 +99,13 @@ export type AdminUserCreateRequest = {
 
 export type AdminUserCreateResponse = AdminUserSummary;
 
+export type AdminUserUpdateRequest = {
+  userId: string;
+  name: string;
+};
+
+export type AdminUserUpdateResponse = AdminUserSummary;
+
 export type AdminUserDetail = AdminUserSummary & {
   termsAccepted: boolean;
   favoritesCount: number;
