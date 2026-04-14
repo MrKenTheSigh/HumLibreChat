@@ -114,7 +114,7 @@ const MessageRender = memo(function MessageRender({
   };
 
   const baseClasses = {
-    common: 'group mx-auto flex flex-1 gap-3 transition-all duration-300 transform-gpu ',
+    common: 'group mx-auto flex flex-1 gap-3 py-2 transition-all duration-300 transform-gpu ',
     chat: getChatWidthClass(),
   };
 
@@ -155,7 +155,7 @@ const MessageRender = memo(function MessageRender({
           </h2>
         )}
 
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-2">
           <div className="flex min-h-[20px] max-w-full flex-grow flex-col gap-0">
             <MessageContext.Provider value={messageContextValue}>
               <MessageContent

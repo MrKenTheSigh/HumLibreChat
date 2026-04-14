@@ -95,6 +95,7 @@ describe('socialLogin', () => {
         'https://example.com/avatar.png',
         expect.any(Object),
         newEmail,
+        'John Doe',
       );
 
       /** Verify callback was called with success */
@@ -136,6 +137,7 @@ describe('socialLogin', () => {
         'https://example.com/fb-avatar.png',
         expect.any(Object),
         email,
+        'Jane Smith',
       );
 
       expect(callback).toHaveBeenCalledWith(null, existingUser);
@@ -230,6 +232,44 @@ describe('socialLogin', () => {
       });
 
       expect(callback).toHaveBeenCalledWith(null, newUser);
+    });
+
+    it('uses username as the fallback name when the provider does not return a name', async () => {
+      const provider = 'google';
+      const googleId = 'google-username-only-user';
+      const email = 'username-only@example.com';
+
+      findUser.mockResolvedValue(null);
+      createSocialUser.mockResolvedValue({
+        _id: 'newuser456',
+        email,
+        provider,
+        googleId,
+      });
+
+      const loginFn = socialLogin(provider, () => ({
+        email,
+        id: googleId,
+        avatarUrl: null,
+        username: 'username_only',
+        name: '',
+        emailVerified: true,
+      }));
+      const callback = jest.fn();
+
+      await loginFn(null, null, null, { id: googleId }, callback);
+
+      expect(createSocialUser).toHaveBeenCalledWith({
+        email,
+        avatarUrl: null,
+        provider,
+        providerKey: 'googleId',
+        providerId: googleId,
+        username: 'username_only',
+        name: 'username_only',
+        emailVerified: true,
+        appConfig: expect.any(Object),
+      });
     });
   });
 

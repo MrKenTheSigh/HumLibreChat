@@ -41,8 +41,10 @@ const socialLogin =
         }
       }
 
+      const resolvedName = (typeof name === 'string' && name.trim()) || username;
+
       if (existingUser?.provider === provider) {
-        await handleExistingUser(existingUser, avatarUrl, appConfig, email);
+        await handleExistingUser(existingUser, avatarUrl, appConfig, email, resolvedName);
         return cb(null, existingUser);
       } else if (existingUser) {
         logger.info(
@@ -72,7 +74,7 @@ const socialLogin =
         providerKey: `${provider}Id`,
         providerId: id,
         username,
-        name,
+        name: resolvedName,
         emailVerified,
         appConfig,
       });

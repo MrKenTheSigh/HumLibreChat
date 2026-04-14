@@ -46,6 +46,7 @@ export const useUpdateAdminUserMutation = (): UseMutationResult<
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries([QueryKeys.adminUser, variables.userId]);
       queryClient.invalidateQueries([QueryKeys.adminUsers]);
+      queryClient.invalidateQueries([QueryKeys.user]);
     },
   });
 };

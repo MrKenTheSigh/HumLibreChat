@@ -60,7 +60,7 @@ const adminCreateUserSchema = z.object({
   name: z
     .string()
     .trim()
-    .min(3, 'Name must be at least 3 characters')
+    .min(1, 'Name must be at least 1 character')
     .max(80, 'Name must be less than 80 characters'),
   username: z
     .union([z.literal(''), usernameSchema])
@@ -83,7 +83,7 @@ const adminUpdateUserSchema = z.object({
   name: z
     .string()
     .trim()
-    .min(3, 'Name must be at least 3 characters')
+    .min(1, 'Name must be at least 1 character')
     .max(80, 'Name must be less than 80 characters'),
 });
 
@@ -96,16 +96,16 @@ const adminUserPlanAssignSchema = z.object({
 });
 
 const adminBalanceAddSchema = z.object({
-  amount: z
-    .coerce.number()
+  amount: z.coerce
+    .number()
     .finite('amount must be a finite number')
     .int('amount must be an integer')
     .positive('amount must be greater than 0'),
 });
 
 const adminBalanceSetSchema = z.object({
-  amount: z
-    .coerce.number()
+  amount: z.coerce
+    .number()
     .finite('amount must be a finite number')
     .int('amount must be an integer')
     .min(0, 'amount must be greater than or equal to 0'),
@@ -295,7 +295,9 @@ export async function getAdminUsers(req: Request, res: Response) {
     const role = trimSearch(req.query.role);
     const provider = trimSearch(req.query.provider);
     const emailVerified = parseOptionalBoolean(req.query.emailVerified);
-    const cursorFilter = buildCreatedAtCursorFilter<AdminUserListItem>(trimSearch(req.query.cursor));
+    const cursorFilter = buildCreatedAtCursorFilter<AdminUserListItem>(
+      trimSearch(req.query.cursor),
+    );
 
     const filters: mongoose.FilterQuery<AdminUserListItem>[] = [];
 
@@ -542,7 +544,9 @@ export async function addAdminUserBalance(req: Request, res: Response) {
   try {
     const { amount } = adminBalanceAddSchema.parse(req.body);
     const { userId } = await getExistingUserOrThrow(req.params.userId);
-    const currentBalance = await Balance.findOne({ user: userId }).lean<AdminBalanceRecord | null>();
+    const currentBalance = await Balance.findOne({
+      user: userId,
+    }).lean<AdminBalanceRecord | null>();
     const nextBalance = await Balance.findOneAndUpdate(
       { user: userId },
       {
@@ -614,7 +618,10 @@ export async function assignAdminUserPlan(req: Request, res: Response) {
     const { planId, plan } = await getExistingPlanOrThrow(planIdParam);
     const assignedAt = new Date();
     const [existingUser, currentBalance] = await Promise.all([
-      User.findById(userId).select('_id adminPlanId').lean<{ _id: mongoose.Types.ObjectId; adminPlanId?: mongoose.Types.ObjectId | null } | null>(),
+      User.findById(userId).select('_id adminPlanId').lean<{
+        _id: mongoose.Types.ObjectId;
+        adminPlanId?: mongoose.Types.ObjectId | null;
+      } | null>(),
       Balance.findOne({ user: userId }).lean<AdminBalanceRecord | null>(),
     ]);
 
@@ -623,7 +630,8 @@ export async function assignAdminUserPlan(req: Request, res: Response) {
     }
 
     const existingPlanId = existingUser.adminPlanId?.toString() ?? null;
-    const nextPlanCredits = typeof plan.startingCredits === 'number' ? Math.max(plan.startingCredits, 0) : 0;
+    const nextPlanCredits =
+      typeof plan.startingCredits === 'number' ? Math.max(plan.startingCredits, 0) : 0;
     const shouldReplacePlanBalance = existingPlanId == null || existingPlanId !== planId.toString();
 
     const updatedUser = await User.findByIdAndUpdate(
@@ -669,7 +677,9 @@ export async function assignAdminUserPlan(req: Request, res: Response) {
 export async function clearAdminUserPlan(req: Request, res: Response) {
   try {
     const { userId } = await getExistingUserOrThrow(req.params.userId);
-    const currentBalance = await Balance.findOne({ user: userId }).lean<AdminBalanceRecord | null>();
+    const currentBalance = await Balance.findOne({
+      user: userId,
+    }).lean<AdminBalanceRecord | null>();
     const nextBalanceState = buildPlanBalanceUpdate({
       balance: currentBalance,
       nextPlanCredits: 0,

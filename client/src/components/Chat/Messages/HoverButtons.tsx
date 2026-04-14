@@ -84,8 +84,7 @@ const HoverButton = memo(
     const buttonStyle = cn(
       'hover-button rounded-lg p-1.5 text-text-secondary-alt',
       'hover:text-text-primary hover:bg-surface-hover',
-      'md:group-hover:visible md:group-focus-within:visible md:group-[.final-completion]:visible',
-      !isLast && 'md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100',
+      'visible opacity-100',
       !isVisible && 'opacity-0',
       'focus-visible:ring-2 focus-visible:ring-black dark:focus-visible:ring-white focus-visible:outline-none',
       isActive && isVisible && 'active text-text-primary bg-surface-hover',
@@ -213,10 +212,7 @@ const HoverButtons = ({
         }
         icon={isCopied ? <CheckMark className="h-[18px] w-[18px]" /> : <Clipboard size="19" />}
         isLast={isLast}
-        className={cn(
-          'ml-0 flex items-center gap-1.5 text-xs',
-          isSubmitting && isCreatedByUser ? 'md:opacity-0 md:group-hover:opacity-100' : '',
-        )}
+        className={cn('ml-0 flex items-center gap-1.5 text-xs')}
       />
 
       {/* Edit Button */}

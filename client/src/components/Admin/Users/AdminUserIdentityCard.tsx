@@ -21,7 +21,7 @@ export default function AdminUserIdentityCard(props: AdminUserIdentityCardProps)
 
   const trimmedName = nextName.trim();
   const isDirty = trimmedName !== (name ?? '');
-  const canSave = trimmedName.length >= 3 && trimmedName.length <= 80 && isDirty;
+  const canSave = trimmedName.length >= 1 && trimmedName.length <= 80 && isDirty;
   const errorMessage =
     updateUserMutation.error?.response?.data?.message ?? updateUserMutation.error?.message;
 
@@ -44,13 +44,22 @@ export default function AdminUserIdentityCard(props: AdminUserIdentityCardProps)
             </div>
             <div className="mt-2 text-sm text-text-primary">{email}</div>
           </div>
-          <div className="rounded-2xl border border-border-medium bg-background p-4">
-            <div className="text-xs uppercase tracking-wide text-text-secondary">
-              {localize('com_auth_username')}
+          <div
+            className="rounded-2xl border border-border-medium bg-background p-4"
+            title={localize('com_ui_admin_username_tooltip')}
+          >
+            <div className="flex items-center justify-between gap-3 text-xs uppercase tracking-wide text-text-secondary">
+              <span>{localize('com_auth_username')}</span>
+              <span className="rounded-full border border-border-light px-2 py-0.5 text-[10px] normal-case tracking-normal text-text-tertiary">
+                {localize('com_ui_admin_secondary_label')}
+              </span>
             </div>
             <div className="mt-2 text-sm text-text-primary">
               {username && username.length > 0 ? username : localize('com_ui_none')}
             </div>
+            <p className="mt-2 text-xs leading-5 text-text-tertiary">
+              {localize('com_ui_admin_username_hint')}
+            </p>
           </div>
         </div>
 

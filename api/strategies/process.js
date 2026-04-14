@@ -4,6 +4,20 @@ const { getStrategyFunctions } = require('~/server/services/Files/strategies');
 const { resizeAvatar } = require('~/server/services/Files/images/avatar');
 const { updateUser, createUser, getUserById } = require('~/models');
 
+function resolveDisplayName(name, username) {
+  const normalizedName = typeof name === 'string' ? name.trim() : '';
+  if (normalizedName.length > 0) {
+    return normalizedName;
+  }
+
+  const normalizedUsername = typeof username === 'string' ? username.trim() : '';
+  if (normalizedUsername.length > 0) {
+    return normalizedUsername;
+  }
+
+  return '';
+}
+
 /**
  * Updates the avatar URL and email of an existing user. If the user's avatar URL does not include the query parameter
  * '?manual=true', it updates the user's avatar with the provided URL. For local file storage, it directly updates
@@ -14,16 +28,18 @@ const { updateUser, createUser, getUserById } = require('~/models');
  * @param {string} avatarUrl - The new avatar URL to be set for the user.
  * @param {AppConfig} appConfig - The application configuration object.
  * @param {string} [email] - Optional. The new email address to update if it has changed.
+ * @param {string} [name] - Optional. Display name from the provider.
  *
  * @returns {Promise<void>}
  *          The function updates the user's avatar and/or email and saves the user object. It does not return any value.
  *
  * @throws {Error} Throws an error if there's an issue saving the updated user object.
  */
-const handleExistingUser = async (oldUser, avatarUrl, appConfig, email) => {
+const handleExistingUser = async (oldUser, avatarUrl, appConfig, email, name) => {
   const fileStrategy = appConfig?.fileStrategy ?? process.env.CDN_PROVIDER;
   const isLocal = fileStrategy === FileSources.local;
   const updates = {};
+  const resolvedName = resolveDisplayName(name, oldUser?.username);
 
   let updatedAvatar = false;
   const hasManualFlag =
@@ -48,6 +64,10 @@ const handleExistingUser = async (oldUser, avatarUrl, appConfig, email) => {
   /** Update email if it has changed */
   if (email && email.trim() !== oldUser.email) {
     updates.email = email.trim();
+  }
+
+  if (resolvedName && (!oldUser?.name || oldUser.name.trim().length === 0)) {
+    updates.name = resolvedName;
   }
 
   if (Object.keys(updates).length > 0) {
@@ -87,13 +107,14 @@ const createSocialUser = async ({
   appConfig,
   emailVerified,
 }) => {
+  const resolvedName = resolveDisplayName(name, username);
   const update = {
     email,
     avatar: avatarUrl,
     provider,
     [providerKey]: providerId,
     username,
-    name,
+    name: resolvedName,
     emailVerified,
   };
 

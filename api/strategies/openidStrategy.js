@@ -563,6 +563,7 @@ async function processOpenIDAuth(tokenset, existingUsersOnly = false) {
       userinfo.preferred_username || userinfo.username || userinfo.email,
     );
   }
+  const resolvedName = (typeof fullName === 'string' && fullName.trim()) || username;
 
   if (existingUsersOnly && !user) {
     throw new Error('User does not exist');
@@ -575,7 +576,7 @@ async function processOpenIDAuth(tokenset, existingUsersOnly = false) {
       username,
       email: email || '',
       emailVerified: userinfo.email_verified || false,
-      name: fullName,
+      name: resolvedName,
       idOnTheSource: userinfo.oid,
     };
 
@@ -585,7 +586,7 @@ async function processOpenIDAuth(tokenset, existingUsersOnly = false) {
     user.provider = 'openid';
     user.openidId = userinfo.sub;
     user.username = username;
-    user.name = fullName;
+    user.name = resolvedName;
     user.idOnTheSource = userinfo.oid;
     if (email && email !== user.email) {
       user.email = email;

@@ -228,6 +228,7 @@ async function setupSaml() {
           const username = convertToUsername(
             getUserName(profile) || getGivenName(profile) || getEmail(profile),
           );
+          const resolvedName = (typeof fullName === 'string' && fullName.trim()) || username;
 
           if (!user) {
             user = {
@@ -236,7 +237,7 @@ async function setupSaml() {
               username,
               email: userEmail,
               emailVerified: true,
-              name: fullName,
+              name: resolvedName,
             };
             const balanceConfig = getBalanceConfig(appConfig);
             user = await createUser(user, balanceConfig, true, true);
@@ -244,7 +245,7 @@ async function setupSaml() {
             user.provider = 'saml';
             user.samlId = profile.nameID;
             user.username = username;
-            user.name = fullName;
+            user.name = resolvedName;
           }
 
           const picture = getPicture(profile);

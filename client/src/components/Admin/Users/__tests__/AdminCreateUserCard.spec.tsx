@@ -24,11 +24,7 @@ describe('AdminCreateUserCard', () => {
     });
     mockUseGetAdminRolesQuery.mockReturnValue({
       data: {
-        roles: [
-          { name: 'USER' },
-          { name: 'ADMIN' },
-          { name: 'MEMBER' },
-        ],
+        roles: [{ name: 'USER' }, { name: 'ADMIN' }, { name: 'MEMBER' }],
       },
     });
   });
@@ -56,7 +52,6 @@ describe('AdminCreateUserCard', () => {
     expect(mockMutate).toHaveBeenCalledWith(
       {
         name: 'New User',
-        username: null,
         email: 'new@example.com',
         password: 'Password123',
         role: 'USER',

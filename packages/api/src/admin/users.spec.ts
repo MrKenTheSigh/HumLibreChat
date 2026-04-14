@@ -213,7 +213,7 @@ describe('admin users handlers', () => {
       mockCreateUser.mockResolvedValue({
         _id: createdId,
         name: 'New User',
-        username: 'new-user',
+        username: 'new',
         email: 'new@example.com',
         role: 'USER',
         provider: 'local',
@@ -226,7 +226,6 @@ describe('admin users handlers', () => {
       const req = {
         body: {
           name: 'New User',
-          username: 'new-user',
           email: 'new@example.com',
           password: 'Password123',
           role: 'USER',
@@ -244,14 +243,14 @@ describe('admin users handlers', () => {
       await createAdminUser(req, res);
 
       expect(mockUserFindOne).toHaveBeenCalledWith({
-        $or: [{ email: 'new@example.com' }, { username: 'new-user' }],
+        $or: [{ email: 'new@example.com' }, { username: 'new' }],
       });
       expect(mockGetBalanceConfig).toHaveBeenCalledWith(req.config);
       expect(mockCreateUser).toHaveBeenCalledWith(
         expect.objectContaining({
           provider: 'local',
           email: 'new@example.com',
-          username: 'new-user',
+          username: 'new',
           name: 'New User',
           role: 'USER',
           emailVerified: true,
@@ -265,7 +264,7 @@ describe('admin users handlers', () => {
       expect(res.json).toHaveBeenCalledWith({
         id: createdId.toString(),
         name: 'New User',
-        username: 'new-user',
+        username: 'new',
         email: 'new@example.com',
         role: 'USER',
         provider: 'local',
@@ -285,7 +284,6 @@ describe('admin users handlers', () => {
       const req = {
         body: {
           name: 'Existing User',
-          username: 'existing',
           email: 'existing@example.com',
           password: 'Password123',
         },
@@ -861,7 +859,9 @@ describe('admin users handlers', () => {
   describe('updateAdminUserRole', () => {
     it('updates a user to a custom role', async () => {
       const userId = new mongoose.Types.ObjectId();
-      mockUserFindById.mockReturnValueOnce(createSelectLeanQuery({ _id: userId, email: 'user@example.com' }));
+      mockUserFindById.mockReturnValueOnce(
+        createSelectLeanQuery({ _id: userId, email: 'user@example.com' }),
+      );
       mockRoleFindOne.mockReturnValueOnce(createSelectLeanQuery({ name: 'MEMBER' }));
       mockUserFindByIdAndUpdate.mockReturnValue(
         createSelectLeanQuery({

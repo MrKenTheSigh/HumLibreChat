@@ -6,7 +6,6 @@ import { useLocalize } from '~/hooks';
 
 type CreateUserForm = {
   name: string;
-  username: string;
   email: string;
   password: string;
   role: string;
@@ -15,7 +14,6 @@ type CreateUserForm = {
 
 const emptyForm: CreateUserForm = {
   name: '',
-  username: '',
   email: '',
   password: '',
   role: SystemRoles.USER,
@@ -56,7 +54,6 @@ export default function AdminCreateUserCard(props: {
         createMutation.mutate(
           {
             name: form.name.trim(),
-            username: form.username.trim() || null,
             email: form.email.trim(),
             password: form.password,
             role: form.role,
@@ -76,27 +73,15 @@ export default function AdminCreateUserCard(props: {
       </h2>
 
       <section className="rounded-2xl border border-border-medium bg-surface-primary p-4">
-        <div className="grid gap-4 md:grid-cols-2">
-          <label className="flex flex-col gap-2 text-sm text-text-secondary">
-            {localize('com_ui_name')}
-            <input
-              required={true}
-              value={form.name}
-              onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-              className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
-            />
-          </label>
-          <label className="flex flex-col gap-2 text-sm text-text-secondary">
-            {localize('com_auth_username')}
-            <input
-              value={form.username}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, username: event.target.value }))
-              }
-              className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
-            />
-          </label>
-        </div>
+        <label className="flex flex-col gap-2 text-sm text-text-secondary">
+          {localize('com_ui_name')}
+          <input
+            required={true}
+            value={form.name}
+            onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+            className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
+          />
+        </label>
 
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <label className="flex flex-col gap-2 text-sm text-text-secondary">

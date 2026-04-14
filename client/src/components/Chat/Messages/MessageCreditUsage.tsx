@@ -33,10 +33,6 @@ export default function MessageCreditUsage(props: MessageCreditUsageProps) {
   const localize = useLocalize();
   const [open, setOpen] = useState(false);
 
-  if (!isAssistantLikeMessage(message)) {
-    return null;
-  }
-
   const creditUsage = message.creditUsage;
   const resolvedConversationId = props.conversationId ?? message.conversationId ?? '';
   const shouldLoadDetail =
@@ -67,7 +63,9 @@ export default function MessageCreditUsage(props: MessageCreditUsageProps) {
       ? creditUsage.status === 'estimated'
         ? 'border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200'
         : 'border-sky-500/30 bg-sky-500/10 text-sky-800 dark:text-sky-200'
-      : 'border-border-medium bg-surface-secondary text-text-secondary';
+      : isAssistantLikeMessage(message)
+        ? 'border-border-medium bg-surface-secondary text-text-secondary'
+        : 'border-border-light bg-transparent text-text-tertiary';
 
   const hoverSpentCredits =
     typeof usageDetail?.spentCredits === 'number'

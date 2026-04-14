@@ -107,6 +107,7 @@ const ldapLogin = new LdapStrategy(ldapOptions, async (userinfo, done) => {
 
     const username =
       (LDAP_USERNAME && userinfo[LDAP_USERNAME]) || userinfo.givenName || userinfo.mail;
+    const resolvedName = (typeof fullName === 'string' && fullName.trim()) || username;
 
     let mail = (LDAP_EMAIL && userinfo[LDAP_EMAIL]) || userinfo.mail || username + '@ldap.local';
     mail = Array.isArray(mail) ? mail[0] : mail;
@@ -140,7 +141,7 @@ const ldapLogin = new LdapStrategy(ldapOptions, async (userinfo, done) => {
         username,
         email: mail,
         emailVerified: true, // The ldap server administrator should verify the email
-        name: fullName,
+        name: resolvedName,
         role,
       };
       const balanceConfig = getBalanceConfig(appConfig);
@@ -153,7 +154,7 @@ const ldapLogin = new LdapStrategy(ldapOptions, async (userinfo, done) => {
       user.ldapId = ldapId;
       user.email = mail;
       user.username = username;
-      user.name = fullName;
+      user.name = resolvedName;
     }
 
     user = await updateUser(user._id, user);
