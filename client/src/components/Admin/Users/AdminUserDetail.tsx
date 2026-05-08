@@ -12,6 +12,7 @@ import { useGetAdminUserQuery } from '~/data-provider/Admin';
 import { useLocalize } from '~/hooks';
 import formatAdminDateTime from '../formatAdminDateTime';
 import AdminUserBalanceCard from './AdminUserBalanceCard';
+import AdminUserDepartmentCard from './AdminUserDepartmentCard';
 import AdminUserIdentityCard from './AdminUserIdentityCard';
 import AdminUserPlanCard from './AdminUserPlanCard';
 import AdminUserProvisioningCard from './AdminUserProvisioningCard';
@@ -158,6 +159,12 @@ export default function AdminUserDetail() {
                 isPrimaryAdminProtected={roleManagement.isPrimaryAdminProtected}
               />
 
+              <AdminUserDepartmentCard
+                userId={user.id}
+                currentDepartment={user.department}
+                assignedAt={user.departmentAssignedAt}
+              />
+
               {startupConfig?.balance?.enabled && (
                 <AdminUserBalanceCard userId={user.id} tokenCredits={user.balance.tokenCredits} />
               )}
@@ -212,6 +219,14 @@ export default function AdminUserDetail() {
                     label={localize('com_ui_admin_memories_enabled')}
                     value={
                       user.personalization.memories ? localize('com_ui_yes') : localize('com_ui_no')
+                    }
+                  />
+                  <DetailRow
+                    label={localize('com_ui_admin_current_department')}
+                    value={
+                      user.department
+                        ? `${user.department.name} (${user.department.code})`
+                        : localize('com_ui_none')
                     }
                   />
                   <DetailRow

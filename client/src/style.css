@@ -2,6 +2,52 @@
 @tailwind components;
 @tailwind utilities;
 
+.admin-org-graph-controls {
+  border: 1px solid var(--border-light);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: var(--surface-primary);
+  box-shadow: 0 12px 30px rgb(0 0 0 / 0.18);
+}
+
+.admin-org-graph-controls .react-flow__controls-button {
+  width: 2rem;
+  height: 2rem;
+  border-bottom: 1px solid var(--border-light);
+  background: var(--surface-primary);
+  color: var(--text-primary);
+  fill: var(--text-primary);
+}
+
+.admin-org-graph-controls .react-flow__controls-button:hover {
+  background: var(--surface-hover);
+}
+
+.admin-org-graph-controls .react-flow__controls-button svg {
+  fill: currentColor;
+}
+
+.admin-org-graph-controls .react-flow__controls-button:last-child {
+  border-bottom: 0;
+}
+
+.admin-org-graph-minimap {
+  border: 1px solid var(--border-light);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: var(--surface-primary);
+  box-shadow: 0 12px 30px rgb(0 0 0 / 0.18);
+}
+
+.admin-org-graph-minimap .react-flow__minimap-mask {
+  fill: rgb(15 23 42 / 0.32);
+}
+
+.admin-org-graph-minimap .react-flow__minimap-node {
+  stroke: var(--border-medium);
+  stroke-width: 3;
+}
+
 /* Custom Variables */
 :root {
   --white: #fff;
@@ -383,7 +429,13 @@ html .admin-console {
 .admin-console textarea {
   background-color: var(--admin-input-bg);
   border-color: var(--admin-border);
+  color: var(--text-primary);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.admin-console input::placeholder,
+.admin-console textarea::placeholder {
+  color: var(--text-secondary);
 }
 
 .admin-console input:not([type='checkbox']):not([type='radio']):focus,

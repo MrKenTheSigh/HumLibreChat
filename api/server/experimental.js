@@ -299,6 +299,10 @@ if (cluster.isMaster) {
     app.use('/oauth', routes.oauth);
     app.use('/api/auth', routes.auth);
     app.use('/api/admin', routes.adminAuth);
+    app.use('/api/admin/quotas', routes.adminQuotas);
+    app.use('/api/admin/departments', routes.adminDepartments);
+    app.use('/api/admin/manager-reviews', routes.adminManagerReviews);
+    app.use('/api/manager-reviews', routes.managerReviews);
     app.use('/api/actions', routes.actions);
     app.use('/api/keys', routes.keys);
     app.use('/api/api-keys', routes.apiKeys);

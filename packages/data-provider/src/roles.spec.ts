@@ -19,6 +19,25 @@ const RESOURCE_PERMISSION_TYPES: PermissionTypes[] = [
 ];
 
 describe('roleDefaults', () => {
+  it('defines enterprise system roles for admin, manager, auditor, and user', () => {
+    expect(Object.keys(roleDefaults).sort()).toEqual([
+      SystemRoles.ADMIN,
+      SystemRoles.AUDITOR,
+      SystemRoles.MANAGER,
+      SystemRoles.USER,
+    ].sort());
+  });
+
+  it.each([SystemRoles.MANAGER, SystemRoles.AUDITOR])(
+    'marks %s as a non-deletable built-in role',
+    (roleName) => {
+      expect(roleDefaults[roleName].isSystem).toBe(true);
+      expect(roleDefaults[roleName].isEditable).toBe(true);
+      expect(roleDefaults[roleName].isDeletable).toBe(false);
+      expect(roleDefaults[roleName].permissions).toEqual(roleDefaults[SystemRoles.USER].permissions);
+    },
+  );
+
   describe('USER role', () => {
     const userPerms = roleDefaults[SystemRoles.USER].permissions;
 

@@ -2,6 +2,7 @@ import { CANCEL_RATE } from '@librechat/data-schemas';
 import type { TCustomConfig, TTransactionsConfig } from 'librechat-data-provider';
 import type { TransactionData } from '@librechat/data-schemas';
 import type { EndpointTokenConfig } from '~/types/tokens';
+import { recordQuotaUsageForTransactions } from '~/admin/quotaUsage';
 
 interface GetMultiplierParams {
   valueKey?: string;
@@ -342,4 +343,5 @@ export async function bulkWriteTransactions(
   }
 
   await dbOps.insertMany(plainDocs);
+  await recordQuotaUsageForTransactions({ userId: user, transactions: plainDocs });
 }

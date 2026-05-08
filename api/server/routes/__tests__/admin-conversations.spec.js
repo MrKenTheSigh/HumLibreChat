@@ -11,14 +11,14 @@ const mockGetAdminConversationMessages = jest.fn((_req, res) =>
 jest.mock(
   '@librechat/api',
   () => ({
-    requireAdmin: (req, res, next) => {
-      if (req.headers['x-admin'] === 'true') {
+    requireAdminDataAccess: (req, res, next) => {
+      if (req.headers['x-admin-data'] === 'true') {
         return next();
       }
 
       return res.status(403).json({
-        error: 'Access denied: Admin privileges required',
-        error_code: 'ADMIN_REQUIRED',
+        error: 'Access denied: Admin data access role required',
+        error_code: 'ADMIN_DATA_ACCESS_REQUIRED',
       });
     },
     getAdminConversations: (...args) => mockGetAdminConversations(...args),
@@ -88,7 +88,7 @@ describe('Admin Conversations Routes', () => {
     expect(mockGetAdminConversations).not.toHaveBeenCalled();
   });
 
-  it('returns 403 for authenticated non-admin users', async () => {
+  it('returns 403 for authenticated users without admin data access', async () => {
     const response = await executeRoute({
       method: 'GET',
       url: '/',
@@ -103,17 +103,17 @@ describe('Admin Conversations Routes', () => {
     await executeRoute({
       method: 'GET',
       url: '/',
-      headers: { 'x-auth': 'true', 'x-admin': 'true' },
+      headers: { 'x-auth': 'true', 'x-admin-data': 'true' },
     });
     await executeRoute({
       method: 'GET',
       url: '/convo-1',
-      headers: { 'x-auth': 'true', 'x-admin': 'true' },
+      headers: { 'x-auth': 'true', 'x-admin-data': 'true' },
     });
     await executeRoute({
       method: 'GET',
       url: '/convo-1/messages',
-      headers: { 'x-auth': 'true', 'x-admin': 'true' },
+      headers: { 'x-auth': 'true', 'x-admin-data': 'true' },
     });
 
     expect(mockGetAdminConversations).toHaveBeenCalledTimes(1);

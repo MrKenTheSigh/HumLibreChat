@@ -30,6 +30,14 @@ export enum SystemRoles {
    */
   ADMIN = 'ADMIN',
   /**
+   * Department-scoped manager role
+   */
+  MANAGER = 'MANAGER',
+  /**
+   * Read-only audit role
+   */
+  AUDITOR = 'AUDITOR',
+  /**
    * The default user role
    */
   USER = 'USER',
@@ -125,7 +133,67 @@ const defaultRolesSchema = z.object({
     name: z.literal(SystemRoles.USER),
     permissions: permissionsSchema,
   }),
+  [SystemRoles.MANAGER]: roleSchema.extend({
+    name: z.literal(SystemRoles.MANAGER),
+    permissions: permissionsSchema,
+  }),
+  [SystemRoles.AUDITOR]: roleSchema.extend({
+    name: z.literal(SystemRoles.AUDITOR),
+    permissions: permissionsSchema,
+  }),
 });
+
+const defaultUserPermissions = {
+  [PermissionTypes.CHAT]: {
+    [Permissions.USE]: true,
+  },
+  [PermissionTypes.PARAMETERS]: {
+    [Permissions.USE]: true,
+  },
+  [PermissionTypes.FILE_UPLOADS]: {
+    [Permissions.USE]: true,
+  },
+  [PermissionTypes.PROMPTS]: {
+    [Permissions.USE]: true,
+    [Permissions.CREATE]: true,
+    [Permissions.SHARE]: false,
+    [Permissions.SHARE_PUBLIC]: false,
+  },
+  [PermissionTypes.BOOKMARKS]: {},
+  [PermissionTypes.MEMORIES]: {},
+  [PermissionTypes.AGENTS]: {
+    [Permissions.USE]: true,
+    [Permissions.CREATE]: true,
+    [Permissions.SHARE]: false,
+    [Permissions.SHARE_PUBLIC]: false,
+  },
+  [PermissionTypes.MULTI_CONVO]: {},
+  [PermissionTypes.TEMPORARY_CHAT]: {},
+  [PermissionTypes.RUN_CODE]: {},
+  [PermissionTypes.WEB_SEARCH]: {},
+  [PermissionTypes.PEOPLE_PICKER]: {
+    [Permissions.VIEW_USERS]: false,
+    [Permissions.VIEW_GROUPS]: false,
+    [Permissions.VIEW_ROLES]: false,
+  },
+  [PermissionTypes.MARKETPLACE]: {
+    [Permissions.USE]: false,
+  },
+  [PermissionTypes.FILE_SEARCH]: {},
+  [PermissionTypes.FILE_CITATIONS]: {},
+  [PermissionTypes.MCP_SERVERS]: {
+    [Permissions.USE]: true,
+    [Permissions.CREATE]: false,
+    [Permissions.SHARE]: false,
+    [Permissions.SHARE_PUBLIC]: false,
+  },
+  [PermissionTypes.REMOTE_AGENTS]: {
+    [Permissions.USE]: false,
+    [Permissions.CREATE]: false,
+    [Permissions.SHARE]: false,
+    [Permissions.SHARE_PUBLIC]: false,
+  },
+};
 
 export const roleDefaults = defaultRolesSchema.parse({
   [SystemRoles.ADMIN]: {
@@ -212,56 +280,22 @@ export const roleDefaults = defaultRolesSchema.parse({
     isSystem: true,
     isEditable: true,
     isDeletable: false,
-    permissions: {
-      [PermissionTypes.CHAT]: {
-        [Permissions.USE]: true,
-      },
-      [PermissionTypes.PARAMETERS]: {
-        [Permissions.USE]: true,
-      },
-      [PermissionTypes.FILE_UPLOADS]: {
-        [Permissions.USE]: true,
-      },
-      [PermissionTypes.PROMPTS]: {
-        [Permissions.USE]: true,
-        [Permissions.CREATE]: true,
-        [Permissions.SHARE]: false,
-        [Permissions.SHARE_PUBLIC]: false,
-      },
-      [PermissionTypes.BOOKMARKS]: {},
-      [PermissionTypes.MEMORIES]: {},
-      [PermissionTypes.AGENTS]: {
-        [Permissions.USE]: true,
-        [Permissions.CREATE]: true,
-        [Permissions.SHARE]: false,
-        [Permissions.SHARE_PUBLIC]: false,
-      },
-      [PermissionTypes.MULTI_CONVO]: {},
-      [PermissionTypes.TEMPORARY_CHAT]: {},
-      [PermissionTypes.RUN_CODE]: {},
-      [PermissionTypes.WEB_SEARCH]: {},
-      [PermissionTypes.PEOPLE_PICKER]: {
-        [Permissions.VIEW_USERS]: false,
-        [Permissions.VIEW_GROUPS]: false,
-        [Permissions.VIEW_ROLES]: false,
-      },
-      [PermissionTypes.MARKETPLACE]: {
-        [Permissions.USE]: false,
-      },
-      [PermissionTypes.FILE_SEARCH]: {},
-      [PermissionTypes.FILE_CITATIONS]: {},
-      [PermissionTypes.MCP_SERVERS]: {
-        [Permissions.USE]: true,
-        [Permissions.CREATE]: false,
-        [Permissions.SHARE]: false,
-        [Permissions.SHARE_PUBLIC]: false,
-      },
-      [PermissionTypes.REMOTE_AGENTS]: {
-        [Permissions.USE]: false,
-        [Permissions.CREATE]: false,
-        [Permissions.SHARE]: false,
-        [Permissions.SHARE_PUBLIC]: false,
-      },
-    },
+    permissions: defaultUserPermissions,
+  },
+  [SystemRoles.MANAGER]: {
+    name: SystemRoles.MANAGER,
+    description: 'Built-in department manager role',
+    isSystem: true,
+    isEditable: true,
+    isDeletable: false,
+    permissions: defaultUserPermissions,
+  },
+  [SystemRoles.AUDITOR]: {
+    name: SystemRoles.AUDITOR,
+    description: 'Built-in read-only auditor role',
+    isSystem: true,
+    isEditable: true,
+    isDeletable: false,
+    permissions: defaultUserPermissions,
   },
 });

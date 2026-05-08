@@ -1,7 +1,19 @@
 const { logger, CANCEL_RATE } = require('@librechat/data-schemas');
+const { recordQuotaUsageForTransactions } = require('@librechat/api');
 const { getMultiplier, getCacheMultiplier } = require('./tx');
 const { Transaction } = require('~/db/models');
 const { updateBalance } = require('~/models');
+
+async function recordQuotaUsageForTransaction({ user, transaction }) {
+  try {
+    await recordQuotaUsageForTransactions({
+      userId: user.toString(),
+      transactions: [transaction.toObject()],
+    });
+  } catch (error) {
+    logger.error('[Transaction.recordQuotaUsageForTransaction]', error);
+  }
+}
 
 /** Method to calculate and set the tokenValue for a transaction */
 function calculateTokenValue(txn) {
@@ -71,6 +83,8 @@ async function createTransaction(_txData) {
   calculateTokenValue(transaction);
 
   await transaction.save();
+  await recordQuotaUsageForTransaction({ user: transaction.user, transaction });
+
   if (!balance?.enabled) {
     return;
   }
@@ -106,6 +120,7 @@ async function createStructuredTransaction(_txData) {
   calculateStructuredTokenValue(transaction);
 
   await transaction.save();
+  await recordQuotaUsageForTransaction({ user: transaction.user, transaction });
 
   if (!balance?.enabled) {
     return;

@@ -45,7 +45,7 @@ export default function StartupLayout({ isAuthenticated }: { isAuthenticated?: b
   }, [isAuthenticated, navigate, data]);
 
   useEffect(() => {
-    applyAppTitle(startupConfig?.appTitle || 'LibreChat');
+    applyAppTitle(startupConfig?.appTitle || 'HUM');
   }, [startupConfig?.appTitle]);
 
   useEffect(() => {

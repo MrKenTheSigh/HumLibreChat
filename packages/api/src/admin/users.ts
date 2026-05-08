@@ -1,9 +1,10 @@
 import mongoose from 'mongoose';
+import { createRequire } from 'node:module';
 import { z } from 'zod';
 import { createModels, createMethods, logger } from '@librechat/data-schemas';
 import type { Request, Response } from 'express';
 import { SystemRoles } from 'librechat-data-provider';
-import type { AppConfig, IUser, IBalance, IRole } from '@librechat/data-schemas';
+import type { AppConfig, IUser, IBalance } from '@librechat/data-schemas';
 import { getBalanceConfig } from '~/app/config';
 import type { AdminUserProvisioningState } from './provisioning';
 import { applyStartingCredits, resolveProvisioningState } from './provisioning';
@@ -16,10 +17,21 @@ import {
   parsePageSize,
   trimSearch,
 } from './utils';
+import { writeRequestActivityLog } from './activityLogs';
 
-const { User, Balance, Transaction, Role } = createModels(mongoose);
+const {
+  User,
+  Balance,
+  Transaction,
+  Role,
+  Department,
+  QuotaAccount,
+  QuotaLedgerEntry,
+  QuotaPeriod,
+} = createModels(mongoose);
 const { createUser } = createMethods(mongoose);
 
+const COMPANY_DEPARTMENT_CODE = 'COMPANY';
 const MIN_PASSWORD_LENGTH = parseInt(process.env.MIN_PASSWORD_LENGTH ?? '', 10) || 8;
 const allowedCharactersRegex = new RegExp(
   '^[' +
@@ -43,7 +55,26 @@ type BcryptModule = {
   hashSync: (value: string, salt: string) => string;
 };
 
-const bcrypt = require('bcryptjs') as BcryptModule;
+type QuotaPeriodRecord = {
+  _id: mongoose.Types.ObjectId;
+};
+
+type QuotaAccountRecord = {
+  _id: mongoose.Types.ObjectId;
+  parentAccountId?: mongoose.Types.ObjectId | string | null;
+  baseAllocatedCredits: number;
+  extraGrantedCredits: number;
+  reservedCredits: number;
+  usedCredits: number;
+  bufferCredits: number;
+};
+
+type CompanyRootDepartmentRecord = {
+  _id: mongoose.Types.ObjectId;
+};
+
+const nodeRequire = createRequire(__filename);
+const bcrypt = nodeRequire('bcryptjs') as BcryptModule;
 
 const usernameSchema = z
   .string()
@@ -95,6 +126,19 @@ const adminUserPlanAssignSchema = z.object({
   planId: z.string().trim().min(1, 'planId is required'),
 });
 
+const adminUserDepartmentAssignSchema = z.object({
+  departmentId: z
+    .union([z.string().trim().min(1), z.literal(''), z.null()])
+    .optional()
+    .default(null)
+    .transform((value) => (value === '' ? null : value)),
+  quotaPeriodId: z
+    .union([z.string().trim().min(1), z.literal(''), z.null()])
+    .optional()
+    .default(null)
+    .transform((value) => (value === '' ? null : value)),
+});
+
 const adminBalanceAddSchema = z.object({
   amount: z.coerce
     .number()
@@ -118,6 +162,7 @@ type AdminUserListItem = {
   email: string;
   role?: string;
   provider: string;
+  departmentId?: mongoose.Types.ObjectId | null;
   emailVerified: boolean;
   twoFactorEnabled?: boolean;
   createdAt?: Date;
@@ -133,6 +178,8 @@ type AdminUserDetailRecord = AdminUserListItem & {
   adminPlanStartingCreditsAppliedPlanId?: mongoose.Types.ObjectId | null;
   adminPlanStartingCreditsAppliedAmount?: number | null;
   adminPlanStartingCreditsAppliedSource?: 'plan_assignment_auto_seed' | 'admin_manual_apply' | null;
+  departmentId?: mongoose.Types.ObjectId | null;
+  departmentAssignedAt?: Date | null;
   personalization?: {
     memories?: boolean;
   };
@@ -155,6 +202,13 @@ type AdminPlanSummaryRecord = {
   name: string;
   slug: string;
   startingCredits?: number | null;
+};
+
+type AdminDepartmentSummaryRecord = {
+  _id: mongoose.Types.ObjectId;
+  code: string;
+  name: string;
+  enabled?: boolean;
 };
 
 type AppAwareRequest = Request & {
@@ -186,6 +240,7 @@ function sanitizeUserListItem(user: AdminUserListItem) {
     email: user.email,
     role: user.role ?? null,
     provider: user.provider,
+    departmentId: user.departmentId?.toString() ?? null,
     emailVerified: user.emailVerified,
     twoFactorEnabled: user.twoFactorEnabled ?? false,
     createdAt: user.createdAt?.toISOString() ?? null,
@@ -197,6 +252,7 @@ function sanitizeUserDetail(
   user: AdminUserDetailRecord,
   balance: IBalance | null,
   plan: AdminPlanSummaryRecord | null,
+  department: AdminDepartmentSummaryRecord | null,
   provisioning: AdminUserProvisioningState,
   roleManagement: {
     isPrimaryAdminProtected: boolean;
@@ -223,12 +279,38 @@ function sanitizeUserDetail(
         }
       : null,
     planAssignedAt: user.adminPlanAssignedAt?.toISOString() ?? null,
+    department: department
+      ? {
+          id: department._id.toString(),
+          code: department.code,
+          name: department.name,
+          enabled: department.enabled ?? true,
+        }
+      : null,
+    departmentAssignedAt: user.departmentAssignedAt?.toISOString() ?? null,
     balance: {
       tokenCredits: balance?.tokenCredits ?? 0,
       updatedAt: null,
     },
     provisioning,
   };
+}
+
+async function writeUserActivityLog(
+  req: Request,
+  action: string,
+  result: 'success' | 'failure',
+  userId: string | null,
+  message = '',
+) {
+  await writeRequestActivityLog(req, {
+    resourceType: 'user',
+    resourceId: userId,
+    action,
+    result,
+    message,
+    metadata: userId ? { userId } : {},
+  });
 }
 
 function extractTokenCredits(balance: unknown): number {
@@ -327,7 +409,7 @@ export async function getAdminUsers(req: Request, res: Response) {
     const query = filters.length > 0 ? { $and: filters } : {};
     const users = await User.find(query)
       .select(
-        '_id name username email role provider emailVerified twoFactorEnabled createdAt updatedAt',
+        '_id name username email role provider departmentId emailVerified twoFactorEnabled createdAt updatedAt',
       )
       .sort({ createdAt: -1, _id: -1 })
       .limit(limit + 1)
@@ -387,7 +469,7 @@ export async function getAdminUser(req: Request, res: Response) {
     const userId = parseObjectId(req.params.userId, 'userId');
     const user = await User.findById(userId)
       .select(
-        '_id name username email role provider emailVerified twoFactorEnabled termsAccepted personalization plugins favorites adminPlanId adminPlanAssignedAt adminPlanStartingCreditsAppliedAt adminPlanStartingCreditsAppliedPlanId adminPlanStartingCreditsAppliedAmount adminPlanStartingCreditsAppliedSource createdAt updatedAt',
+        '_id name username email role provider emailVerified twoFactorEnabled termsAccepted personalization plugins favorites adminPlanId adminPlanAssignedAt adminPlanStartingCreditsAppliedAt adminPlanStartingCreditsAppliedPlanId adminPlanStartingCreditsAppliedAmount adminPlanStartingCreditsAppliedSource departmentId departmentAssignedAt createdAt updatedAt',
       )
       .lean<AdminUserDetailRecord | null>();
 
@@ -395,7 +477,7 @@ export async function getAdminUser(req: Request, res: Response) {
       throw createStatusError(404, 'User not found');
     }
 
-    const [balance, plan, provisioning, isPrimaryAdminProtected] = await Promise.all([
+    const [balance, plan, department, provisioning, isPrimaryAdminProtected] = await Promise.all([
       Balance.findOne({ user: userId }).lean(),
       user.adminPlanId
         ? User.db
@@ -403,6 +485,11 @@ export async function getAdminUser(req: Request, res: Response) {
             .findById(user.adminPlanId)
             .select('_id name slug startingCredits')
             .lean<AdminPlanSummaryRecord | null>()
+        : Promise.resolve(null),
+      user.departmentId
+        ? Department.findById(user.departmentId)
+            .select('_id code name enabled')
+            .lean<AdminDepartmentSummaryRecord | null>()
         : Promise.resolve(null),
       resolveProvisioningState({
         appConfig: (req as AppAwareRequest).config,
@@ -412,7 +499,7 @@ export async function getAdminUser(req: Request, res: Response) {
     ]);
 
     return res.status(200).json(
-      sanitizeUserDetail(user, balance as IBalance | null, plan, provisioning, {
+      sanitizeUserDetail(user, balance as IBalance | null, plan, department, provisioning, {
         isPrimaryAdminProtected,
         canChangeRole: !isPrimaryAdminProtected,
         canDelete: !isPrimaryAdminProtected,
@@ -448,6 +535,65 @@ export async function updateAdminUser(req: Request, res: Response) {
   }
 }
 
+export async function updateAdminUserDepartment(req: Request, res: Response) {
+  try {
+    const { userId } = await getExistingUserOrThrow(req.params.userId);
+    const { departmentId: departmentIdParam, quotaPeriodId } =
+      adminUserDepartmentAssignSchema.parse(req.body);
+    const assignedAt = departmentIdParam == null ? null : new Date();
+    const departmentResult =
+      departmentIdParam == null ? null : await getExistingDepartmentOrThrow(departmentIdParam);
+
+    await transferActiveUserQuotaParent({
+      req,
+      userId,
+      targetDepartmentId: departmentResult?.departmentId ?? null,
+      quotaPeriodId,
+    });
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      {
+        $set: {
+          departmentId: departmentResult?.departmentId ?? null,
+          departmentAssignedAt: assignedAt,
+        },
+      },
+      { new: true },
+    )
+      .select('_id departmentId departmentAssignedAt')
+      .lean<Pick<AdminUserDetailRecord, '_id' | 'departmentId' | 'departmentAssignedAt'> | null>();
+
+    if (!updatedUser) {
+      throw createStatusError(404, 'User not found');
+    }
+
+    await writeUserActivityLog(req, 'user.department.update', 'success', userId.toString());
+
+    return res.status(200).json({
+      userId: userId.toString(),
+      department: departmentResult
+        ? {
+            id: departmentResult.department._id.toString(),
+            code: departmentResult.department.code,
+            name: departmentResult.department.name,
+            enabled: departmentResult.department.enabled ?? true,
+          }
+        : null,
+      departmentAssignedAt: updatedUser.departmentAssignedAt?.toISOString() ?? null,
+    });
+  } catch (error) {
+    await writeUserActivityLog(
+      req,
+      'user.department.update',
+      'failure',
+      typeof req.params.userId === 'string' ? req.params.userId : null,
+      error instanceof Error ? error.message : 'Failed to update user department',
+    );
+    return handleAdminError(error, res, '[updateAdminUserDepartment]');
+  }
+}
+
 async function getExistingUserOrThrow(
   userIdParam: string,
 ): Promise<{ userId: mongoose.Types.ObjectId }> {
@@ -476,17 +622,189 @@ async function getExistingPlanOrThrow(
   return { planId, plan };
 }
 
-async function getExistingRoleOrThrow(
-  roleNameParam: string,
-): Promise<{ role: IRole; roleName: string }> {
+async function getExistingDepartmentOrThrow(
+  departmentIdParam: string,
+): Promise<{ departmentId: mongoose.Types.ObjectId; department: AdminDepartmentSummaryRecord }> {
+  const departmentId = parseObjectId(departmentIdParam, 'departmentId');
+  const department = await Department.findById(departmentId)
+    .select('_id code name enabled')
+    .lean<AdminDepartmentSummaryRecord | null>();
+
+  if (!department) {
+    throw createStatusError(404, 'Department not found');
+  }
+
+  if (department.enabled === false) {
+    throw createStatusError(409, 'Cannot assign a disabled department');
+  }
+
+  return { departmentId, department };
+}
+
+function getQuotaAccountLimitCredits(account: QuotaAccountRecord): number {
+  return (account.baseAllocatedCredits ?? 0) + (account.extraGrantedCredits ?? 0);
+}
+
+function getQuotaAccountAllocatableCredits(account: QuotaAccountRecord): number {
+  return getQuotaAccountLimitCredits(account) - (account.reservedCredits ?? 0);
+}
+
+function getRequestUserId(req: Request): mongoose.Types.ObjectId | null {
+  const user = (req as Request & { user?: { id?: string; _id?: string | mongoose.Types.ObjectId } })
+    .user;
+  const id = typeof user?.id === 'string' && user.id.length > 0 ? user.id : user?._id?.toString();
+
+  return id ? parseObjectId(id, 'actorUserId') : null;
+}
+
+async function getQuotaPeriodForTransfer(
+  quotaPeriodId: string | null,
+): Promise<QuotaPeriodRecord | null> {
+  if (quotaPeriodId) {
+    const periodId = parseObjectId(quotaPeriodId, 'quotaPeriodId');
+    return QuotaPeriod.findById(periodId).lean<QuotaPeriodRecord | null>();
+  }
+
+  const now = new Date();
+  return QuotaPeriod.findOne({
+    status: 'active',
+    periodStart: { $lte: now },
+    periodEnd: { $gte: now },
+  })
+    .sort({ periodStart: -1, _id: -1 })
+    .lean<QuotaPeriodRecord | null>();
+}
+
+async function getCompanyRootDepartmentId(): Promise<string | null> {
+  const department = await Department.findOne({ code: COMPANY_DEPARTMENT_CODE })
+    .select('_id')
+    .lean<CompanyRootDepartmentRecord | null>();
+
+  return department?._id.toString() ?? null;
+}
+
+async function transferActiveUserQuotaParent(input: {
+  req: Request;
+  userId: mongoose.Types.ObjectId;
+  targetDepartmentId: mongoose.Types.ObjectId | null;
+  quotaPeriodId: string | null;
+}) {
+  const period = await getQuotaPeriodForTransfer(input.quotaPeriodId);
+  if (!period) {
+    return;
+  }
+
+  const userAccount = await QuotaAccount.findOne({
+    periodId: period._id,
+    scopeType: 'user',
+    scopeId: input.userId.toString(),
+  }).lean<QuotaAccountRecord | null>();
+
+  if (!userAccount) {
+    return;
+  }
+
+  if (!input.targetDepartmentId) {
+    throw createStatusError(409, 'Cannot move a quota-assigned user to no department');
+  }
+
+  const targetDepartmentId = input.targetDepartmentId.toString();
+  const companyRootDepartmentId = await getCompanyRootDepartmentId();
+  const targetAccountQuery =
+    companyRootDepartmentId != null && targetDepartmentId === companyRootDepartmentId
+      ? {
+          periodId: period._id,
+          scopeType: 'company',
+          scopeId: 'company',
+        }
+      : {
+          periodId: period._id,
+          scopeType: 'department',
+          scopeId: targetDepartmentId,
+        };
+
+  const targetAccount = await QuotaAccount.findOne(
+    targetAccountQuery,
+  ).lean<QuotaAccountRecord | null>();
+
+  if (!targetAccount) {
+    throw createStatusError(409, 'Target quota account does not exist');
+  }
+
+  const currentParentAccountId = userAccount.parentAccountId?.toString() ?? null;
+  if (currentParentAccountId === targetAccount._id.toString()) {
+    return;
+  }
+
+  const transferCredits = userAccount.baseAllocatedCredits ?? 0;
+  if (getQuotaAccountAllocatableCredits(targetAccount) < transferCredits) {
+    throw createStatusError(409, 'Target department has insufficient quota credits');
+  }
+
+  const currentParentAccount = currentParentAccountId
+    ? await QuotaAccount.findById(currentParentAccountId).lean<QuotaAccountRecord | null>()
+    : null;
+  const updates: Promise<unknown>[] = [
+    QuotaAccount.updateOne(
+      { _id: userAccount._id },
+      { $set: { parentAccountId: targetAccount._id } },
+    ),
+    QuotaAccount.updateOne(
+      { _id: targetAccount._id },
+      { $set: { reservedCredits: (targetAccount.reservedCredits ?? 0) + transferCredits } },
+    ),
+  ];
+
+  if (currentParentAccount) {
+    updates.push(
+      QuotaAccount.updateOne(
+        { _id: currentParentAccount._id },
+        {
+          $set: {
+            reservedCredits: Math.max(
+              0,
+              (currentParentAccount.reservedCredits ?? 0) - transferCredits,
+            ),
+          },
+        },
+      ),
+    );
+  }
+
+  await Promise.all(updates);
+
+  await QuotaLedgerEntry.create({
+    periodId: period._id,
+    accountId: userAccount._id,
+    counterpartyAccountId: targetAccount._id,
+    entryType: 'adjustment',
+    amount: 0,
+    balanceAfter:
+      getQuotaAccountLimitCredits(userAccount) +
+      (userAccount.bufferCredits ?? 0) -
+      (userAccount.usedCredits ?? 0),
+    sourceType: 'admin_action',
+    sourceId: input.userId.toString(),
+    reason: 'User department quota parent transferred',
+    actorUserId: getRequestUserId(input.req),
+  });
+}
+
+async function getExistingRoleOrThrow(roleNameParam: string): Promise<{ roleName: string }> {
   const roleName = normalizeRoleName(roleNameParam);
-  const role = await Role.findOne({ name: roleName }).lean<IRole | null>();
+  const role = await Role.findOne({ name: roleName })
+    .select('_id')
+    .lean<{ _id: mongoose.Types.ObjectId } | null>();
+
+  if (!role && Object.values(SystemRoles).includes(roleName as SystemRoles)) {
+    return { roleName };
+  }
 
   if (!role) {
     throw createStatusError(404, 'Role not found');
   }
 
-  return { role, roleName };
+  return { roleName };
 }
 
 async function getPrimaryAdminUserId(): Promise<mongoose.Types.ObjectId | null> {
@@ -772,11 +1090,20 @@ export async function updateAdminUserRole(req: Request, res: Response) {
       throw createStatusError(404, 'User not found');
     }
 
+    await writeUserActivityLog(req, 'user.role.update', 'success', userId.toString());
+
     return res.status(200).json({
       userId: userId.toString(),
       role: updatedUser.role,
     });
   } catch (error) {
+    await writeUserActivityLog(
+      req,
+      'user.role.update',
+      'failure',
+      typeof req.params.userId === 'string' ? req.params.userId : null,
+      error instanceof Error ? error.message : 'Failed to update user role',
+    );
     return handleAdminError(error, res, '[updateAdminUserRole]');
   }
 }

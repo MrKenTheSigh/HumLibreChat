@@ -14,6 +14,7 @@ const {
   assignAdminUserPlan,
   clearAdminUserPlan,
   setAdminUserBalance,
+  updateAdminUserDepartment,
   updateAdminUserRole,
 } = require('@librechat/api');
 
@@ -28,6 +29,7 @@ router.patch('/:userId', updateAdminUser);
 router.post('/:userId/balance/add', addAdminUserBalance);
 router.post('/:userId/balance/set', setAdminUserBalance);
 router.post('/:userId/role', updateAdminUserRole);
+router.post('/:userId/department', updateAdminUserDepartment);
 router.post('/:userId/plan', configMiddleware, assignAdminUserPlan);
 router.post(
   '/:userId/plan/apply-starting-credits',

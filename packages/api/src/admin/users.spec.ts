@@ -10,7 +10,16 @@ const mockRoleFindOne = jest.fn();
 const mockBalanceFindOne = jest.fn();
 const mockBalanceFindOneAndUpdate = jest.fn();
 const mockAdminPlanFindById = jest.fn();
+const mockDepartmentFindById = jest.fn();
+const mockDepartmentFindOne = jest.fn();
+const mockQuotaPeriodFindOne = jest.fn();
+const mockQuotaPeriodFindById = jest.fn();
+const mockQuotaAccountFindOne = jest.fn();
+const mockQuotaAccountFindById = jest.fn();
+const mockQuotaAccountUpdateOne = jest.fn();
+const mockQuotaLedgerEntryCreate = jest.fn();
 const mockTransactionCreate = jest.fn();
+const mockActivityLogCreate = jest.fn();
 const mockCreateUser = jest.fn();
 const mockUpdateBalance = jest.fn();
 const mockLoggerError = jest.fn();
@@ -42,6 +51,25 @@ jest.mock('@librechat/data-schemas', () => ({
     Transaction: {
       create: mockTransactionCreate,
     },
+    Department: {
+      findById: mockDepartmentFindById,
+      findOne: mockDepartmentFindOne,
+    },
+    QuotaPeriod: {
+      findOne: mockQuotaPeriodFindOne,
+      findById: mockQuotaPeriodFindById,
+    },
+    QuotaAccount: {
+      findOne: mockQuotaAccountFindOne,
+      findById: mockQuotaAccountFindById,
+      updateOne: mockQuotaAccountUpdateOne,
+    },
+    QuotaLedgerEntry: {
+      create: mockQuotaLedgerEntryCreate,
+    },
+    ActivityLog: {
+      create: mockActivityLogCreate,
+    },
   })),
   createMethods: jest.fn(() => ({
     createUser: mockCreateUser,
@@ -61,6 +89,7 @@ jest.mock('./provisioning', () => ({
   resolveProvisioningState: (...args: unknown[]) => mockResolveProvisioningState(...args),
 }));
 
+/* eslint-disable @typescript-eslint/no-require-imports */
 const {
   applyAdminUserPlanStartingCredits,
   createAdminUser,
@@ -71,8 +100,10 @@ const {
   getAdminUsers,
   setAdminUserBalance,
   updateAdminUser,
+  updateAdminUserDepartment,
   updateAdminUserRole,
 } = require('./users');
+/* eslint-enable @typescript-eslint/no-require-imports */
 
 type MockResponse = Response & {
   status: jest.Mock;
@@ -105,6 +136,14 @@ describe('admin users handlers', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockUserFind.mockReturnValue(createLeanQuery([]));
+    mockDepartmentFindById.mockReturnValue(createSelectLeanQuery(null));
+    mockDepartmentFindOne.mockReturnValue(createSelectLeanQuery(null));
+    mockQuotaPeriodFindOne.mockReturnValue(createLeanQuery(null));
+    mockQuotaPeriodFindById.mockReturnValue(createSelectLeanQuery(null));
+    mockQuotaAccountFindOne.mockReturnValue(createSelectLeanQuery(null));
+    mockQuotaAccountFindById.mockReturnValue(createSelectLeanQuery(null));
+    mockQuotaAccountUpdateOne.mockResolvedValue({});
+    mockQuotaLedgerEntryCreate.mockResolvedValue({});
     mockGetBalanceConfig.mockReturnValue(null);
     mockApplyStartingCredits.mockResolvedValue({
       applied: false,
@@ -149,6 +188,7 @@ describe('admin users handlers', () => {
             email: 'admin@example.com',
             role: 'ADMIN',
             provider: 'local',
+            departmentId: null,
             emailVerified: true,
             twoFactorEnabled: true,
             createdAt: new Date('2026-03-25T00:00:00.000Z'),
@@ -195,6 +235,7 @@ describe('admin users handlers', () => {
             email: 'admin@example.com',
             role: 'ADMIN',
             provider: 'local',
+            departmentId: null,
             emailVerified: true,
             twoFactorEnabled: true,
             createdAt: '2026-03-25T00:00:00.000Z',
@@ -217,6 +258,7 @@ describe('admin users handlers', () => {
         email: 'new@example.com',
         role: 'USER',
         provider: 'local',
+        departmentId: null,
         emailVerified: true,
         twoFactorEnabled: false,
         createdAt: new Date('2026-03-26T08:00:00.000Z'),
@@ -268,6 +310,7 @@ describe('admin users handlers', () => {
         email: 'new@example.com',
         role: 'USER',
         provider: 'local',
+        departmentId: null,
         emailVerified: true,
         twoFactorEnabled: false,
         createdAt: '2026-03-26T08:00:00.000Z',
@@ -317,6 +360,8 @@ describe('admin users handlers', () => {
           favorites: [{ model: 'gpt-4o' }, { endpoint: 'azureOpenAI' }],
           adminPlanId: new mongoose.Types.ObjectId(),
           adminPlanAssignedAt: new Date('2026-03-25T02:00:00.000Z'),
+          departmentId: new mongoose.Types.ObjectId(),
+          departmentAssignedAt: new Date('2026-03-25T03:00:00.000Z'),
           personalization: { memories: false },
           plugins: ['web'],
           password: 'should-not-leak',
@@ -346,6 +391,14 @@ describe('admin users handlers', () => {
           _id: new mongoose.Types.ObjectId(),
           name: 'Pro',
           slug: 'pro',
+        }),
+      );
+      mockDepartmentFindById.mockReturnValue(
+        createSelectLeanQuery({
+          _id: new mongoose.Types.ObjectId(),
+          code: 'IT',
+          name: 'Information Technology',
+          enabled: true,
         }),
       );
 
@@ -378,6 +431,13 @@ describe('admin users handlers', () => {
           startingCredits: null,
         },
         planAssignedAt: '2026-03-25T02:00:00.000Z',
+        department: {
+          id: expect.any(String),
+          code: 'IT',
+          name: 'Information Technology',
+          enabled: true,
+        },
+        departmentAssignedAt: '2026-03-25T03:00:00.000Z',
         balance: { tokenCredits: 500, updatedAt: null },
         provisioning: {
           balanceEnabled: true,
@@ -463,6 +523,7 @@ describe('admin users handlers', () => {
         email: 'tester@example.com',
         role: 'USER',
         provider: 'local',
+        departmentId: null,
         emailVerified: true,
         twoFactorEnabled: false,
         createdAt: '2026-03-25T00:00:00.000Z',
@@ -852,6 +913,383 @@ describe('admin users handlers', () => {
           appliedPlanMatchesCurrent: true,
           canApplyStartingCredits: false,
         },
+      });
+    });
+  });
+
+  describe('updateAdminUserDepartment', () => {
+    it('assigns an enabled department to a user', async () => {
+      const userId = new mongoose.Types.ObjectId();
+      const departmentId = new mongoose.Types.ObjectId();
+      mockUserFindById.mockReturnValue(
+        createSelectLeanQuery({
+          _id: userId,
+          email: 'tester@example.com',
+        }),
+      );
+      mockDepartmentFindById.mockReturnValue(
+        createSelectLeanQuery({
+          _id: departmentId,
+          code: 'IT',
+          name: 'Information Technology',
+          enabled: true,
+        }),
+      );
+      mockUserFindByIdAndUpdate.mockReturnValue(
+        createSelectLeanQuery({
+          _id: userId,
+          departmentId,
+          departmentAssignedAt: new Date('2026-04-21T00:00:00.000Z'),
+        }),
+      );
+
+      const req = {
+        params: { userId: userId.toString() },
+        body: { departmentId: departmentId.toString() },
+      } as unknown as Request;
+      const res = createMockResponse();
+
+      await updateAdminUserDepartment(req, res);
+
+      expect(mockUserFindByIdAndUpdate).toHaveBeenCalledWith(
+        userId,
+        {
+          $set: {
+            departmentId,
+            departmentAssignedAt: expect.any(Date),
+          },
+        },
+        { new: true },
+      );
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({
+        userId: userId.toString(),
+        department: {
+          id: departmentId.toString(),
+          code: 'IT',
+          name: 'Information Technology',
+          enabled: true,
+        },
+        departmentAssignedAt: '2026-04-21T00:00:00.000Z',
+      });
+    });
+
+    it('transfers an active user quota account to the new department account', async () => {
+      const userId = new mongoose.Types.ObjectId();
+      const departmentId = new mongoose.Types.ObjectId();
+      const periodId = new mongoose.Types.ObjectId();
+      const userAccountId = new mongoose.Types.ObjectId();
+      const oldDepartmentAccountId = new mongoose.Types.ObjectId();
+      const newDepartmentAccountId = new mongoose.Types.ObjectId();
+      mockUserFindById.mockReturnValue(
+        createSelectLeanQuery({
+          _id: userId,
+          email: 'tester@example.com',
+        }),
+      );
+      mockDepartmentFindById.mockReturnValue(
+        createSelectLeanQuery({
+          _id: departmentId,
+          code: 'IT',
+          name: 'Information Technology',
+          enabled: true,
+        }),
+      );
+      mockDepartmentFindOne.mockReturnValue(createSelectLeanQuery(null));
+      mockQuotaPeriodFindOne.mockReturnValue(createLeanQuery({ _id: periodId }));
+      mockQuotaAccountFindOne
+        .mockReturnValueOnce(
+          createSelectLeanQuery({
+            _id: userAccountId,
+            parentAccountId: oldDepartmentAccountId,
+            baseAllocatedCredits: 100,
+            extraGrantedCredits: 0,
+            reservedCredits: 0,
+            usedCredits: 25,
+            bufferCredits: 0,
+          }),
+        )
+        .mockReturnValueOnce(
+          createSelectLeanQuery({
+            _id: newDepartmentAccountId,
+            parentAccountId: null,
+            baseAllocatedCredits: 500,
+            extraGrantedCredits: 0,
+            reservedCredits: 200,
+            usedCredits: 0,
+            bufferCredits: 0,
+          }),
+        );
+      mockQuotaAccountFindById.mockReturnValue(
+        createSelectLeanQuery({
+          _id: oldDepartmentAccountId,
+          parentAccountId: null,
+          baseAllocatedCredits: 300,
+          extraGrantedCredits: 0,
+          reservedCredits: 150,
+          usedCredits: 0,
+          bufferCredits: 0,
+        }),
+      );
+      mockUserFindByIdAndUpdate.mockReturnValue(
+        createSelectLeanQuery({
+          _id: userId,
+          departmentId,
+          departmentAssignedAt: new Date('2026-04-21T00:00:00.000Z'),
+        }),
+      );
+
+      const req = {
+        params: { userId: userId.toString() },
+        body: { departmentId: departmentId.toString() },
+      } as unknown as Request;
+      const res = createMockResponse();
+
+      await updateAdminUserDepartment(req, res);
+
+      expect(mockQuotaAccountUpdateOne).toHaveBeenCalledWith(
+        { _id: userAccountId },
+        { $set: { parentAccountId: newDepartmentAccountId } },
+      );
+      expect(mockQuotaAccountUpdateOne).toHaveBeenCalledWith(
+        { _id: newDepartmentAccountId },
+        { $set: { reservedCredits: 300 } },
+      );
+      expect(mockQuotaAccountUpdateOne).toHaveBeenCalledWith(
+        { _id: oldDepartmentAccountId },
+        { $set: { reservedCredits: 50 } },
+      );
+      expect(mockQuotaLedgerEntryCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          periodId,
+          accountId: userAccountId,
+          counterpartyAccountId: newDepartmentAccountId,
+          entryType: 'adjustment',
+          sourceType: 'admin_action',
+          sourceId: userId.toString(),
+        }),
+      );
+      expect(res.status).toHaveBeenCalledWith(200);
+    });
+
+    it('uses the requested quota period when transferring a user quota account', async () => {
+      const userId = new mongoose.Types.ObjectId();
+      const departmentId = new mongoose.Types.ObjectId();
+      const periodId = new mongoose.Types.ObjectId();
+      const userAccountId = new mongoose.Types.ObjectId();
+      const oldDepartmentAccountId = new mongoose.Types.ObjectId();
+      const newDepartmentAccountId = new mongoose.Types.ObjectId();
+      mockUserFindById.mockReturnValue(
+        createSelectLeanQuery({
+          _id: userId,
+          email: 'tester@example.com',
+        }),
+      );
+      mockDepartmentFindById.mockReturnValue(
+        createSelectLeanQuery({
+          _id: departmentId,
+          code: 'IT',
+          name: 'Information Technology',
+          enabled: true,
+        }),
+      );
+      mockDepartmentFindOne.mockReturnValue(createSelectLeanQuery(null));
+      mockQuotaPeriodFindById.mockReturnValue(createSelectLeanQuery({ _id: periodId }));
+      mockQuotaAccountFindOne
+        .mockReturnValueOnce(
+          createSelectLeanQuery({
+            _id: userAccountId,
+            parentAccountId: oldDepartmentAccountId,
+            baseAllocatedCredits: 100,
+            extraGrantedCredits: 0,
+            reservedCredits: 0,
+            usedCredits: 0,
+            bufferCredits: 0,
+          }),
+        )
+        .mockReturnValueOnce(
+          createSelectLeanQuery({
+            _id: newDepartmentAccountId,
+            parentAccountId: null,
+            baseAllocatedCredits: 500,
+            extraGrantedCredits: 0,
+            reservedCredits: 0,
+            usedCredits: 0,
+            bufferCredits: 0,
+          }),
+        );
+      mockQuotaAccountFindById.mockReturnValue(
+        createSelectLeanQuery({
+          _id: oldDepartmentAccountId,
+          parentAccountId: null,
+          baseAllocatedCredits: 500,
+          extraGrantedCredits: 0,
+          reservedCredits: 100,
+          usedCredits: 0,
+          bufferCredits: 0,
+        }),
+      );
+      mockUserFindByIdAndUpdate.mockReturnValue(
+        createSelectLeanQuery({
+          _id: userId,
+          departmentId,
+          departmentAssignedAt: new Date('2026-04-21T00:00:00.000Z'),
+        }),
+      );
+
+      const req = {
+        params: { userId: userId.toString() },
+        body: { departmentId: departmentId.toString(), quotaPeriodId: periodId.toString() },
+      } as unknown as Request;
+      const res = createMockResponse();
+
+      await updateAdminUserDepartment(req, res);
+
+      expect(mockQuotaPeriodFindById).toHaveBeenCalledWith(periodId);
+      expect(mockQuotaPeriodFindOne).not.toHaveBeenCalled();
+      expect(mockQuotaAccountFindOne).toHaveBeenCalledWith({
+        periodId,
+        scopeType: 'user',
+        scopeId: userId.toString(),
+      });
+      expect(res.status).toHaveBeenCalledWith(200);
+    });
+
+    it('rejects department changes when the target quota account has insufficient credits', async () => {
+      const userId = new mongoose.Types.ObjectId();
+      const departmentId = new mongoose.Types.ObjectId();
+      const periodId = new mongoose.Types.ObjectId();
+      const userAccountId = new mongoose.Types.ObjectId();
+      const oldDepartmentAccountId = new mongoose.Types.ObjectId();
+      const newDepartmentAccountId = new mongoose.Types.ObjectId();
+      mockUserFindById.mockReturnValue(
+        createSelectLeanQuery({
+          _id: userId,
+          email: 'tester@example.com',
+        }),
+      );
+      mockDepartmentFindById.mockReturnValue(
+        createSelectLeanQuery({
+          _id: departmentId,
+          code: 'IT',
+          name: 'Information Technology',
+          enabled: true,
+        }),
+      );
+      mockDepartmentFindOne.mockReturnValue(createSelectLeanQuery(null));
+      mockQuotaPeriodFindOne.mockReturnValue(createLeanQuery({ _id: periodId }));
+      mockQuotaAccountFindOne
+        .mockReturnValueOnce(
+          createSelectLeanQuery({
+            _id: userAccountId,
+            parentAccountId: oldDepartmentAccountId,
+            baseAllocatedCredits: 100,
+            extraGrantedCredits: 0,
+            reservedCredits: 0,
+            usedCredits: 0,
+            bufferCredits: 0,
+          }),
+        )
+        .mockReturnValueOnce(
+          createSelectLeanQuery({
+            _id: newDepartmentAccountId,
+            parentAccountId: null,
+            baseAllocatedCredits: 250,
+            extraGrantedCredits: 0,
+            reservedCredits: 200,
+            usedCredits: 0,
+            bufferCredits: 0,
+          }),
+        );
+
+      const req = {
+        params: { userId: userId.toString() },
+        body: { departmentId: departmentId.toString() },
+      } as unknown as Request;
+      const res = createMockResponse();
+
+      await updateAdminUserDepartment(req, res);
+
+      expect(mockQuotaAccountUpdateOne).not.toHaveBeenCalled();
+      expect(mockUserFindByIdAndUpdate).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(409);
+      expect(res.json).toHaveBeenCalledWith({
+        message: 'Target department has insufficient quota credits',
+      });
+    });
+
+    it('clears a user department assignment', async () => {
+      const userId = new mongoose.Types.ObjectId();
+      mockUserFindById.mockReturnValue(
+        createSelectLeanQuery({
+          _id: userId,
+          email: 'tester@example.com',
+        }),
+      );
+      mockUserFindByIdAndUpdate.mockReturnValue(
+        createSelectLeanQuery({
+          _id: userId,
+          departmentId: null,
+          departmentAssignedAt: null,
+        }),
+      );
+
+      const req = {
+        params: { userId: userId.toString() },
+        body: { departmentId: null },
+      } as unknown as Request;
+      const res = createMockResponse();
+
+      await updateAdminUserDepartment(req, res);
+
+      expect(mockUserFindByIdAndUpdate).toHaveBeenCalledWith(
+        userId,
+        {
+          $set: {
+            departmentId: null,
+            departmentAssignedAt: null,
+          },
+        },
+        { new: true },
+      );
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({
+        userId: userId.toString(),
+        department: null,
+        departmentAssignedAt: null,
+      });
+    });
+
+    it('rejects disabled department assignment', async () => {
+      const userId = new mongoose.Types.ObjectId();
+      const departmentId = new mongoose.Types.ObjectId();
+      mockUserFindById.mockReturnValue(
+        createSelectLeanQuery({
+          _id: userId,
+          email: 'tester@example.com',
+        }),
+      );
+      mockDepartmentFindById.mockReturnValue(
+        createSelectLeanQuery({
+          _id: departmentId,
+          code: 'OLD',
+          name: 'Old Department',
+          enabled: false,
+        }),
+      );
+
+      const req = {
+        params: { userId: userId.toString() },
+        body: { departmentId: departmentId.toString() },
+      } as unknown as Request;
+      const res = createMockResponse();
+
+      await updateAdminUserDepartment(req, res);
+
+      expect(mockUserFindByIdAndUpdate).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(409);
+      expect(res.json).toHaveBeenCalledWith({
+        message: 'Cannot assign a disabled department',
       });
     });
   });

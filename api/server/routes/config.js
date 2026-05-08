@@ -8,6 +8,7 @@ const { getProjectByName } = require('~/models/Project');
 const { getLogStores } = require('~/cache');
 
 const router = express.Router();
+const DEFAULT_APP_TITLE = 'HUM';
 const emailLoginEnabled =
   process.env.ALLOW_EMAIL_LOGIN === undefined || isEnabled(process.env.ALLOW_EMAIL_LOGIN);
 const passwordResetEnabled = isEnabled(process.env.ALLOW_PASSWORD_RESET);
@@ -23,9 +24,10 @@ const openidReuseTokens = isEnabled(process.env.OPENID_REUSE_TOKENS);
 
 router.get('/', async function (req, res) {
   const cache = getLogStores(CacheKeys.CONFIG_STORE);
+  const appTitle = process.env.APP_TITLE || DEFAULT_APP_TITLE;
 
   const cachedStartupConfig = await cache.get(CacheKeys.STARTUP_CONFIG);
-  if (cachedStartupConfig) {
+  if (cachedStartupConfig && cachedStartupConfig.appTitle === appTitle) {
     res.send(cachedStartupConfig);
     return;
   }
@@ -58,7 +60,7 @@ router.get('/', async function (req, res) {
 
     /** @type {TStartupConfig} */
     const payload = {
-      appTitle: process.env.APP_TITLE || 'LibreChat',
+      appTitle,
       appIcon: process.env.APP_ICON,
       socialLogins: appConfig?.registration?.socialLogins ?? defaultSocialLogins,
       discordLoginEnabled: !!process.env.DISCORD_CLIENT_ID && !!process.env.DISCORD_CLIENT_SECRET,

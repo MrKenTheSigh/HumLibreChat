@@ -77,6 +77,7 @@ export type AdminUserSummary = {
   email: string;
   role: string | null;
   provider: string;
+  departmentId: string | null;
   emailVerified: boolean;
   twoFactorEnabled: boolean;
   createdAt: string | null;
@@ -85,6 +86,478 @@ export type AdminUserSummary = {
 
 export type AdminUsersListResponse = {
   users: AdminUserSummary[];
+  nextCursor: string | null;
+};
+
+export type AdminDepartment = {
+  id: string;
+  code: string;
+  name: string;
+  description: string;
+  parentDepartmentId: string | null;
+  managerUserId: string | null;
+  enabled: boolean;
+  sortOrder: number;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+export type AdminDepartmentSummary = Pick<AdminDepartment, 'id' | 'code' | 'name' | 'enabled'>;
+
+export type AdminDepartmentsListParams = {
+  search?: string;
+  enabled?: boolean;
+};
+
+export type AdminDepartmentsListResponse = {
+  departments: AdminDepartment[];
+};
+
+export type AdminActivityLogResult = 'success' | 'failure';
+export type AdminActivityLogMetadataValue = string | number | boolean | null;
+export type AdminActivityLogMetadata = Record<string, AdminActivityLogMetadataValue>;
+
+export type AdminActivityLog = {
+  id: string;
+  eventId: string;
+  actorUserId: string | null;
+  actorRole: string | null;
+  actorDepartmentId: string | null;
+  resourceType: string;
+  resourceId: string | null;
+  action: string;
+  result: AdminActivityLogResult;
+  message: string;
+  metadata: AdminActivityLogMetadata;
+  requestIp: string | null;
+  userAgent: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+export type AdminActivityLogsListParams = {
+  cursor?: string;
+  limit?: number;
+  actorUserId?: string;
+  resourceType?: string;
+  resourceId?: string;
+  action?: string;
+  result?: AdminActivityLogResult;
+  createdAfter?: string;
+  createdBefore?: string;
+};
+
+export type AdminActivityLogsListResponse = {
+  events: AdminActivityLog[];
+  nextCursor: string | null;
+};
+
+export type AdminManagerReviewCadence = 'daily' | 'weekly';
+export type AdminManagerReviewBatchStatus =
+  | 'generated'
+  | 'sent'
+  | 'reviewed'
+  | 'overdue'
+  | 'cancelled';
+
+export type AdminManagerReviewBatch = {
+  id: string;
+  batchKey: string;
+  managerUserId: string;
+  departmentId: string;
+  cadence: AdminManagerReviewCadence;
+  periodStart: string;
+  periodEnd: string;
+  status: AdminManagerReviewBatchStatus;
+  itemCount: number;
+  transactionCount: number;
+  totalTokenValue: number;
+  totalRawAmount: number;
+  totalInputTokens: number;
+  totalWriteTokens: number;
+  totalReadTokens: number;
+  quotaPeriodId?: string | null;
+  quotaAccountId?: string | null;
+  quotaAllocatedCredits?: number;
+  quotaExtraGrantedCredits?: number;
+  quotaUsedCredits?: number;
+  quotaRemainingCredits?: number;
+  quotaBufferCredits?: number;
+  quotaWarningCount?: number;
+  quotaBlockCount?: number;
+  emailTo: string;
+  sentAt: string | null;
+  reminderSentAt: string | null;
+  dueAt: string | null;
+  reviewedAt: string | null;
+  responseStatus: 'ok' | 'not_ok' | null;
+  responseText: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+export type AdminManagerReviewBatchesListParams = {
+  cursor?: string;
+  limit?: number;
+  managerUserId?: string;
+  departmentId?: string;
+  status?: AdminManagerReviewBatchStatus | 'all';
+  cadence?: AdminManagerReviewCadence | 'all';
+  responseStatus?: 'ok' | 'not_ok' | 'pending' | 'all';
+  periodStart?: string;
+  periodEnd?: string;
+};
+
+export type AdminManagerReviewBatchesListResponse = {
+  batches: AdminManagerReviewBatch[];
+  nextCursor: string | null;
+};
+
+export type AdminManagerReviewItemStatus = 'pending' | 'ok' | 'not_ok';
+export type AdminManagerReviewRiskLevel = 'normal' | 'attention' | 'high';
+
+export type AdminManagerReviewItem = {
+  id: string;
+  batchId: string;
+  managerUserId: string;
+  departmentId: string;
+  userId: string;
+  userEmail: string | null;
+  userName: string | null;
+  conversationId: string | null;
+  status: AdminManagerReviewItemStatus;
+  riskLevel: AdminManagerReviewRiskLevel;
+  transactionCount: number;
+  totalTokenValue: number;
+  totalRawAmount: number;
+  totalInputTokens: number;
+  totalWriteTokens: number;
+  totalReadTokens: number;
+  quotaAccountId?: string | null;
+  quotaAllocatedCredits?: number;
+  quotaExtraGrantedCredits?: number;
+  quotaUsedCredits?: number;
+  quotaRemainingCredits?: number;
+  quotaBufferCredits?: number;
+  quotaWarningCount?: number;
+  quotaBlockCount?: number;
+  newestTransactionAt: string | null;
+  reviewedAt: string | null;
+  responseText: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+export type AdminManagerReviewBatchItemsListParams = {
+  cursor?: string;
+  limit?: number;
+};
+
+export type AdminManagerReviewBatchItemsListResponse = {
+  items: AdminManagerReviewItem[];
+  nextCursor: string | null;
+};
+
+export type AdminManagerReviewBatchCreateRequest = {
+  managerUserId: string;
+  departmentId: string;
+  cadence?: AdminManagerReviewCadence;
+  periodStart: string;
+  periodEnd: string;
+  dueAt?: string;
+};
+
+export type AdminManagerReviewBatchCreateResponse = {
+  batch: AdminManagerReviewBatch;
+  replyToken: string;
+};
+
+export type AdminManagerReviewOverdueScanResponse = {
+  matchedCount: number;
+  modifiedCount: number;
+  overdueCount: number;
+  scannedAt: string;
+};
+
+export type AdminManagerReviewEmailPreviewResponse = {
+  mode: 'dry_run';
+  sent: false;
+  email: {
+    to: string;
+    subject: string;
+    text: string;
+    html: string;
+  };
+  batch: AdminManagerReviewBatch;
+};
+
+export type AdminManagerReviewEmailSendResponse = {
+  mode: 'disabled' | 'smtp';
+  sent: boolean;
+  reason: string | null;
+  email: AdminManagerReviewEmailPreviewResponse['email'];
+  batch: AdminManagerReviewBatch;
+};
+
+export type AdminManagerReviewBatchResponseRequest = {
+  batchId: string;
+  responseStatus: 'ok' | 'not_ok';
+  responseText?: string;
+};
+
+export type AdminManagerReviewBatchResponseResponse = {
+  batch: AdminManagerReviewBatch;
+};
+
+export type ManagerReviewPublicBatchRequest = {
+  batchId: string;
+  token: string;
+};
+
+export type ManagerReviewPublicBatchResponse = {
+  batch: AdminManagerReviewBatch;
+};
+
+export type ManagerReviewPublicBatchItemsRequest = ManagerReviewPublicBatchRequest & {
+  cursor?: string;
+  limit?: number;
+};
+
+export type ManagerReviewPublicBatchItemsResponse = AdminManagerReviewBatchItemsListResponse;
+
+export type ManagerReviewPublicResponseRequest = ManagerReviewPublicBatchRequest & {
+  responseStatus: 'ok' | 'not_ok';
+  responseText?: string;
+};
+
+export type ManagerReviewPublicResponseResponse = {
+  batch: AdminManagerReviewBatch;
+};
+
+export type AdminDepartmentCreateRequest = {
+  code: string;
+  name: string;
+  description?: string | null;
+  parentDepartmentId?: string | null;
+  managerUserId?: string | null;
+  enabled?: boolean;
+  sortOrder?: number;
+};
+
+export type AdminDepartmentUpdateRequest = {
+  departmentId: string;
+  name?: string;
+  description?: string | null;
+  parentDepartmentId?: string | null;
+  managerUserId?: string | null;
+  enabled?: boolean;
+  sortOrder?: number;
+};
+
+export type AdminQuotaPeriodStatus = 'draft' | 'active' | 'closed';
+export type AdminQuotaAccountScopeType = 'company' | 'department' | 'user';
+export type AdminQuotaLedgerEntryType =
+  | 'allocation'
+  | 'grant'
+  | 'usage'
+  | 'refund'
+  | 'adjustment'
+  | 'warning'
+  | 'block';
+export type AdminQuotaLedgerSourceType =
+  | 'transaction'
+  | 'admin_action'
+  | 'manager_action'
+  | 'system';
+export type AdminQuotaAllocationStatus = 'active' | 'replaced' | 'cancelled';
+export type AdminQuotaGrantStatus = 'requested' | 'approved' | 'rejected' | 'cancelled';
+
+export type AdminQuotaPeriod = {
+  id: string;
+  periodKey: string;
+  timezone: string;
+  periodStart: string;
+  periodEnd: string;
+  status: AdminQuotaPeriodStatus;
+  billingDay: number | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+export type AdminQuotaAccount = {
+  id: string;
+  periodId: string;
+  scopeType: AdminQuotaAccountScopeType;
+  scopeId: string | null;
+  scopeLabel?: string | null;
+  scopeSecondaryLabel?: string | null;
+  department?: AdminDepartmentSummary | null;
+  parentAccountId: string | null;
+  baseAllocatedCredits: number;
+  extraGrantedCredits: number;
+  usedCredits: number;
+  reservedCredits: number;
+  remainingCredits: number;
+  limitCredits?: number;
+  allocatedLimitCredits?: number;
+  allocatableLimitCredits?: number;
+  usableRemainingCredits?: number;
+  warningThresholds: number[];
+  hardLimitEnabled: boolean;
+  bufferCredits: number;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+export type AdminQuotaAllocation = {
+  id: string;
+  periodId: string;
+  fromAccountId: string;
+  toAccountId: string;
+  amount: number;
+  status: AdminQuotaAllocationStatus;
+  reason: string;
+  actorUserId: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+export type AdminQuotaGrant = {
+  id: string;
+  periodId: string;
+  targetAccountId: string;
+  requestedByUserId: string | null;
+  approvedByUserId: string | null;
+  amount: number;
+  reason: string;
+  status: AdminQuotaGrantStatus;
+  expiresAt: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+export type AdminQuotaLedgerEntry = {
+  id: string;
+  periodId: string;
+  accountId: string;
+  account?: AdminQuotaAccount | null;
+  counterpartyAccountId: string | null;
+  counterpartyAccount?: AdminQuotaAccount | null;
+  entryType: AdminQuotaLedgerEntryType;
+  amount: number;
+  balanceAfter: number;
+  sourceType: AdminQuotaLedgerSourceType;
+  sourceId: string | null;
+  allocation?: {
+    fromAccount: AdminQuotaAccount | null;
+    toAccount: AdminQuotaAccount | null;
+  } | null;
+  reason: string;
+  actorUserId: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+export type AdminQuotaPeriodsListParams = {
+  status?: AdminQuotaPeriodStatus | 'all';
+};
+
+export type AdminQuotaPeriodsListResponse = {
+  periods: AdminQuotaPeriod[];
+};
+
+export type AdminQuotaPeriodCreateRequest = {
+  year: number;
+  month?: number;
+  createFullYear?: boolean;
+  timezone?: string;
+  companyCredits: number;
+  templatePeriodId?: string | null;
+};
+
+export type AdminQuotaPeriodCreateResponse = {
+  period: AdminQuotaPeriod;
+  companyAccount: AdminQuotaAccount;
+  periods?: AdminQuotaPeriod[];
+  companyAccounts?: AdminQuotaAccount[];
+};
+
+export type AdminQuotaAccountsListParams = {
+  periodId?: string;
+  scopeType?: AdminQuotaAccountScopeType | 'all';
+};
+
+export type AdminQuotaAccountsListResponse = {
+  accounts: AdminQuotaAccount[];
+};
+
+export type AdminQuotaAllocationCreateRequest = {
+  periodId: string;
+  fromAccountId: string;
+  scopeType: Exclude<AdminQuotaAccountScopeType, 'company'>;
+  scopeId: string;
+  amount: number;
+  reason?: string;
+};
+
+export type AdminQuotaAllocationCreateResponse = {
+  allocation: AdminQuotaAllocation;
+  fromAccount: AdminQuotaAccount;
+  toAccount: AdminQuotaAccount;
+};
+
+export type AdminQuotaGrantCreateRequest = {
+  periodId: string;
+  targetAccountId: string;
+  amount: number;
+  reason: string;
+  expiresAt?: string;
+};
+
+export type AdminQuotaGrantCreateResponse = {
+  grant: AdminQuotaGrant;
+  account: AdminQuotaAccount;
+};
+
+export type AdminQuotaGrantsListParams = {
+  cursor?: string;
+  limit?: number;
+  periodId?: string;
+  targetAccountId?: string;
+  status?: AdminQuotaGrantStatus | 'all';
+};
+
+export type AdminQuotaGrantsListResponse = {
+  grants: AdminQuotaGrant[];
+  nextCursor: string | null;
+};
+
+export type AdminQuotaGrantRequestCreateResponse = {
+  grant: AdminQuotaGrant;
+};
+
+export type AdminQuotaGrantDecisionRequest = {
+  grantId: string;
+  reason?: string;
+};
+
+export type AdminQuotaGrantDecisionResponse = {
+  grant: AdminQuotaGrant;
+  account?: AdminQuotaAccount;
+};
+
+export type AdminQuotaLedgerListParams = {
+  cursor?: string;
+  limit?: number;
+  periodId?: string;
+  accountId?: string;
+  entryType?: AdminQuotaLedgerEntryType | 'all';
+  createdAfter?: string;
+  createdBefore?: string;
+};
+
+export type AdminQuotaLedgerListResponse = {
+  ledger: AdminQuotaLedgerEntry[];
   nextCursor: string | null;
 };
 
@@ -125,6 +598,8 @@ export type AdminUserDetail = AdminUserSummary & {
     startingCredits: number | null;
   } | null;
   planAssignedAt: string | null;
+  department: AdminDepartmentSummary | null;
+  departmentAssignedAt: string | null;
   balance: {
     tokenCredits: number;
     updatedAt: string | null;
@@ -156,6 +631,18 @@ export type AdminUserPlanAssignmentResponse = {
     slug: string;
   } | null;
   assignedAt: string | null;
+};
+
+export type AdminUserDepartmentAssignmentRequest = {
+  userId: string;
+  departmentId?: string | null;
+  quotaPeriodId?: string | null;
+};
+
+export type AdminUserDepartmentAssignmentResponse = {
+  userId: string;
+  department: AdminDepartmentSummary | null;
+  departmentAssignedAt: string | null;
 };
 
 export type AdminProvisioningSource = 'plan_assignment_auto_seed' | 'admin_manual_apply';
@@ -202,6 +689,7 @@ export type AdminUserRoleAssignmentResponse = {
 export type AdminTransactionsListParams = {
   cursor?: string;
   limit?: number;
+  departmentId?: string;
   userId?: string;
   model?: string;
   context?: string;
@@ -244,6 +732,30 @@ export type AdminUsageSummaryResponse = {
   totalReadTokens: number;
   newestTransactionAt: string | null;
   oldestTransactionAt: string | null;
+};
+
+export type AdminUsageMemberItem = {
+  userId: string;
+  userEmail: string | null;
+  userName: string | null;
+  transactionCount: number;
+  totalTokenValue: number;
+  totalRawAmount: number;
+  totalInputTokens: number;
+  totalWriteTokens: number;
+  totalReadTokens: number;
+  totalTokens: number;
+  newestTransactionAt: string | null;
+};
+
+export type AdminUsageMembersResponse = {
+  members: AdminUsageMemberItem[];
+  nextCursor: string | null;
+};
+
+export type AdminUsageExportCountResponse = {
+  count: number;
+  limit: number;
 };
 
 export type AdminChannelInventoryItem = {

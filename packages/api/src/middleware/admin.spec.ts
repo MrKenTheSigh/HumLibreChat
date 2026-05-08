@@ -1,6 +1,6 @@
 import { logger } from '@librechat/data-schemas';
 import { SystemRoles } from 'librechat-data-provider';
-import { requireAdmin } from './admin';
+import { requireAdmin, requireAdminDataAccess } from './admin';
 import type { Response } from 'express';
 import type { ServerRequest } from '~/types/http';
 
@@ -136,5 +136,69 @@ describe('requireAdmin middleware', () => {
       expect(logger.warn).not.toHaveBeenCalled();
       expect(logger.debug).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('requireAdminDataAccess middleware', () => {
+  let mockReq: Partial<ServerRequest>;
+  let mockRes: Partial<Response>;
+  let mockNext: jest.Mock;
+  let jsonMock: jest.Mock;
+  let statusMock: jest.Mock;
+
+  beforeEach(() => {
+    jsonMock = jest.fn();
+    statusMock = jest.fn().mockReturnValue({ json: jsonMock });
+
+    mockReq = {};
+    mockRes = {
+      status: statusMock,
+    };
+    mockNext = jest.fn();
+
+    (logger.warn as jest.Mock).mockClear();
+    (logger.debug as jest.Mock).mockClear();
+  });
+
+  it('returns 401 when no user is present', () => {
+    requireAdminDataAccess(mockReq as ServerRequest, mockRes as Response, mockNext);
+
+    expect(statusMock).toHaveBeenCalledWith(401);
+    expect(jsonMock).toHaveBeenCalledWith({
+      error: 'Authentication required',
+      error_code: 'AUTHENTICATION_REQUIRED',
+    });
+    expect(mockNext).not.toHaveBeenCalled();
+  });
+
+  it.each([SystemRoles.ADMIN, SystemRoles.AUDITOR, SystemRoles.MANAGER])(
+    'allows %s',
+    (role) => {
+      mockReq.user = {
+        email: `${role.toLowerCase()}@test.com`,
+        role,
+      } as ServerRequest['user'];
+
+      requireAdminDataAccess(mockReq as ServerRequest, mockRes as Response, mockNext);
+
+      expect(mockNext).toHaveBeenCalledTimes(1);
+      expect(statusMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it('returns 403 for normal users', () => {
+    mockReq.user = {
+      email: 'user@test.com',
+      role: SystemRoles.USER,
+    } as ServerRequest['user'];
+
+    requireAdminDataAccess(mockReq as ServerRequest, mockRes as Response, mockNext);
+
+    expect(statusMock).toHaveBeenCalledWith(403);
+    expect(jsonMock).toHaveBeenCalledWith({
+      error: 'Access denied: Admin data access role required',
+      error_code: 'ADMIN_DATA_ACCESS_REQUIRED',
+    });
+    expect(mockNext).not.toHaveBeenCalled();
   });
 });

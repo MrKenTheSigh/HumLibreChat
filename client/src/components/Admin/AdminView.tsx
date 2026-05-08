@@ -3,8 +3,13 @@ import {
   BarChart3,
   ArrowLeft,
   Blocks,
+  Building2,
   ChevronLeft,
   ChevronRight,
+  ClipboardList,
+  Coins,
+  ClipboardCheck,
+  Network,
   Layers3,
   MessagesSquare,
   Shield,
@@ -21,6 +26,7 @@ type NavItem = {
   icon: typeof Users;
   labelKey: TranslationKeys;
   to: string;
+  roles?: SystemRoles[];
 };
 
 type NavGroup = {
@@ -39,11 +45,18 @@ const navItemClassName = ({ isActive, isCollapsed }: { isActive: boolean; isColl
       : 'text-text-secondary hover:text-text-primary',
   );
 
-const navGroups: NavGroup[] = [
+const adminDataRoles = new Set<string>([
+  SystemRoles.ADMIN,
+  SystemRoles.AUDITOR,
+  SystemRoles.MANAGER,
+]);
+
+const allNavGroups: NavGroup[] = [
   {
     headingKey: 'com_ui_admin_people',
     items: [
       { icon: Users, labelKey: 'com_ui_admin_users', to: '/d/admin/users' },
+      { icon: Building2, labelKey: 'com_ui_admin_departments', to: '/d/admin/departments' },
       { icon: ShieldCheck, labelKey: 'com_ui_admin_roles', to: '/d/admin/roles' },
     ],
   },
@@ -52,6 +65,7 @@ const navGroups: NavGroup[] = [
     items: [
       { icon: Layers3, labelKey: 'com_ui_admin_plans', to: '/d/admin/plans' },
       { icon: Blocks, labelKey: 'com_ui_admin_channels', to: '/d/admin/channels' },
+      { icon: Coins, labelKey: 'com_ui_admin_quotas', to: '/d/admin/quotas' },
     ],
   },
   {
@@ -63,6 +77,29 @@ const navGroups: NavGroup[] = [
         to: '/d/admin/conversations',
       },
       { icon: BarChart3, labelKey: 'com_ui_admin_usage', to: '/d/admin/usage' },
+      {
+        icon: ClipboardCheck,
+        labelKey: 'com_ui_admin_manager_reviews',
+        to: '/d/admin/manager-reviews',
+        roles: [SystemRoles.ADMIN],
+      },
+      {
+        icon: ClipboardList,
+        labelKey: 'com_ui_admin_audit_events',
+        to: '/d/admin/activity-logs',
+        roles: [SystemRoles.ADMIN, SystemRoles.AUDITOR],
+      },
+    ],
+  },
+  {
+    headingKey: 'com_ui_admin_experiments',
+    items: [
+      {
+        icon: Network,
+        labelKey: 'com_ui_admin_org_graph',
+        to: '/d/admin/org-graph',
+        roles: [SystemRoles.ADMIN],
+      },
     ],
   },
 ];
@@ -94,6 +131,22 @@ export default function AdminView() {
   }
 
   if (user?.role !== SystemRoles.ADMIN) {
+    if (!adminDataRoles.has(user?.role ?? '')) {
+      return <Navigate to="/c/new" replace={true} />;
+    }
+  }
+
+  const userRole = user?.role as SystemRoles | undefined;
+  const navGroups = (user?.role === SystemRoles.ADMIN ? allNavGroups : allNavGroups.slice(2))
+    .map((group) => ({
+      ...group,
+      items: group.items.filter(
+        (item) => item.roles == null || item.roles.includes(userRole as SystemRoles),
+      ),
+    }))
+    .filter((group) => group.items.length > 0);
+
+  if (navGroups.length === 0) {
     return <Navigate to="/c/new" replace={true} />;
   }
 

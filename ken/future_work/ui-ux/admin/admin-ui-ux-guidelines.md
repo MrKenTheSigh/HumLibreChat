@@ -55,7 +55,7 @@ This document captures the working rules established while rebuilding the `Users
 
 ## Formatting
 
-- Standardize admin timestamps as `yyyy-MM-dd HH:mm:ss`.
+- Standardize admin date display as `yyyy/MM/dd`; use `yyyy/MM/dd HH:mm:ss` when time is needed.
 - Keep loading, empty, error, and locked states visually bounded.
 
 ## Controls
@@ -63,3 +63,4 @@ This document captures the working rules established while rebuilding the `Users
 - On the same page, comparable actions should use the same button style.
 - Reserve stronger danger styling for truly destructive actions.
 - Avoid mixing plain text links, bordered buttons, and branded buttons for equivalent operations in the same surface.
+- Admin date and datetime inputs should use the shared admin date picker pattern already used by Manager Reviews and Activity Logs. Do not introduce native browser date inputs or a page-local picker unless there is a clear reason to diverge.

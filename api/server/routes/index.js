@@ -2,13 +2,18 @@ const accessPermissions = require('./accessPermissions');
 const assistants = require('./assistants');
 const categories = require('./categories');
 const adminAuth = require('./admin/auth');
+const adminActivityLogs = require('./admin/activity-logs');
 const adminChannelInventory = require('./admin/channelInventory');
 const adminChannels = require('./admin/channels');
 const adminPlans = require('./admin/plans');
+const adminQuotas = require('./admin/quotas');
 const adminRoles = require('./admin/roles');
+const adminManagerReviews = require('./admin/manager-reviews');
 const adminUsers = require('./admin/users');
 const adminConversations = require('./admin/conversations');
+const adminDepartments = require('./admin/departments');
 const adminUsage = require('./admin/usage');
+const managerReviews = require('./manager-reviews');
 const endpoints = require('./endpoints');
 const staticRoute = require('./static');
 const messages = require('./messages');
@@ -38,13 +43,18 @@ module.exports = {
   mcp,
   auth,
   adminAuth,
+  adminActivityLogs,
   adminChannelInventory,
   adminChannels,
   adminPlans,
+  adminQuotas,
   adminRoles,
+  adminManagerReviews,
   adminUsers,
   adminConversations,
+  adminDepartments,
   adminUsage,
+  managerReviews,
   keys,
   apiKeys,
   user,

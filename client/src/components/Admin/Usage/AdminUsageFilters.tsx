@@ -1,13 +1,22 @@
 import type { ChangeEvent } from 'react';
 import { useLocalize } from '~/hooks';
+import AdminDateTimePicker from '../AdminDateTimePicker';
 
 type AdminUsageFiltersProps = {
+  departmentId: string;
+  canSelectDepartment: boolean;
+  departments: Array<{
+    id: string;
+    code: string;
+    name: string;
+  }>;
   userId: string;
   model: string;
   context: string;
   tokenType: 'all' | 'prompt' | 'completion' | 'credits';
   dateFrom: string;
   dateTo: string;
+  onDepartmentIdChange: (value: string) => void;
   onUserIdChange: (value: string) => void;
   onModelChange: (value: string) => void;
   onContextChange: (value: string) => void;
@@ -24,12 +33,16 @@ const tokenTypeOptions: Array<'all' | 'prompt' | 'completion' | 'credits'> = [
 ];
 
 export default function AdminUsageFilters({
+  departmentId,
+  canSelectDepartment,
+  departments,
   userId,
   model,
   context,
   tokenType,
   dateFrom,
   dateTo,
+  onDepartmentIdChange,
   onUserIdChange,
   onModelChange,
   onContextChange,
@@ -45,6 +58,21 @@ export default function AdminUsageFilters({
 
   return (
     <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+      {canSelectDepartment ? (
+        <select
+          value={departmentId}
+          onChange={(event) => onDepartmentIdChange(event.target.value)}
+          className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
+          aria-label={localize('com_ui_admin_department')}
+        >
+          <option value="">{localize('com_ui_all_proper')}</option>
+          {departments.map((department) => (
+            <option key={department.id} value={department.id}>
+              {department.code} - {department.name}
+            </option>
+          ))}
+        </select>
+      ) : null}
       <input
         type="text"
         value={userId}
@@ -80,19 +108,15 @@ export default function AdminUsageFilters({
           </option>
         ))}
       </select>
-      <input
-        type="date"
+      <AdminDateTimePicker
         value={dateFrom}
-        onChange={handleChange(onDateFromChange)}
-        className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
-        aria-label={localize('com_ui_admin_date_from')}
+        onChange={onDateFromChange}
+        ariaLabel={localize('com_ui_admin_date_from')}
       />
-      <input
-        type="date"
+      <AdminDateTimePicker
         value={dateTo}
-        onChange={handleChange(onDateToChange)}
-        className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
-        aria-label={localize('com_ui_admin_date_to')}
+        onChange={onDateToChange}
+        ariaLabel={localize('com_ui_admin_date_to')}
       />
     </div>
   );

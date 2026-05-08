@@ -29,6 +29,19 @@ import { createAccessRoleModel } from './accessRole';
 import { createAdminPlanModel } from './adminPlan';
 import { createAclEntryModel } from './aclEntry';
 import { createGroupModel } from './group';
+import { createDepartmentModel } from './department';
+import { createActivityLogModel } from './activityLog';
+import {
+  createManagerReviewBatchModel,
+  createManagerReviewItemModel,
+} from './managerReview';
+import {
+  createQuotaAccountModel,
+  createQuotaAllocationModel,
+  createQuotaGrantModel,
+  createQuotaLedgerEntryModel,
+  createQuotaPeriodModel,
+} from './quota';
 
 /**
  * Creates all database models for all collections
@@ -66,5 +79,14 @@ export function createModels(mongoose: typeof import('mongoose')) {
     AccessRole: createAccessRoleModel(mongoose),
     AclEntry: createAclEntryModel(mongoose),
     Group: createGroupModel(mongoose),
+    Department: createDepartmentModel(mongoose),
+    ActivityLog: createActivityLogModel(mongoose),
+    ManagerReviewBatch: createManagerReviewBatchModel(mongoose),
+    ManagerReviewItem: createManagerReviewItemModel(mongoose),
+    QuotaPeriod: createQuotaPeriodModel(mongoose),
+    QuotaAccount: createQuotaAccountModel(mongoose),
+    QuotaLedgerEntry: createQuotaLedgerEntryModel(mongoose),
+    QuotaAllocation: createQuotaAllocationModel(mongoose),
+    QuotaGrant: createQuotaGrantModel(mongoose),
   };
 }

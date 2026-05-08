@@ -1,6 +1,7 @@
 export { default as actionSchema } from './action';
 export { default as adminChannelSchema } from './adminChannel';
 export { default as adminPlanSchema } from './adminPlan';
+export { default as activityLogSchema } from './activityLog';
 export { default as agentSchema } from './agent';
 export { default as agentApiKeySchema } from './agentApiKey';
 export { default as agentCategorySchema } from './agentCategory';
@@ -10,6 +11,7 @@ export { default as bannerSchema } from './banner';
 export { default as categoriesSchema } from './categories';
 export { default as conversationTagSchema } from './conversationTag';
 export { default as convoSchema } from './convo';
+export { default as departmentSchema } from './department';
 export { default as fileSchema } from './file';
 export { default as keySchema } from './key';
 export { default as messageSchema } from './message';
@@ -27,3 +29,14 @@ export { default as transactionSchema } from './transaction';
 export { default as userSchema } from './user';
 export { default as memorySchema } from './memory';
 export { default as groupSchema } from './group';
+export {
+  managerReviewBatchSchema,
+  managerReviewItemSchema,
+} from './managerReview';
+export {
+  quotaAccountSchema,
+  quotaAllocationSchema,
+  quotaGrantSchema,
+  quotaLedgerEntrySchema,
+  quotaPeriodSchema,
+} from './quota';

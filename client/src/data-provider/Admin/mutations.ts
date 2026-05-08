@@ -15,6 +15,8 @@ export const useAddAdminUserBalanceMutation = (): UseMutationResult<
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries([QueryKeys.adminUser, variables.userId]);
       queryClient.invalidateQueries([QueryKeys.adminUsers]);
+      queryClient.invalidateQueries([QueryKeys.adminQuotaAccounts]);
+      queryClient.invalidateQueries([QueryKeys.adminQuotaLedger]);
     },
   });
 };
@@ -30,6 +32,90 @@ export const useCreateAdminUserMutation = (): UseMutationResult<
   return useMutation((variables) => dataService.createAdminUser(variables), {
     onSuccess: () => {
       queryClient.invalidateQueries([QueryKeys.adminUsers]);
+    },
+  });
+};
+
+export const useCreateAdminManagerReviewBatchMutation = (): UseMutationResult<
+  t.AdminManagerReviewBatchCreateResponse,
+  t.TError | undefined,
+  t.AdminManagerReviewBatchCreateRequest,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+
+  return useMutation((variables) => dataService.createAdminManagerReviewBatch(variables), {
+    onSuccess: () => {
+      queryClient.invalidateQueries([QueryKeys.adminManagerReviewBatches]);
+    },
+  });
+};
+
+export const usePreviewAdminManagerReviewBatchEmailMutation = (): UseMutationResult<
+  t.AdminManagerReviewEmailPreviewResponse,
+  t.TError | undefined,
+  string,
+  unknown
+> => {
+  return useMutation((batchId) => dataService.previewAdminManagerReviewBatchEmail(batchId));
+};
+
+export const useSendAdminManagerReviewBatchEmailMutation = (): UseMutationResult<
+  t.AdminManagerReviewEmailSendResponse,
+  t.TError | undefined,
+  string,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+
+  return useMutation((batchId) => dataService.sendAdminManagerReviewBatchEmail(batchId), {
+    onSuccess: () => {
+      queryClient.invalidateQueries([QueryKeys.adminManagerReviewBatches]);
+    },
+  });
+};
+
+export const useSendAdminManagerReviewBatchReminderEmailMutation = (): UseMutationResult<
+  t.AdminManagerReviewEmailSendResponse,
+  t.TError | undefined,
+  string,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+
+  return useMutation((batchId) => dataService.sendAdminManagerReviewBatchReminderEmail(batchId), {
+    onSuccess: () => {
+      queryClient.invalidateQueries([QueryKeys.adminManagerReviewBatches]);
+    },
+  });
+};
+
+export const useScanAdminManagerReviewBatchesOverdueMutation = (): UseMutationResult<
+  t.AdminManagerReviewOverdueScanResponse,
+  t.TError | undefined,
+  void,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+
+  return useMutation(() => dataService.scanAdminManagerReviewBatchesOverdue(), {
+    onSuccess: () => {
+      queryClient.invalidateQueries([QueryKeys.adminManagerReviewBatches]);
+    },
+  });
+};
+
+export const useSubmitAdminManagerReviewBatchResponseMutation = (): UseMutationResult<
+  t.AdminManagerReviewBatchResponseResponse,
+  t.TError | undefined,
+  t.AdminManagerReviewBatchResponseRequest,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+
+  return useMutation((variables) => dataService.submitAdminManagerReviewBatchResponse(variables), {
+    onSuccess: () => {
+      queryClient.invalidateQueries([QueryKeys.adminManagerReviewBatches]);
     },
   });
 };
@@ -132,6 +218,22 @@ export const useUpdateAdminUserRoleMutation = (): UseMutationResult<
   });
 };
 
+export const useUpdateAdminUserDepartmentMutation = (): UseMutationResult<
+  t.AdminUserDepartmentAssignmentResponse,
+  t.TError | undefined,
+  t.AdminUserDepartmentAssignmentRequest,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+
+  return useMutation((variables) => dataService.updateAdminUserDepartment(variables), {
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries([QueryKeys.adminUser, variables.userId]);
+      queryClient.invalidateQueries([QueryKeys.adminUsers]);
+    },
+  });
+};
+
 export const useAssignAdminUserPlanMutation = (): UseMutationResult<
   t.AdminUserPlanAssignmentResponse,
   t.TError | undefined,
@@ -208,6 +310,55 @@ export const useCreateAdminPlanMutation = (): UseMutationResult<
   return useMutation((variables) => dataService.createAdminPlan(variables), {
     onSuccess: () => {
       queryClient.invalidateQueries([QueryKeys.adminPlans]);
+    },
+  });
+};
+
+export const useCreateAdminDepartmentMutation = (): UseMutationResult<
+  t.AdminDepartment,
+  t.TError | undefined,
+  t.AdminDepartmentCreateRequest,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+
+  return useMutation((variables) => dataService.createAdminDepartment(variables), {
+    onSuccess: () => {
+      queryClient.invalidateQueries([QueryKeys.adminDepartments]);
+    },
+  });
+};
+
+export const useUpdateAdminDepartmentMutation = (): UseMutationResult<
+  t.AdminDepartment,
+  t.TError | undefined,
+  t.AdminDepartmentUpdateRequest,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+
+  return useMutation((variables) => dataService.updateAdminDepartment(variables), {
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries([QueryKeys.adminDepartments]);
+      queryClient.invalidateQueries([QueryKeys.adminDepartment, variables.departmentId]);
+      queryClient.invalidateQueries([QueryKeys.adminUsers]);
+    },
+  });
+};
+
+export const useDeleteAdminDepartmentMutation = (): UseMutationResult<
+  t.AdminDepartment,
+  t.TError | undefined,
+  string,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+
+  return useMutation((departmentId) => dataService.deleteAdminDepartment(departmentId), {
+    onSuccess: (_data, departmentId) => {
+      queryClient.invalidateQueries([QueryKeys.adminDepartments]);
+      queryClient.invalidateQueries([QueryKeys.adminDepartment, departmentId]);
+      queryClient.invalidateQueries([QueryKeys.adminUsers]);
     },
   });
 };
@@ -296,6 +447,133 @@ export const useDeleteAdminPlanMutation = (): UseMutationResult<
     onSuccess: (_data, planId) => {
       queryClient.invalidateQueries([QueryKeys.adminPlans]);
       queryClient.removeQueries([QueryKeys.adminPlan, planId]);
+    },
+  });
+};
+
+export const useCreateAdminQuotaPeriodMutation = (): UseMutationResult<
+  t.AdminQuotaPeriodCreateResponse,
+  t.TError | undefined,
+  t.AdminQuotaPeriodCreateRequest,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+
+  return useMutation((variables) => dataService.createAdminQuotaPeriod(variables), {
+    onSuccess: () => {
+      queryClient.invalidateQueries([QueryKeys.adminQuotaPeriods]);
+      queryClient.invalidateQueries([QueryKeys.adminQuotaAccounts]);
+      queryClient.invalidateQueries([QueryKeys.adminQuotaLedger]);
+    },
+  });
+};
+
+export const useActivateAdminQuotaPeriodMutation = (): UseMutationResult<
+  t.AdminQuotaPeriod,
+  t.TError | undefined,
+  string,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+
+  return useMutation((periodId) => dataService.activateAdminQuotaPeriod(periodId), {
+    onSuccess: () => {
+      queryClient.invalidateQueries([QueryKeys.adminQuotaPeriods]);
+    },
+  });
+};
+
+export const useCloseAdminQuotaPeriodMutation = (): UseMutationResult<
+  t.AdminQuotaPeriod,
+  t.TError | undefined,
+  string,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+
+  return useMutation((periodId) => dataService.closeAdminQuotaPeriod(periodId), {
+    onSuccess: () => {
+      queryClient.invalidateQueries([QueryKeys.adminQuotaPeriods]);
+    },
+  });
+};
+
+export const useCreateAdminQuotaAllocationMutation = (): UseMutationResult<
+  t.AdminQuotaAllocationCreateResponse,
+  t.TError | undefined,
+  t.AdminQuotaAllocationCreateRequest,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+
+  return useMutation((variables) => dataService.createAdminQuotaAllocation(variables), {
+    onSuccess: () => {
+      queryClient.invalidateQueries([QueryKeys.adminQuotaAccounts]);
+      queryClient.invalidateQueries([QueryKeys.adminQuotaLedger]);
+    },
+  });
+};
+
+export const useCreateAdminQuotaGrantMutation = (): UseMutationResult<
+  t.AdminQuotaGrantCreateResponse,
+  t.TError | undefined,
+  t.AdminQuotaGrantCreateRequest,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+
+  return useMutation((variables) => dataService.createAdminQuotaGrant(variables), {
+    onSuccess: () => {
+      queryClient.invalidateQueries([QueryKeys.adminQuotaAccounts]);
+      queryClient.invalidateQueries([QueryKeys.adminQuotaLedger]);
+      queryClient.invalidateQueries([QueryKeys.adminQuotaGrants]);
+    },
+  });
+};
+
+export const useCreateAdminQuotaGrantRequestMutation = (): UseMutationResult<
+  t.AdminQuotaGrantRequestCreateResponse,
+  t.TError | undefined,
+  t.AdminQuotaGrantCreateRequest,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+
+  return useMutation((variables) => dataService.createAdminQuotaGrantRequest(variables), {
+    onSuccess: () => {
+      queryClient.invalidateQueries([QueryKeys.adminQuotaGrants]);
+    },
+  });
+};
+
+export const useApproveAdminQuotaGrantRequestMutation = (): UseMutationResult<
+  t.AdminQuotaGrantDecisionResponse,
+  t.TError | undefined,
+  t.AdminQuotaGrantDecisionRequest,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+
+  return useMutation((variables) => dataService.approveAdminQuotaGrantRequest(variables), {
+    onSuccess: () => {
+      queryClient.invalidateQueries([QueryKeys.adminQuotaAccounts]);
+      queryClient.invalidateQueries([QueryKeys.adminQuotaLedger]);
+      queryClient.invalidateQueries([QueryKeys.adminQuotaGrants]);
+    },
+  });
+};
+
+export const useRejectAdminQuotaGrantRequestMutation = (): UseMutationResult<
+  t.AdminQuotaGrantDecisionResponse,
+  t.TError | undefined,
+  t.AdminQuotaGrantDecisionRequest,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+
+  return useMutation((variables) => dataService.rejectAdminQuotaGrantRequest(variables), {
+    onSuccess: () => {
+      queryClient.invalidateQueries([QueryKeys.adminQuotaGrants]);
     },
   });
 };

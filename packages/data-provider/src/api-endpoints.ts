@@ -46,19 +46,68 @@ export const userEntitlements = () => `${BASE_URL}/api/user/entitlements`;
 export const balance = () => `${BASE_URL}/api/balance`;
 
 const adminRoot = `${BASE_URL}/api/admin`;
+const adminActivityLogsRoot = `${adminRoot}/activity-logs`;
 const adminUsersRoot = `${adminRoot}/users`;
 const adminConversationsRoot = `${adminRoot}/conversations`;
 const adminChannelInventoryRoot = `${adminRoot}/channel-inventory`;
 const adminChannelsRoot = `${adminRoot}/channels`;
+const adminDepartmentsRoot = `${adminRoot}/departments`;
+const adminManagerReviewsRoot = `${adminRoot}/manager-reviews`;
 const adminPlansRoot = `${adminRoot}/plans`;
+const adminQuotasRoot = `${adminRoot}/quotas`;
 const adminUsageRoot = `${adminRoot}/usage`;
 const adminRolesRoot = `${adminRoot}/roles`;
+const managerReviewsRoot = `${BASE_URL}/api/manager-reviews`;
 
 export const adminUsers = (params: q.AdminUsersListParams) => {
   return `${adminUsersRoot}${buildQuery(params)}`;
 };
 
 export const adminRoles = () => adminRolesRoot;
+
+export const adminActivityLogs = (params: q.AdminActivityLogsListParams) => {
+  return `${adminActivityLogsRoot}${buildQuery(params)}`;
+};
+
+export const adminManagerReviewBatches = (params: q.AdminManagerReviewBatchesListParams) =>
+  `${adminManagerReviewsRoot}/batches${buildQuery(params)}`;
+
+export const adminManagerReviewBatchItems = (
+  batchId: string,
+  params: q.AdminManagerReviewBatchItemsListParams,
+) => `${adminManagerReviewsRoot}/batches/${encodeURIComponent(batchId)}/items${buildQuery(params)}`;
+
+export const adminManagerReviewBatchesOverdueScan = () =>
+  `${adminManagerReviewsRoot}/batches/overdue/scan`;
+
+export const adminManagerReviewBatchEmailPreview = (batchId: string) =>
+  `${adminManagerReviewsRoot}/batches/${encodeURIComponent(batchId)}/email/preview`;
+
+export const adminManagerReviewBatchEmailSend = (batchId: string) =>
+  `${adminManagerReviewsRoot}/batches/${encodeURIComponent(batchId)}/email/send`;
+
+export const adminManagerReviewBatchReminderEmailSend = (batchId: string) =>
+  `${adminManagerReviewsRoot}/batches/${encodeURIComponent(batchId)}/reminder/email/send`;
+
+export const adminManagerReviewBatchResponse = (batchId: string) =>
+  `${adminManagerReviewsRoot}/batches/${encodeURIComponent(batchId)}/response`;
+
+export const managerReviewBatch = (batchId: string, token: string) =>
+  `${managerReviewsRoot}/batches/${encodeURIComponent(batchId)}${buildQuery({ token })}`;
+
+export const managerReviewBatchItems = (
+  batchId: string,
+  params: q.ManagerReviewPublicBatchItemsRequest,
+) => {
+  const { token, ...queryParams } = params;
+  return `${managerReviewsRoot}/batches/${encodeURIComponent(batchId)}/items${buildQuery({
+    token,
+    ...queryParams,
+  })}`;
+};
+
+export const managerReviewBatchResponse = (batchId: string, token: string) =>
+  `${managerReviewsRoot}/batches/${encodeURIComponent(batchId)}/response${buildQuery({ token })}`;
 
 export const adminRole = (roleName: string) =>
   `${adminRolesRoot}/${encodeURIComponent(roleName)}`;
@@ -81,6 +130,9 @@ export const adminUserRole = (userId: string) =>
 export const adminUserPlan = (userId: string) =>
   `${adminUsersRoot}/${encodeURIComponent(userId)}/plan`;
 
+export const adminUserDepartment = (userId: string) =>
+  `${adminUsersRoot}/${encodeURIComponent(userId)}/department`;
+
 export const adminUserApplyStartingCredits = (userId: string) =>
   `${adminUsersRoot}/${encodeURIComponent(userId)}/plan/apply-starting-credits`;
 
@@ -91,9 +143,46 @@ export const adminChannels = () => adminChannelsRoot;
 export const adminChannel = (channelId: string) =>
   `${adminChannelsRoot}/${encodeURIComponent(channelId)}`;
 
+export const adminDepartments = (params: q.AdminDepartmentsListParams) => {
+  return `${adminDepartmentsRoot}${buildQuery(params)}`;
+};
+
+export const adminDepartment = (departmentId: string) =>
+  `${adminDepartmentsRoot}/${encodeURIComponent(departmentId)}`;
+
 export const adminPlans = () => adminPlansRoot;
 
 export const adminPlan = (planId: string) => `${adminPlansRoot}/${encodeURIComponent(planId)}`;
+
+export const adminQuotaPeriods = (params: q.AdminQuotaPeriodsListParams) =>
+  `${adminQuotasRoot}/periods${buildQuery(params)}`;
+
+export const adminQuotaPeriodActivate = (periodId: string) =>
+  `${adminQuotasRoot}/periods/${encodeURIComponent(periodId)}/activate`;
+
+export const adminQuotaPeriodClose = (periodId: string) =>
+  `${adminQuotasRoot}/periods/${encodeURIComponent(periodId)}/close`;
+
+export const adminQuotaAccounts = (params: q.AdminQuotaAccountsListParams) =>
+  `${adminQuotasRoot}/accounts${buildQuery(params)}`;
+
+export const adminQuotaAllocations = () => `${adminQuotasRoot}/allocations`;
+
+export const adminQuotaGrants = () => `${adminQuotasRoot}/grants`;
+
+export const adminQuotaGrantRequests = () => `${adminQuotasRoot}/grants/requests`;
+
+export const adminQuotaGrantApprove = (grantId: string) =>
+  `${adminQuotasRoot}/grants/${encodeURIComponent(grantId)}/approve`;
+
+export const adminQuotaGrantReject = (grantId: string) =>
+  `${adminQuotasRoot}/grants/${encodeURIComponent(grantId)}/reject`;
+
+export const adminQuotaGrantList = (params: q.AdminQuotaGrantsListParams) =>
+  `${adminQuotasRoot}/grants${buildQuery(params)}`;
+
+export const adminQuotaLedger = (params: q.AdminQuotaLedgerListParams) =>
+  `${adminQuotasRoot}/ledger${buildQuery(params)}`;
 
 export const adminConversations = (params: q.AdminConversationListParams) => {
   return `${adminConversationsRoot}${buildQuery(params)}`;
@@ -108,8 +197,23 @@ export const adminConversationMessages = (conversationId: string) =>
 export const adminTransactions = (params: q.AdminTransactionsListParams) =>
   `${adminUsageRoot}/transactions${buildQuery(params)}`;
 
+export const adminTransactionsExport = (params: q.AdminTransactionsListParams) =>
+  `${adminUsageRoot}/transactions/export${buildQuery(params)}`;
+
+export const adminTransactionsExportCount = (params: q.AdminTransactionsListParams) =>
+  `${adminUsageRoot}/transactions/export/count${buildQuery(params)}`;
+
 export const adminUsageSummary = (params: q.AdminTransactionsListParams) =>
   `${adminUsageRoot}/summary${buildQuery(params)}`;
+
+export const adminUsageMembers = (params: q.AdminTransactionsListParams) =>
+  `${adminUsageRoot}/members${buildQuery(params)}`;
+
+export const adminUsageMembersExport = (params: q.AdminTransactionsListParams) =>
+  `${adminUsageRoot}/members/export${buildQuery(params)}`;
+
+export const adminUsageMembersExportCount = (params: q.AdminTransactionsListParams) =>
+  `${adminUsageRoot}/members/export/count${buildQuery(params)}`;
 
 export const userPlugins = () => `${BASE_URL}/api/user/plugins`;
 

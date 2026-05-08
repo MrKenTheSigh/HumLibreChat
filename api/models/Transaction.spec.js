@@ -1,11 +1,13 @@
 const mongoose = require('mongoose');
 const { recordCollectedUsage } = require('@librechat/api');
-const { createMethods } = require('@librechat/data-schemas');
+const { createMethods, createModels } = require('@librechat/data-schemas');
 const { MongoMemoryServer } = require('mongodb-memory-server');
 const { getMultiplier, getCacheMultiplier, premiumTokenValues, tokenValues } = require('./tx');
 const { createTransaction, createStructuredTransaction } = require('./Transaction');
 const { spendTokens, spendStructuredTokens } = require('./spendTokens');
 const { Balance, Transaction } = require('~/db/models');
+
+const { QuotaAccount, QuotaLedgerEntry, QuotaPeriod } = createModels(mongoose);
 
 let mongoServer;
 beforeAll(async () => {
@@ -502,6 +504,51 @@ describe('Transactions Config Tests', () => {
     expect(balance.tokenCredits).toBe(initialBalance);
   });
 
+  test('createTransaction should record quota usage for legacy transaction path', async () => {
+    const userId = new mongoose.Types.ObjectId();
+    const period = await QuotaPeriod.create({
+      periodKey: '2026-04',
+      timezone: 'UTC',
+      periodStart: new Date(Date.now() - 60_000),
+      periodEnd: new Date(Date.now() + 60_000),
+      status: 'active',
+    });
+    const account = await QuotaAccount.create({
+      periodId: period._id,
+      scopeType: 'user',
+      scopeId: userId.toString(),
+      baseAllocatedCredits: 10000,
+      remainingCredits: 10000,
+    });
+
+    await createTransaction({
+      user: userId,
+      conversationId: 'test-conversation-id',
+      model: 'gpt-3.5-turbo',
+      context: 'test',
+      rawAmount: -100,
+      tokenType: 'prompt',
+      transactions: { enabled: true },
+      balance: { enabled: false },
+    });
+
+    const updatedAccount = await QuotaAccount.findById(account._id).lean();
+    const ledgerEntry = await QuotaLedgerEntry.findOne({
+      accountId: account._id,
+      entryType: 'usage',
+    }).lean();
+
+    expect(updatedAccount.usedCredits).toBeGreaterThan(0);
+    expect(updatedAccount.remainingCredits).toBeLessThan(10000);
+    expect(ledgerEntry).toEqual(
+      expect.objectContaining({
+        accountId: account._id,
+        amount: expect.any(Number),
+        sourceType: 'transaction',
+      }),
+    );
+  });
+
   test('createStructuredTransaction should not save when transactions.enabled is false', async () => {
     // Arrange
     const userId = new mongoose.Types.ObjectId();
@@ -564,6 +611,53 @@ describe('Transactions Config Tests', () => {
     expect(transactions[0].readTokens).toBe(-5);
     const balance = await Balance.findOne({ user: userId });
     expect(balance.tokenCredits).toBe(initialBalance);
+  });
+
+  test('createStructuredTransaction should record quota usage for legacy structured path', async () => {
+    const userId = new mongoose.Types.ObjectId();
+    const period = await QuotaPeriod.create({
+      periodKey: '2026-05',
+      timezone: 'UTC',
+      periodStart: new Date(Date.now() - 60_000),
+      periodEnd: new Date(Date.now() + 60_000),
+      status: 'active',
+    });
+    const account = await QuotaAccount.create({
+      periodId: period._id,
+      scopeType: 'user',
+      scopeId: userId.toString(),
+      baseAllocatedCredits: 10000,
+      remainingCredits: 10000,
+    });
+
+    await createStructuredTransaction({
+      user: userId,
+      conversationId: 'test-conversation-id',
+      model: 'claude-3-5-sonnet',
+      context: 'message',
+      tokenType: 'prompt',
+      inputTokens: -10,
+      writeTokens: -100,
+      readTokens: -5,
+      transactions: { enabled: true },
+      balance: { enabled: false },
+    });
+
+    const updatedAccount = await QuotaAccount.findById(account._id).lean();
+    const ledgerEntry = await QuotaLedgerEntry.findOne({
+      accountId: account._id,
+      entryType: 'usage',
+    }).lean();
+
+    expect(updatedAccount.usedCredits).toBeGreaterThan(0);
+    expect(updatedAccount.remainingCredits).toBeLessThan(10000);
+    expect(ledgerEntry).toEqual(
+      expect.objectContaining({
+        accountId: account._id,
+        amount: expect.any(Number),
+        sourceType: 'transaction',
+      }),
+    );
   });
 });
 

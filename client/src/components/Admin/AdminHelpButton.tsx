@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { CircleHelp } from 'lucide-react';
+import type { ReactNode } from 'react';
 import {
   OGDialog,
   OGDialogContent,
@@ -12,13 +13,15 @@ import { useLocalize } from '~/hooks';
 
 type AdminHelpButtonProps = {
   title: TranslationKeys;
-  description: TranslationKeys;
+  description?: TranslationKeys;
+  children?: ReactNode;
   className?: string;
 };
 
 export default function AdminHelpButton({
   title,
   description,
+  children,
   className = '',
 }: AdminHelpButtonProps) {
   const localize = useLocalize();
@@ -44,7 +47,11 @@ export default function AdminHelpButton({
             <OGDialogTitle className="text-lg font-semibold text-text-primary">
               {localize(title)}
             </OGDialogTitle>
-            <p className="mt-4 text-sm leading-6 text-text-secondary">{localize(description)}</p>
+            {children ?? (
+              <p className="mt-4 text-sm leading-6 text-text-secondary">
+                {description ? localize(description) : null}
+              </p>
+            )}
           </OGDialogContent>
         </OGDialogPortal>
       </OGDialog>

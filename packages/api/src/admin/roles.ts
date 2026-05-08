@@ -4,9 +4,12 @@ import { createModels, logger } from '@librechat/data-schemas';
 import { permissionsSchema, roleDefaults, SystemRoles } from 'librechat-data-provider';
 import type { Request, Response } from 'express';
 import type { IRole } from '@librechat/data-schemas';
+import { writeRequestActivityLog } from './activityLogs';
 import { createStatusError } from './utils';
 
 const { Role, User } = createModels(mongoose);
+
+const systemRoleNames = new Set<string>(Object.values(SystemRoles));
 
 const roleNameRegex = /^[A-Z][A-Z0-9_]{1,39}$/;
 
@@ -47,6 +50,18 @@ type RoleRecord = Pick<
   updatedAt?: Date;
 };
 
+function createDefaultRoleRecord(roleName: SystemRoles): RoleRecord {
+  const defaultRole = roleDefaults[roleName];
+  return {
+    name: defaultRole.name,
+    description: defaultRole.description,
+    isSystem: defaultRole.isSystem,
+    isEditable: defaultRole.isEditable,
+    isDeletable: defaultRole.isDeletable,
+    permissions: defaultRole.permissions,
+  } as RoleRecord;
+}
+
 function sanitizeRole(role: RoleRecord | null) {
   if (!role) {
     return null;
@@ -55,13 +70,17 @@ function sanitizeRole(role: RoleRecord | null) {
   const defaultRole = roleDefaults[role.name as keyof typeof roleDefaults];
   const fallbackPermissions = defaultRole?.permissions ?? roleDefaults[SystemRoles.USER].permissions;
   const mergedPermissions = Object.fromEntries(
-    Object.keys(permissionsSchema.shape).map((permissionType) => [
-      permissionType,
-      {
-        ...(fallbackPermissions[permissionType as keyof typeof fallbackPermissions] ?? {}),
-        ...(role.permissions?.[permissionType as keyof typeof role.permissions] ?? {}),
-      },
-    ]),
+    Object.keys(permissionsSchema.shape).map((permissionType) => {
+      const permissionKey = permissionType as keyof typeof fallbackPermissions;
+      return [
+        permissionType,
+        Object.assign(
+          {},
+          fallbackPermissions[permissionKey] ?? {},
+          role.permissions?.[permissionKey as keyof typeof role.permissions] ?? {},
+        ),
+      ];
+    }),
   ) as IRole['permissions'];
 
   return {
@@ -94,15 +113,52 @@ function handleAdminRoleError(error: unknown, res: Response, context: string) {
   return res.status(statusCode).json({ message });
 }
 
+async function writeRoleActivityLog(
+  req: Request,
+  action: string,
+  result: 'success' | 'failure',
+  roleName: string | null,
+  message = '',
+) {
+  await writeRequestActivityLog(req, {
+    resourceType: 'role',
+    resourceId: roleName,
+    action,
+    result,
+    message,
+    metadata: roleName ? { roleName } : {},
+  });
+}
+
 export async function getAdminRoles(_req: Request, res: Response) {
   try {
     const roles = await Role.find({})
       .select('name description isSystem isEditable isDeletable permissions')
       .sort({ isSystem: -1, name: 1 })
       .lean<RoleRecord[]>();
+    const roleMap = new Map<string, RoleRecord>(
+      roles.map((role): [string, RoleRecord] => [role.name, role]),
+    );
+
+    for (const roleName of Object.values(SystemRoles)) {
+      if (!roleMap.has(roleName)) {
+        roleMap.set(roleName, createDefaultRoleRecord(roleName));
+      }
+    }
+
+    const mergedRoles = Array.from(roleMap.values()).sort((left, right) => {
+      const leftSystem = systemRoleNames.has(left.name) ? 0 : 1;
+      const rightSystem = systemRoleNames.has(right.name) ? 0 : 1;
+
+      if (leftSystem !== rightSystem) {
+        return leftSystem - rightSystem;
+      }
+
+      return left.name.localeCompare(right.name);
+    });
 
     return res.status(200).json({
-      roles: roles.map(sanitizeRole),
+      roles: mergedRoles.map(sanitizeRole),
     });
   } catch (error) {
     return handleAdminRoleError(error, res, '[getAdminRoles]');
@@ -115,6 +171,10 @@ export async function getAdminRole(req: Request, res: Response) {
     const role = await Role.findOne({ name: roleName })
       .select('name description isSystem isEditable isDeletable permissions')
       .lean<RoleRecord | null>();
+
+    if (!role && systemRoleNames.has(roleName)) {
+      return res.status(200).json(sanitizeRole(createDefaultRoleRecord(roleName as SystemRoles)));
+    }
 
     if (!role) {
       throw createStatusError(404, 'Role not found');
@@ -130,7 +190,7 @@ export async function createAdminRole(req: Request, res: Response) {
   try {
     const body = adminRoleCreateSchema.parse(req.body);
 
-    if (body.name === SystemRoles.ADMIN || body.name === SystemRoles.USER) {
+    if (systemRoleNames.has(body.name)) {
       throw createStatusError(409, 'System role already exists');
     }
 
@@ -152,8 +212,17 @@ export async function createAdminRole(req: Request, res: Response) {
       .select('name description isSystem isEditable isDeletable permissions')
       .lean<RoleRecord | null>();
 
+    await writeRoleActivityLog(req, 'role.create', 'success', body.name);
+
     return res.status(201).json(sanitizeRole(role));
   } catch (error) {
+    await writeRoleActivityLog(
+      req,
+      'role.create',
+      'failure',
+      typeof req.body?.name === 'string' ? req.body.name.toUpperCase() : null,
+      error instanceof Error ? error.message : 'Failed to create role',
+    );
     return handleAdminRoleError(error, res, '[createAdminRole]');
   }
 }
@@ -184,8 +253,17 @@ export async function updateAdminRole(req: Request, res: Response) {
       .select('name description isSystem isEditable isDeletable permissions')
       .lean<RoleRecord | null>();
 
+    await writeRoleActivityLog(req, 'role.update', 'success', roleName);
+
     return res.status(200).json(sanitizeRole(updatedRole));
   } catch (error) {
+    await writeRoleActivityLog(
+      req,
+      'role.update',
+      'failure',
+      typeof req.params.roleName === 'string' ? req.params.roleName.toUpperCase() : null,
+      error instanceof Error ? error.message : 'Failed to update role',
+    );
     return handleAdminRoleError(error, res, '[updateAdminRole]');
   }
 }
@@ -212,11 +290,20 @@ export async function deleteAdminRole(req: Request, res: Response) {
 
     await Role.deleteOne({ name: roleName });
 
+    await writeRoleActivityLog(req, 'role.delete', 'success', roleName);
+
     return res.status(200).json({
       deleted: true,
       roleName,
     });
   } catch (error) {
+    await writeRoleActivityLog(
+      req,
+      'role.delete',
+      'failure',
+      typeof req.params.roleName === 'string' ? req.params.roleName.toUpperCase() : null,
+      error instanceof Error ? error.message : 'Failed to delete role',
+    );
     return handleAdminRoleError(error, res, '[deleteAdminRole]');
   }
 }

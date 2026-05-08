@@ -42,6 +42,65 @@ export const useGetAdminRolesQuery = (
   );
 };
 
+export const useGetAdminActivityLogsQuery = (
+  params: t.AdminActivityLogsListParams,
+  config?: UseQueryOptions<t.AdminActivityLogsListResponse>,
+): QueryObserverResult<t.AdminActivityLogsListResponse> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+
+  return useQuery<t.AdminActivityLogsListResponse>(
+    [QueryKeys.adminActivityLogs, params],
+    () => dataService.getAdminActivityLogs(params),
+    {
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      refetchOnMount: true,
+      ...config,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled,
+    },
+  );
+};
+
+export const useGetAdminManagerReviewBatchesQuery = (
+  params: t.AdminManagerReviewBatchesListParams,
+  config?: UseQueryOptions<t.AdminManagerReviewBatchesListResponse>,
+): QueryObserverResult<t.AdminManagerReviewBatchesListResponse> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+
+  return useQuery<t.AdminManagerReviewBatchesListResponse>(
+    [QueryKeys.adminManagerReviewBatches, params],
+    () => dataService.getAdminManagerReviewBatches(params),
+    {
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      refetchOnMount: true,
+      ...config,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled,
+    },
+  );
+};
+
+export const useGetAdminManagerReviewBatchItemsQuery = (
+  batchId: string,
+  params: t.AdminManagerReviewBatchItemsListParams,
+  config?: UseQueryOptions<t.AdminManagerReviewBatchItemsListResponse>,
+): QueryObserverResult<t.AdminManagerReviewBatchItemsListResponse> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+
+  return useQuery<t.AdminManagerReviewBatchItemsListResponse>(
+    [QueryKeys.adminManagerReviewBatchItems, batchId, params],
+    () => dataService.getAdminManagerReviewBatchItems(batchId, params),
+    {
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      refetchOnMount: true,
+      ...config,
+      enabled:
+        (config?.enabled ?? true) === true && queriesEnabled && batchId.length > 0,
+    },
+  );
+};
+
 export const useGetAdminUserQuery = (
   userId: string,
   config?: UseQueryOptions<t.AdminUserDetail>,
@@ -118,6 +177,46 @@ export const useGetAdminChannelQuery = (
   );
 };
 
+export const useGetAdminDepartmentsQuery = (
+  params: t.AdminDepartmentsListParams,
+  config?: UseQueryOptions<t.AdminDepartmentsListResponse>,
+): QueryObserverResult<t.AdminDepartmentsListResponse> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+
+  return useQuery<t.AdminDepartmentsListResponse>(
+    [QueryKeys.adminDepartments, params],
+    () => dataService.getAdminDepartments(params),
+    {
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      refetchOnMount: true,
+      ...config,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled,
+    },
+  );
+};
+
+export const useGetAdminDepartmentQuery = (
+  departmentId: string,
+  config?: UseQueryOptions<t.AdminDepartment>,
+): QueryObserverResult<t.AdminDepartment> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+
+  return useQuery<t.AdminDepartment>(
+    [QueryKeys.adminDepartment, departmentId],
+    () => dataService.getAdminDepartment(departmentId),
+    {
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      refetchOnMount: true,
+      retry: false,
+      ...config,
+      enabled:
+        (config?.enabled ?? true) === true && queriesEnabled && departmentId.length > 0,
+    },
+  );
+};
+
 export const useGetAdminPlansQuery = (
   config?: UseQueryOptions<t.AdminPlansListResponse>,
 ): QueryObserverResult<t.AdminPlansListResponse> => {
@@ -152,6 +251,79 @@ export const useGetAdminPlanQuery = (
       retry: false,
       ...config,
       enabled: (config?.enabled ?? true) === true && queriesEnabled && planId.length > 0,
+    },
+  );
+};
+
+export const useGetAdminQuotaPeriodsQuery = (
+  params: t.AdminQuotaPeriodsListParams,
+  config?: UseQueryOptions<t.AdminQuotaPeriodsListResponse>,
+): QueryObserverResult<t.AdminQuotaPeriodsListResponse> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+
+  return useQuery<t.AdminQuotaPeriodsListResponse>(
+    [QueryKeys.adminQuotaPeriods, params],
+    () => dataService.getAdminQuotaPeriods(params),
+    {
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      refetchOnMount: true,
+      ...config,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled,
+    },
+  );
+};
+
+export const useGetAdminQuotaAccountsQuery = (
+  params: t.AdminQuotaAccountsListParams,
+  config?: UseQueryOptions<t.AdminQuotaAccountsListResponse>,
+): QueryObserverResult<t.AdminQuotaAccountsListResponse> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+
+  return useQuery<t.AdminQuotaAccountsListResponse>(
+    [QueryKeys.adminQuotaAccounts, params],
+    () => dataService.getAdminQuotaAccounts(params),
+    {
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      refetchOnMount: true,
+      ...config,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled,
+    },
+  );
+};
+
+export const useGetAdminQuotaLedgerQuery = (
+  params: t.AdminQuotaLedgerListParams,
+  config?: UseQueryOptions<t.AdminQuotaLedgerListResponse>,
+): QueryObserverResult<t.AdminQuotaLedgerListResponse> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+
+  return useQuery<t.AdminQuotaLedgerListResponse>(
+    [QueryKeys.adminQuotaLedger, params],
+    () => dataService.getAdminQuotaLedger(params),
+    {
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      refetchOnMount: true,
+      ...config,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled,
+    },
+  );
+};
+
+export const useGetAdminQuotaGrantsQuery = (
+  params: t.AdminQuotaGrantsListParams,
+  config?: UseQueryOptions<t.AdminQuotaGrantsListResponse>,
+): QueryObserverResult<t.AdminQuotaGrantsListResponse> => {
+  const enabled = config?.enabled ?? true;
+
+  return useQuery<t.AdminQuotaGrantsListResponse>(
+    [QueryKeys.adminQuotaGrants, params],
+    () => dataService.getAdminQuotaGrants(params),
+    {
+      ...config,
+      enabled,
     },
   );
 };
@@ -245,6 +417,25 @@ export const useGetAdminUsageSummaryQuery = (
   return useQuery<t.AdminUsageSummaryResponse>(
     [QueryKeys.adminUsageSummary, params],
     () => dataService.getAdminUsageSummary(params),
+    {
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      refetchOnMount: true,
+      ...config,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled,
+    },
+  );
+};
+
+export const useGetAdminUsageMembersQuery = (
+  params: t.AdminTransactionsListParams,
+  config?: UseQueryOptions<t.AdminUsageMembersResponse>,
+): QueryObserverResult<t.AdminUsageMembersResponse> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+
+  return useQuery<t.AdminUsageMembersResponse>(
+    [QueryKeys.adminUsageMembers, params],
+    () => dataService.getAdminUsageMembers(params),
     {
       refetchOnWindowFocus: false,
       refetchOnReconnect: false,

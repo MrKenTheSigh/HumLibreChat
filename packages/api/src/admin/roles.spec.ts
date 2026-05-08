@@ -1,3 +1,4 @@
+import { roleDefaults, SystemRoles } from 'librechat-data-provider';
 import type { Request, Response } from 'express';
 
 const mockRoleCreate = jest.fn();
@@ -7,6 +8,7 @@ const mockRoleFindById = jest.fn();
 const mockRoleFindOne = jest.fn();
 const mockRoleFindOneAndUpdate = jest.fn();
 const mockUserFindOne = jest.fn();
+const mockActivityLogCreate = jest.fn();
 const mockLoggerError = jest.fn();
 
 jest.mock('@librechat/data-schemas', () => ({
@@ -21,6 +23,9 @@ jest.mock('@librechat/data-schemas', () => ({
     },
     User: {
       findOne: mockUserFindOne,
+    },
+    ActivityLog: {
+      create: mockActivityLogCreate,
     },
   })),
   logger: {
@@ -64,7 +69,7 @@ function createSelectLeanQuery<T>(value: T) {
 
 describe('admin roles handlers', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
   });
 
   it('returns all roles', async () => {
@@ -94,7 +99,7 @@ describe('admin roles handlers', () => {
 
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith({
-      roles: [
+      roles: expect.arrayContaining([
         expect.objectContaining({
           name: 'ADMIN',
           description: 'Built-in administrator role',
@@ -117,8 +122,37 @@ describe('admin roles handlers', () => {
             PROMPTS: expect.objectContaining({ USE: false }),
           }),
         }),
-      ],
+        expect.objectContaining({
+          name: 'AUDITOR',
+          isSystem: true,
+          isDeletable: false,
+        }),
+        expect.objectContaining({
+          name: 'MANAGER',
+          isSystem: true,
+          isDeletable: false,
+        }),
+      ]),
     });
+  });
+
+  it('returns a system role default when it is not stored yet', async () => {
+    mockRoleFindOne.mockReturnValue(createSelectLeanQuery(null));
+
+    const res = createMockResponse();
+    await getAdminRole(
+      { params: { roleName: SystemRoles.MANAGER } } as unknown as Request,
+      res,
+    );
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: SystemRoles.MANAGER,
+        isSystem: true,
+        isDeletable: false,
+      }),
+    );
   });
 
   it('returns one role by name', async () => {
@@ -171,23 +205,7 @@ describe('admin roles handlers', () => {
       body: {
         name: 'analyst',
         description: 'Read only',
-        permissions: {
-          CHAT: { USE: true },
-          PROMPTS: { USE: true, CREATE: false, SHARE: false, SHARE_PUBLIC: false },
-          BOOKMARKS: { USE: true },
-          MEMORIES: { USE: false, CREATE: false, UPDATE: false, READ: false, OPT_OUT: false },
-          AGENTS: { USE: false, CREATE: false, SHARE: false, SHARE_PUBLIC: false },
-          MULTI_CONVO: { USE: false },
-          TEMPORARY_CHAT: { USE: false },
-          RUN_CODE: { USE: false },
-          WEB_SEARCH: { USE: false },
-          PEOPLE_PICKER: { VIEW_USERS: false, VIEW_GROUPS: false, VIEW_ROLES: false },
-          MARKETPLACE: { USE: false },
-          FILE_SEARCH: { USE: false },
-          FILE_CITATIONS: { USE: false },
-          MCP_SERVERS: { USE: false, CREATE: false, SHARE: false, SHARE_PUBLIC: false },
-          REMOTE_AGENTS: { USE: false, CREATE: false, SHARE: false, SHARE_PUBLIC: false },
-        },
+        permissions: roleDefaults[SystemRoles.USER].permissions,
       },
     } as Request;
     const res = createMockResponse();

@@ -135,6 +135,79 @@ export function getAdminRole(roleName: string): Promise<q.AdminRole> {
   return request.get(endpoints.adminRole(roleName));
 }
 
+export function getAdminActivityLogs(
+  params: q.AdminActivityLogsListParams,
+): Promise<q.AdminActivityLogsListResponse> {
+  return request.get(endpoints.adminActivityLogs(params));
+}
+
+export function getAdminManagerReviewBatches(
+  params: q.AdminManagerReviewBatchesListParams,
+): Promise<q.AdminManagerReviewBatchesListResponse> {
+  return request.get(endpoints.adminManagerReviewBatches(params));
+}
+
+export function getAdminManagerReviewBatchItems(
+  batchId: string,
+  params: q.AdminManagerReviewBatchItemsListParams,
+): Promise<q.AdminManagerReviewBatchItemsListResponse> {
+  return request.get(endpoints.adminManagerReviewBatchItems(batchId, params));
+}
+
+export function createAdminManagerReviewBatch(
+  payload: q.AdminManagerReviewBatchCreateRequest,
+): Promise<q.AdminManagerReviewBatchCreateResponse> {
+  return request.post(endpoints.adminManagerReviewBatches({}), payload);
+}
+
+export function scanAdminManagerReviewBatchesOverdue(): Promise<q.AdminManagerReviewOverdueScanResponse> {
+  return request.post(endpoints.adminManagerReviewBatchesOverdueScan());
+}
+
+export function previewAdminManagerReviewBatchEmail(
+  batchId: string,
+): Promise<q.AdminManagerReviewEmailPreviewResponse> {
+  return request.post(endpoints.adminManagerReviewBatchEmailPreview(batchId));
+}
+
+export function sendAdminManagerReviewBatchEmail(
+  batchId: string,
+): Promise<q.AdminManagerReviewEmailSendResponse> {
+  return request.post(endpoints.adminManagerReviewBatchEmailSend(batchId));
+}
+
+export function sendAdminManagerReviewBatchReminderEmail(
+  batchId: string,
+): Promise<q.AdminManagerReviewEmailSendResponse> {
+  return request.post(endpoints.adminManagerReviewBatchReminderEmailSend(batchId));
+}
+
+export function submitAdminManagerReviewBatchResponse(
+  payload: q.AdminManagerReviewBatchResponseRequest,
+): Promise<q.AdminManagerReviewBatchResponseResponse> {
+  const { batchId, ...body } = payload;
+  return request.post(endpoints.adminManagerReviewBatchResponse(batchId), body);
+}
+
+export function getManagerReviewBatchByToken(
+  payload: q.ManagerReviewPublicBatchRequest,
+): Promise<q.ManagerReviewPublicBatchResponse> {
+  return request.get(endpoints.managerReviewBatch(payload.batchId, payload.token));
+}
+
+export function getManagerReviewBatchItemsByToken(
+  payload: q.ManagerReviewPublicBatchItemsRequest,
+): Promise<q.ManagerReviewPublicBatchItemsResponse> {
+  return request.get(endpoints.managerReviewBatchItems(payload.batchId, payload));
+}
+
+export function submitManagerReviewBatchResponseByToken(
+  payload: q.ManagerReviewPublicResponseRequest,
+): Promise<q.ManagerReviewPublicResponseResponse> {
+  const { batchId, token, ...body } = payload;
+  return request.post(endpoints.managerReviewBatchResponse(batchId, token), body);
+}
+
 export function createAdminRole(payload: q.AdminRoleCreateRequest): Promise<q.AdminRole> {
   return request.post(endpoints.adminRoles(), payload);
 }
@@ -187,6 +260,15 @@ export function updateAdminUserRole(
   return request.post(endpoints.adminUserRole(payload.userId), { roleName: payload.roleName });
 }
 
+export function updateAdminUserDepartment(
+  payload: q.AdminUserDepartmentAssignmentRequest,
+): Promise<q.AdminUserDepartmentAssignmentResponse> {
+  return request.post(endpoints.adminUserDepartment(payload.userId), {
+    departmentId: payload.departmentId ?? null,
+    quotaPeriodId: payload.quotaPeriodId ?? null,
+  });
+}
+
 export function assignAdminUserPlan(
   payload: q.AdminUserPlanAssignmentRequest,
 ): Promise<q.AdminUserPlanAssignmentResponse> {
@@ -213,6 +295,33 @@ export function getAdminChannels(): Promise<q.AdminChannelsListResponse> {
 
 export function getAdminChannel(channelId: string): Promise<q.AdminChannel> {
   return request.get(endpoints.adminChannel(channelId));
+}
+
+export function getAdminDepartments(
+  params: q.AdminDepartmentsListParams,
+): Promise<q.AdminDepartmentsListResponse> {
+  return request.get(endpoints.adminDepartments(params));
+}
+
+export function getAdminDepartment(departmentId: string): Promise<q.AdminDepartment> {
+  return request.get(endpoints.adminDepartment(departmentId));
+}
+
+export function createAdminDepartment(
+  payload: q.AdminDepartmentCreateRequest,
+): Promise<q.AdminDepartment> {
+  return request.post(endpoints.adminDepartments({}), payload);
+}
+
+export function updateAdminDepartment(
+  payload: q.AdminDepartmentUpdateRequest,
+): Promise<q.AdminDepartment> {
+  const { departmentId, ...body } = payload;
+  return request.patch(endpoints.adminDepartment(departmentId), body);
+}
+
+export function deleteAdminDepartment(departmentId: string): Promise<q.AdminDepartment> {
+  return request.delete(endpoints.adminDepartment(departmentId));
 }
 
 export function createAdminChannel(payload: q.AdminChannelUpsertRequest): Promise<q.AdminChannel> {
@@ -249,6 +358,78 @@ export function deleteAdminPlan(planId: string): Promise<q.AdminPlanDeleteRespon
   return request.delete(endpoints.adminPlan(planId));
 }
 
+export function getAdminQuotaPeriods(
+  params: q.AdminQuotaPeriodsListParams,
+): Promise<q.AdminQuotaPeriodsListResponse> {
+  return request.get(endpoints.adminQuotaPeriods(params));
+}
+
+export function createAdminQuotaPeriod(
+  payload: q.AdminQuotaPeriodCreateRequest,
+): Promise<q.AdminQuotaPeriodCreateResponse> {
+  return request.post(endpoints.adminQuotaPeriods({}), payload);
+}
+
+export function activateAdminQuotaPeriod(periodId: string): Promise<q.AdminQuotaPeriod> {
+  return request.post(endpoints.adminQuotaPeriodActivate(periodId));
+}
+
+export function closeAdminQuotaPeriod(periodId: string): Promise<q.AdminQuotaPeriod> {
+  return request.post(endpoints.adminQuotaPeriodClose(periodId));
+}
+
+export function getAdminQuotaAccounts(
+  params: q.AdminQuotaAccountsListParams,
+): Promise<q.AdminQuotaAccountsListResponse> {
+  return request.get(endpoints.adminQuotaAccounts(params));
+}
+
+export function createAdminQuotaAllocation(
+  payload: q.AdminQuotaAllocationCreateRequest,
+): Promise<q.AdminQuotaAllocationCreateResponse> {
+  return request.post(endpoints.adminQuotaAllocations(), payload);
+}
+
+export function createAdminQuotaGrant(
+  payload: q.AdminQuotaGrantCreateRequest,
+): Promise<q.AdminQuotaGrantCreateResponse> {
+  return request.post(endpoints.adminQuotaGrants(), payload);
+}
+
+export function getAdminQuotaGrants(
+  params: q.AdminQuotaGrantsListParams,
+): Promise<q.AdminQuotaGrantsListResponse> {
+  return request.get(endpoints.adminQuotaGrantList(params));
+}
+
+export function createAdminQuotaGrantRequest(
+  payload: q.AdminQuotaGrantCreateRequest,
+): Promise<q.AdminQuotaGrantRequestCreateResponse> {
+  return request.post(endpoints.adminQuotaGrantRequests(), payload);
+}
+
+export function approveAdminQuotaGrantRequest(
+  payload: q.AdminQuotaGrantDecisionRequest,
+): Promise<q.AdminQuotaGrantDecisionResponse> {
+  return request.post(endpoints.adminQuotaGrantApprove(payload.grantId), {
+    reason: payload.reason,
+  });
+}
+
+export function rejectAdminQuotaGrantRequest(
+  payload: q.AdminQuotaGrantDecisionRequest,
+): Promise<q.AdminQuotaGrantDecisionResponse> {
+  return request.post(endpoints.adminQuotaGrantReject(payload.grantId), {
+    reason: payload.reason,
+  });
+}
+
+export function getAdminQuotaLedger(
+  params: q.AdminQuotaLedgerListParams,
+): Promise<q.AdminQuotaLedgerListResponse> {
+  return request.get(endpoints.adminQuotaLedger(params));
+}
+
 export function getAdminConversations(
   params: q.AdminConversationListParams,
 ): Promise<q.AdminConversationListResponse> {
@@ -271,10 +452,44 @@ export function getAdminTransactions(
   return request.get(endpoints.adminTransactions(params));
 }
 
+export function exportAdminTransactionsCsv(
+  params: q.AdminTransactionsListParams,
+): Promise<AxiosResponse<Blob>> {
+  return request.getResponse(endpoints.adminTransactionsExport(params), {
+    responseType: 'blob',
+  });
+}
+
+export function getAdminTransactionsExportCount(
+  params: q.AdminTransactionsListParams,
+): Promise<q.AdminUsageExportCountResponse> {
+  return request.get(endpoints.adminTransactionsExportCount(params));
+}
+
 export function getAdminUsageSummary(
   params: q.AdminTransactionsListParams,
 ): Promise<q.AdminUsageSummaryResponse> {
   return request.get(endpoints.adminUsageSummary(params));
+}
+
+export function getAdminUsageMembers(
+  params: q.AdminTransactionsListParams,
+): Promise<q.AdminUsageMembersResponse> {
+  return request.get(endpoints.adminUsageMembers(params));
+}
+
+export function exportAdminUsageMembersCsv(
+  params: q.AdminTransactionsListParams,
+): Promise<AxiosResponse<Blob>> {
+  return request.getResponse(endpoints.adminUsageMembersExport(params), {
+    responseType: 'blob',
+  });
+}
+
+export function getAdminUsageMembersExportCount(
+  params: q.AdminTransactionsListParams,
+): Promise<q.AdminUsageExportCountResponse> {
+  return request.get(endpoints.adminUsageMembersExportCount(params));
 }
 
 export const updateTokenCount = (text: string) => {

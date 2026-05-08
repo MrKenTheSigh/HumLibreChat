@@ -1,4 +1,5 @@
 import { Navigate } from 'react-router-dom';
+import { SystemRoles } from 'librechat-data-provider';
 import {
   PromptsView,
   PromptForm,
@@ -6,19 +7,33 @@ import {
   EmptyPromptPreview,
 } from '~/components/Prompts';
 import {
+  AdminActivityLogsPage,
+  AdminManagerReviewsPage,
+  AdminOrganizationGraphPage,
   AdminChannelForm,
   AdminChannelsPage,
   AdminConversationDetail,
   AdminConversationsPage,
+  AdminDepartmentForm,
+  AdminDepartmentsPage,
   AdminPlanForm,
   AdminPlansPage,
+  AdminQuotasPage,
   AdminRolesPage,
   AdminUsagePage,
   AdminUserDetail,
   AdminUsersPage,
   AdminView,
 } from '~/components/Admin';
+import { useAuthContext } from '~/hooks';
 import DashboardRoute from './Layouts/Dashboard';
+
+function AdminIndexRedirect() {
+  const { user } = useAuthContext();
+  const target = user?.role === SystemRoles.ADMIN ? '/d/admin/users' : '/d/admin/conversations';
+
+  return <Navigate to={target} replace={true} />;
+}
 
 const dashboardRoutes = {
   path: 'd/*',
@@ -73,7 +88,7 @@ const dashboardRoutes = {
       children: [
         {
           index: true,
-          element: <Navigate to="/d/admin/users" replace={true} />,
+          element: <AdminIndexRedirect />,
         },
         {
           path: 'users',
@@ -82,6 +97,20 @@ const dashboardRoutes = {
             {
               path: ':userId',
               element: <AdminUserDetail />,
+            },
+          ],
+        },
+        {
+          path: 'departments',
+          element: <AdminDepartmentsPage />,
+          children: [
+            {
+              path: 'new',
+              element: <AdminDepartmentForm />,
+            },
+            {
+              path: ':departmentId',
+              element: <AdminDepartmentForm />,
             },
           ],
         },
@@ -118,6 +147,10 @@ const dashboardRoutes = {
           ],
         },
         {
+          path: 'quotas',
+          element: <AdminQuotasPage />,
+        },
+        {
           path: 'conversations',
           element: <AdminConversationsPage />,
           children: [
@@ -130,6 +163,18 @@ const dashboardRoutes = {
         {
           path: 'usage',
           element: <AdminUsagePage />,
+        },
+        {
+          path: 'manager-reviews',
+          element: <AdminManagerReviewsPage />,
+        },
+        {
+          path: 'activity-logs',
+          element: <AdminActivityLogsPage />,
+        },
+        {
+          path: 'org-graph',
+          element: <AdminOrganizationGraphPage />,
         },
       ],
     },

@@ -1,4 +1,5 @@
 const { logger } = require('@librechat/data-schemas');
+const { checkQuotaAvailability } = require('@librechat/api');
 const { ViolationTypes } = require('librechat-data-provider');
 const { createAutoRefillTransaction } = require('./Transaction');
 const { logViolation } = require('~/cache');
@@ -132,7 +133,31 @@ const addIntervalToDate = (date, value, unit) => {
 const checkBalance = async ({ req, res, txData }) => {
   const { canSpend, balance, tokenCost } = await checkBalanceRecord(txData);
   if (canSpend) {
-    return true;
+    const quotaAvailability = await checkQuotaAvailability({
+      userId: txData.user,
+      estimatedCredits: tokenCost,
+    });
+    if (quotaAvailability.canSpend) {
+      return true;
+    }
+
+    const type = ViolationTypes.TOKEN_BALANCE;
+    const errorMessage = {
+      type,
+      balance,
+      tokenCost,
+      promptTokens: txData.amount,
+      quotaAccountId: quotaAvailability.accountId,
+      quotaScopeType: quotaAvailability.scopeType,
+      quotaRemainingCredits: quotaAvailability.remainingCredits,
+    };
+
+    if (txData.generations && txData.generations.length > 0) {
+      errorMessage.generations = txData.generations;
+    }
+
+    await logViolation(req, res, type, errorMessage, 0);
+    throw new Error(JSON.stringify(errorMessage));
   }
 
   const type = ViolationTypes.TOKEN_BALANCE;

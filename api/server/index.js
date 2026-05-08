@@ -137,11 +137,16 @@ const startServer = async () => {
   /* API Endpoints */
   app.use('/api/auth', routes.auth);
   app.use('/api/admin', routes.adminAuth);
+  app.use('/api/admin/activity-logs', routes.adminActivityLogs);
   app.use('/api/admin/channel-inventory', routes.adminChannelInventory);
   app.use('/api/admin/channels', routes.adminChannels);
   app.use('/api/admin/plans', routes.adminPlans);
+  app.use('/api/admin/quotas', routes.adminQuotas);
   app.use('/api/admin/roles', routes.adminRoles);
   app.use('/api/admin/users', routes.adminUsers);
+  app.use('/api/admin/departments', routes.adminDepartments);
+  app.use('/api/admin/manager-reviews', routes.adminManagerReviews);
+  app.use('/api/manager-reviews', routes.managerReviews);
   app.use('/api/admin/conversations', routes.adminConversations);
   app.use('/api/admin/usage', routes.adminUsage);
   app.use('/api/actions', routes.actions);

@@ -5,11 +5,21 @@ const mockCreateAdminUser = jest.fn((_req, res) =>
   res.status(201).json({ id: 'user-2', email: 'new@example.com' }),
 );
 const mockGetAdminUser = jest.fn((_req, res) => res.status(200).json({ id: 'user-1' }));
+const mockUpdateAdminUser = jest.fn((_req, res) =>
+  res.status(200).json({ id: 'user-1', name: 'Updated User' }),
+);
 const mockAddAdminUserBalance = jest.fn((_req, res) =>
   res.status(200).json({ userId: 'user-1', tokenCredits: 100, updatedAt: null }),
 );
 const mockUpdateAdminUserRole = jest.fn((_req, res) =>
   res.status(200).json({ userId: 'user-1', role: 'MEMBER' }),
+);
+const mockUpdateAdminUserDepartment = jest.fn((_req, res) =>
+  res.status(200).json({
+    userId: 'user-1',
+    department: { id: 'department-1', code: 'IT', name: 'Information Technology' },
+    departmentAssignedAt: '2026-04-21T00:00:00.000Z',
+  }),
 );
 const mockAssignAdminUserPlan = jest.fn((_req, res) =>
   res.status(200).json({
@@ -59,8 +69,10 @@ jest.mock(
     createAdminUser: (...args) => mockCreateAdminUser(...args),
     getAdminUsers: (...args) => mockGetAdminUsers(...args),
     getAdminUser: (...args) => mockGetAdminUser(...args),
+    updateAdminUser: (...args) => mockUpdateAdminUser(...args),
     addAdminUserBalance: (...args) => mockAddAdminUserBalance(...args),
     updateAdminUserRole: (...args) => mockUpdateAdminUserRole(...args),
+    updateAdminUserDepartment: (...args) => mockUpdateAdminUserDepartment(...args),
     applyAdminUserPlanStartingCredits: (...args) => mockApplyAdminUserPlanStartingCredits(...args),
     assignAdminUserPlan: (...args) => mockAssignAdminUserPlan(...args),
     clearAdminUserPlan: (...args) => mockClearAdminUserPlan(...args),
@@ -165,6 +177,12 @@ describe('Admin Users Routes', () => {
       headers: { 'x-auth': 'true', 'x-admin': 'true' },
     });
     await executeRoute({
+      method: 'PATCH',
+      url: '/user-1',
+      headers: { 'x-auth': 'true', 'x-admin': 'true' },
+      body: { name: 'Updated User' },
+    });
+    await executeRoute({
       method: 'POST',
       url: '/user-1/balance/add',
       headers: { 'x-auth': 'true', 'x-admin': 'true' },
@@ -181,6 +199,12 @@ describe('Admin Users Routes', () => {
       url: '/user-1/role',
       headers: { 'x-auth': 'true', 'x-admin': 'true' },
       body: { roleName: 'MEMBER' },
+    });
+    await executeRoute({
+      method: 'POST',
+      url: '/user-1/department',
+      headers: { 'x-auth': 'true', 'x-admin': 'true' },
+      body: { departmentId: 'department-1' },
     });
     await executeRoute({
       method: 'POST',
@@ -201,9 +225,11 @@ describe('Admin Users Routes', () => {
 
     expect(mockCreateAdminUser).toHaveBeenCalledTimes(1);
     expect(mockGetAdminUser).toHaveBeenCalledTimes(1);
+    expect(mockUpdateAdminUser).toHaveBeenCalledTimes(1);
     expect(mockAddAdminUserBalance).toHaveBeenCalledTimes(1);
     expect(mockSetAdminUserBalance).toHaveBeenCalledTimes(1);
     expect(mockUpdateAdminUserRole).toHaveBeenCalledTimes(1);
+    expect(mockUpdateAdminUserDepartment).toHaveBeenCalledTimes(1);
     expect(mockAssignAdminUserPlan).toHaveBeenCalledTimes(1);
     expect(mockApplyAdminUserPlanStartingCredits).toHaveBeenCalledTimes(1);
     expect(mockClearAdminUserPlan).toHaveBeenCalledTimes(1);

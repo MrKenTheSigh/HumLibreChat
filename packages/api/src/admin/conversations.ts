@@ -11,6 +11,7 @@ import {
   parsePageSize,
   trimSearch,
 } from './utils';
+import { canAccessUserId, resolveAdminDataScope, resolveScopedUserIds } from './scope';
 
 const { Conversation, Message, User } = createModels(mongoose);
 
@@ -112,6 +113,8 @@ function sanitizeMessage(message: AdminMessageItem) {
 
 export async function getAdminConversations(req: Request, res: Response) {
   try {
+    const scope = await resolveAdminDataScope(req);
+    const scopedUserIds = await resolveScopedUserIds(scope);
     const limit = parsePageSize(req.query.limit);
     const search = trimSearch(req.query.search);
     const userId = trimSearch(req.query.userId);
@@ -127,6 +130,10 @@ export async function getAdminConversations(req: Request, res: Response) {
 
     if (userId) {
       filters.push({ user: parseObjectId(userId, 'userId') });
+    }
+
+    if (scopedUserIds != null) {
+      filters.push({ user: { $in: scopedUserIds } });
     }
 
     if (endpoint && endpoint.toLowerCase() !== 'all') {
@@ -195,12 +202,17 @@ export async function getAdminConversations(req: Request, res: Response) {
 
 export async function getAdminConversation(req: Request, res: Response) {
   try {
+    const scope = await resolveAdminDataScope(req);
     const conversationId = req.params.conversationId;
     const conversation = await Conversation.findOne({ conversationId })
       .select('conversationId user title endpoint model createdAt updatedAt')
       .lean<AdminConversationListItem | null>();
 
     if (!conversation) {
+      throw createStatusError(404, 'Conversation not found');
+    }
+
+    if ((await canAccessUserId(scope, conversation.user)) !== true) {
       throw createStatusError(404, 'Conversation not found');
     }
 
@@ -215,12 +227,17 @@ export async function getAdminConversation(req: Request, res: Response) {
 
 export async function getAdminConversationMessages(req: Request, res: Response) {
   try {
+    const scope = await resolveAdminDataScope(req);
     const conversationId = req.params.conversationId;
     const conversation = await Conversation.findOne({ conversationId })
       .select('conversationId user title endpoint model createdAt updatedAt')
       .lean<AdminConversationListItem | null>();
 
     if (!conversation) {
+      throw createStatusError(404, 'Conversation not found');
+    }
+
+    if ((await canAccessUserId(scope, conversation.user)) !== true) {
       throw createStatusError(404, 'Conversation not found');
     }
 

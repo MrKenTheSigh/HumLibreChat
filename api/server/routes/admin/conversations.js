@@ -1,5 +1,5 @@
 const express = require('express');
-const { requireAdmin } = require('@librechat/api');
+const { requireAdminDataAccess } = require('@librechat/api');
 const { requireJwtAuth } = require('~/server/middleware');
 const {
   getAdminConversations,
@@ -9,7 +9,7 @@ const {
 
 const router = express.Router();
 
-router.use(requireJwtAuth, requireAdmin);
+router.use(requireJwtAuth, requireAdminDataAccess);
 
 router.get('/', getAdminConversations);
 router.get('/:conversationId/messages', getAdminConversationMessages);
