@@ -9,6 +9,7 @@ import {
   trimSearch,
 } from './utils';
 import { writeRequestActivityLog } from './activityLogs';
+import { resolveAdminDataScope, resolveScopedDepartmentIds } from './scope';
 
 const { Department, User } = createModels(mongoose);
 
@@ -191,9 +192,15 @@ async function buildDepartmentWrite(input: DepartmentInput | DepartmentUpdateInp
 
 export async function getAdminDepartments(req: Request, res: Response) {
   try {
+    const scope = await resolveAdminDataScope(req);
     const search = trimSearch(req.query.search);
     const enabled = parseOptionalBoolean(req.query.enabled);
     const filters: mongoose.FilterQuery<DepartmentRecord>[] = [];
+    const scopedDepartmentIds = await resolveScopedDepartmentIds(scope);
+
+    if (scopedDepartmentIds != null) {
+      filters.push({ _id: { $in: scopedDepartmentIds } });
+    }
 
     if (search) {
       const regex = new RegExp(search, 'i');

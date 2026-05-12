@@ -12,6 +12,11 @@ import {
   trimSearch,
 } from './utils';
 import { writeRequestActivityLog } from './activityLogs';
+import {
+  resolveAdminDataScope,
+  resolveScopedDepartmentIds,
+  resolveScopedUserIds,
+} from './scope';
 
 const {
   Department,
@@ -20,6 +25,7 @@ const {
   QuotaGrant,
   QuotaLedgerEntry,
   QuotaPeriod,
+  QuotaRequest,
   User,
 } = createModels(mongoose);
 
@@ -72,6 +78,18 @@ const quotaGrantSchema = z.object({
 });
 
 const quotaGrantDecisionSchema = z.object({
+  reason: z.string().trim().max(1000, 'reason is too long').optional().default(''),
+});
+
+const quotaRequestSchema = z.object({
+  periodId: z.string().trim().min(1, 'periodId is required'),
+  targetAccountId: z.string().trim().min(1, 'targetAccountId is required'),
+  sourceAccountId: z.string().trim().min(1, 'sourceAccountId is required').optional(),
+  amount: z.number().positive('amount must be greater than 0'),
+  reason: z.string().trim().min(1, 'reason is required').max(1000, 'reason is too long'),
+});
+
+const quotaRequestDecisionSchema = z.object({
   reason: z.string().trim().max(1000, 'reason is too long').optional().default(''),
 });
 
@@ -185,9 +203,38 @@ type QuotaGrantRecord = {
   updatedAt?: Date;
 };
 
+type QuotaRequestRecord = {
+  _id: mongoose.Types.ObjectId;
+  periodId: mongoose.Types.ObjectId | string;
+  sourceAccountId: mongoose.Types.ObjectId | string;
+  targetAccountId: mongoose.Types.ObjectId | string;
+  requestedByUserId?: mongoose.Types.ObjectId | string | null;
+  reviewedByUserId?: mongoose.Types.ObjectId | string | null;
+  fulfilledAllocationId?: mongoose.Types.ObjectId | string | null;
+  amount: number;
+  reason: string;
+  reviewReason?: string;
+  status: string;
+  requestedAt: Date;
+  reviewedAt?: Date | null;
+  createdAt?: Date;
+  updatedAt?: Date;
+};
+
 type AppliedQuotaGrant = {
   grant: QuotaGrantRecord;
   account: QuotaAccountRecord;
+};
+
+type AppliedQuotaAllocation = {
+  allocation: QuotaAllocationRecord;
+  fromAccount: QuotaAccountRecord;
+  toAccount: QuotaAccountRecord;
+};
+
+type QuotaAccountScopeIds = {
+  visibleAccountIds: Set<string>;
+  managedAccountIds: Set<string>;
 };
 
 type QuotaPeriodDefinition = {
@@ -621,6 +668,40 @@ function sanitizeGrant(grant: QuotaGrantRecord) {
   };
 }
 
+function sanitizeQuotaRequest(
+  request: QuotaRequestRecord,
+  input?: {
+    sourceAccount?: QuotaAccountRecord | null;
+    targetAccount?: QuotaAccountRecord | null;
+    sourceAccountMetadata?: QuotaAccountScopeMetadata;
+    targetAccountMetadata?: QuotaAccountScopeMetadata;
+  },
+) {
+  return {
+    id: request._id.toString(),
+    periodId: request.periodId.toString(),
+    sourceAccountId: request.sourceAccountId.toString(),
+    sourceAccount: input?.sourceAccount
+      ? sanitizeAccount(input.sourceAccount, input.sourceAccountMetadata)
+      : null,
+    targetAccountId: request.targetAccountId.toString(),
+    targetAccount: input?.targetAccount
+      ? sanitizeAccount(input.targetAccount, input.targetAccountMetadata)
+      : null,
+    requestedByUserId: toOptionalId(request.requestedByUserId),
+    reviewedByUserId: toOptionalId(request.reviewedByUserId),
+    fulfilledAllocationId: toOptionalId(request.fulfilledAllocationId),
+    amount: request.amount,
+    reason: request.reason,
+    reviewReason: request.reviewReason ?? '',
+    status: request.status,
+    requestedAt: request.requestedAt.toISOString(),
+    reviewedAt: request.reviewedAt?.toISOString() ?? null,
+    createdAt: request.createdAt?.toISOString() ?? null,
+    updatedAt: request.updatedAt?.toISOString() ?? null,
+  };
+}
+
 function getRequestUserId(req: Request): mongoose.Types.ObjectId | null {
   const user = (req as Request & { user?: { id?: string; _id?: string | mongoose.Types.ObjectId } })
     .user;
@@ -677,11 +758,113 @@ async function findOrCreateAccount(input: {
   return QuotaAccount.findById(created._id).lean<QuotaAccountRecord>().orFail();
 }
 
+async function resolveQuotaAccountScopeIds(req: Request, periodId?: mongoose.Types.ObjectId) {
+  const scope = await resolveAdminDataScope(req);
+  if (scope.type === 'all') {
+    return null;
+  }
+
+  const [departmentIds, userIds] = await Promise.all([
+    resolveScopedDepartmentIds(scope),
+    resolveScopedUserIds(scope),
+  ]);
+  const managedFilters: mongoose.FilterQuery<QuotaAccountRecord>[] = [
+    { scopeType: 'department', scopeId: { $in: (departmentIds ?? []).map((id) => id.toString()) } },
+    { scopeType: 'user', scopeId: { $in: (userIds ?? []).map((id) => id.toString()) } },
+  ];
+  const managedAccounts = await QuotaAccount.find({
+    ...(periodId ? { periodId } : {}),
+    $or: managedFilters,
+  })
+    .select('_id parentAccountId')
+    .lean<QuotaAccountRecord[]>();
+  const managedAccountIds = new Set(managedAccounts.map((account) => account._id.toString()));
+  const visibleAccountIds = new Set(managedAccountIds);
+  const parentAccountIds = managedAccounts
+    .map((account) => account.parentAccountId?.toString())
+    .filter((id): id is string => typeof id === 'string' && id.length > 0);
+
+  for (const parentAccountId of parentAccountIds) {
+    visibleAccountIds.add(parentAccountId);
+  }
+
+  return { visibleAccountIds, managedAccountIds };
+}
+
+function assertQuotaAccountInScope(
+  quotaAccountScopeIds: QuotaAccountScopeIds | null,
+  accountId: mongoose.Types.ObjectId | string,
+  message: string,
+) {
+  if (quotaAccountScopeIds == null) {
+    return;
+  }
+
+  if (!quotaAccountScopeIds.visibleAccountIds.has(accountId.toString())) {
+    throw createStatusError(403, message);
+  }
+}
+
+function assertManagedQuotaAccountInScope(
+  quotaAccountScopeIds: QuotaAccountScopeIds | null,
+  accountId: mongoose.Types.ObjectId | string,
+  message: string,
+) {
+  if (quotaAccountScopeIds == null) {
+    return;
+  }
+
+  if (!quotaAccountScopeIds.managedAccountIds.has(accountId.toString())) {
+    throw createStatusError(403, message);
+  }
+}
+
 async function assertAllocationTargetAllowed(input: {
   fromAccount: QuotaAccountRecord;
   scopeType: 'department' | 'user';
   scopeId: string;
 }) {
+  if (
+    (input.fromAccount.scopeType === 'company' || input.fromAccount.scopeType === 'department') &&
+    input.scopeType === 'department'
+  ) {
+    const department = await Department.findById(input.scopeId)
+      .select('_id parentDepartmentId')
+      .lean<{ _id: mongoose.Types.ObjectId; parentDepartmentId?: mongoose.Types.ObjectId | null } | null>();
+
+    if (!department) {
+      throw createStatusError(404, 'Department not found');
+    }
+
+    if (input.fromAccount.scopeType === 'company') {
+      const parentDepartmentId = department.parentDepartmentId?.toString() ?? null;
+      if (parentDepartmentId == null) {
+        return;
+      }
+
+      const companyRootDepartment = await Department.findOne({ code: COMPANY_DEPARTMENT_CODE })
+        .select('_id')
+        .lean<CompanyRootDepartmentRecord | null>();
+
+      if (
+        (!companyRootDepartment || parentDepartmentId !== companyRootDepartment._id.toString())
+      ) {
+        throw createStatusError(409, 'Cannot allocate company quota to a nested department');
+      }
+
+      return;
+    }
+
+    if (department.parentDepartmentId?.toString() !== input.fromAccount.scopeId) {
+      throw createStatusError(
+        409,
+        'Cannot allocate department quota to a department outside its direct children',
+      );
+    }
+
+    return;
+  }
+
   if (
     (input.fromAccount.scopeType !== 'company' && input.fromAccount.scopeType !== 'department') ||
     input.scopeType !== 'user'
@@ -724,6 +907,123 @@ async function assertAllocationTargetAllowed(input: {
       409,
       'Cannot allocate department quota to a user outside the department',
     );
+  }
+}
+
+async function applyQuotaAllocation(input: {
+  req: Request;
+  periodId: mongoose.Types.ObjectId;
+  fromAccount: QuotaAccountRecord;
+  toAccount: QuotaAccountRecord;
+  amount: number;
+  reason: string;
+  sourceType: 'admin_action' | 'manager_action' | 'system';
+  sourceId?: string | null;
+}) {
+  if (getAccountAllocatableLimitCredits(input.fromAccount) < input.amount) {
+    throw createStatusError(409, 'Insufficient quota credits');
+  }
+
+  const actorUserId = getRequestUserId(input.req);
+  const updatedFromReserved = (input.fromAccount.reservedCredits ?? 0) + input.amount;
+  const updatedFromAllocatable = getAccountLimitCredits(input.fromAccount) - updatedFromReserved;
+  const updatedToBase = (input.toAccount.baseAllocatedCredits ?? 0) + input.amount;
+  const updatedToRemaining =
+    updatedToBase +
+    (input.toAccount.extraGrantedCredits ?? 0) +
+    (input.toAccount.bufferCredits ?? 0) -
+    (input.toAccount.usedCredits ?? 0);
+  const allocation = await QuotaAllocation.create({
+    periodId: input.periodId,
+    fromAccountId: input.fromAccount._id,
+    toAccountId: input.toAccount._id,
+    amount: input.amount,
+    reason: input.reason,
+    actorUserId,
+  });
+  const sourceId = input.sourceId ?? allocation._id.toString();
+
+  await Promise.all([
+    QuotaAccount.updateOne(
+      { _id: input.fromAccount._id },
+      {
+        $set: {
+          reservedCredits: updatedFromReserved,
+          remainingCredits: getAccountUsableRemainingCredits(input.fromAccount),
+        },
+      },
+    ),
+    QuotaAccount.updateOne(
+      { _id: input.toAccount._id },
+      {
+        $set: {
+          baseAllocatedCredits: updatedToBase,
+          remainingCredits: updatedToRemaining,
+        },
+      },
+    ),
+    QuotaLedgerEntry.create({
+      periodId: input.periodId,
+      accountId: input.fromAccount._id,
+      counterpartyAccountId: input.toAccount._id,
+      entryType: 'allocation',
+      amount: -input.amount,
+      balanceAfter: updatedFromAllocatable,
+      sourceType: input.sourceType,
+      sourceId,
+      reason: input.reason,
+      actorUserId,
+    }),
+    QuotaLedgerEntry.create({
+      periodId: input.periodId,
+      accountId: input.toAccount._id,
+      counterpartyAccountId: input.fromAccount._id,
+      entryType: 'allocation',
+      amount: input.amount,
+      balanceAfter: updatedToRemaining,
+      sourceType: input.sourceType,
+      sourceId,
+      reason: input.reason,
+      actorUserId,
+    }),
+  ]);
+
+  const [storedAllocation, storedFromAccount, storedToAccount] = await Promise.all([
+    QuotaAllocation.findById(allocation._id).lean<QuotaAllocationRecord>().orFail(),
+    QuotaAccount.findById(input.fromAccount._id).lean<QuotaAccountRecord>().orFail(),
+    QuotaAccount.findById(input.toAccount._id).lean<QuotaAccountRecord>().orFail(),
+  ]);
+
+  return {
+    allocation: storedAllocation,
+    fromAccount: storedFromAccount,
+    toAccount: storedToAccount,
+  };
+}
+
+function assertQuotaRequestAccounts(input: {
+  periodId: mongoose.Types.ObjectId;
+  sourceAccount: QuotaAccountRecord;
+  targetAccount: QuotaAccountRecord;
+}) {
+  if (input.sourceAccount.periodId.toString() !== input.periodId.toString()) {
+    throw createStatusError(400, 'sourceAccountId is outside the quota period');
+  }
+
+  if (input.targetAccount.periodId.toString() !== input.periodId.toString()) {
+    throw createStatusError(400, 'targetAccountId is outside the quota period');
+  }
+
+  if (input.targetAccount.scopeType === 'company') {
+    throw createStatusError(400, 'Company quota must use admin grant instead of quota request');
+  }
+
+  if (input.sourceAccount._id.toString() === input.targetAccount._id.toString()) {
+    throw createStatusError(400, 'Cannot request quota from the same account');
+  }
+
+  if (input.targetAccount.parentAccountId?.toString() !== input.sourceAccount._id.toString()) {
+    throw createStatusError(409, 'Quota requests must target the parent account');
   }
 }
 
@@ -970,9 +1270,17 @@ export async function getAdminQuotaAccounts(req: Request, res: Response) {
     const periodId = trimSearch(req.query.periodId);
     const scopeType = trimSearch(req.query.scopeType);
     const filters: mongoose.FilterQuery<QuotaAccountRecord>[] = [];
+    const parsedPeriodId = periodId ? parseObjectId(periodId, 'periodId') : undefined;
+    const quotaAccountScopeIds = await resolveQuotaAccountScopeIds(req, parsedPeriodId);
 
-    if (periodId) {
-      filters.push({ periodId: parseObjectId(periodId, 'periodId') });
+    if (parsedPeriodId) {
+      filters.push({ periodId: parsedPeriodId });
+    }
+
+    if (quotaAccountScopeIds != null) {
+      filters.push({
+        _id: { $in: toObjectIds(Array.from(quotaAccountScopeIds.visibleAccountIds)) },
+      });
     }
 
     if (scopeType && scopeType !== 'all') {
@@ -1010,6 +1318,12 @@ export async function createAdminQuotaAllocation(req: Request, res: Response) {
     if (fromAccount.periodId.toString() !== period._id.toString()) {
       throw createStatusError(400, 'fromAccountId is outside the quota period');
     }
+    const quotaAccountScopeIds = await resolveQuotaAccountScopeIds(req, periodId);
+    assertManagedQuotaAccountInScope(
+      quotaAccountScopeIds,
+      fromAccount._id,
+      'fromAccountId is outside the allowed scope',
+    );
 
     if (
       fromAccount.scopeType === input.scopeType &&
@@ -1034,94 +1348,32 @@ export async function createAdminQuotaAllocation(req: Request, res: Response) {
       scopeId: input.scopeId,
       parentAccountId: fromAccount._id,
     });
-    const updatedFromReserved = (fromAccount.reservedCredits ?? 0) + input.amount;
-    const updatedFromAllocatable = getAccountLimitCredits(fromAccount) - updatedFromReserved;
-    const updatedToBase = (toAccount.baseAllocatedCredits ?? 0) + input.amount;
-    const updatedToRemaining =
-      updatedToBase +
-      (toAccount.extraGrantedCredits ?? 0) +
-      (toAccount.bufferCredits ?? 0) -
-      (toAccount.usedCredits ?? 0);
-    const allocation = await QuotaAllocation.create({
+    const appliedAllocation: AppliedQuotaAllocation = await applyQuotaAllocation({
+      req,
       periodId,
-      fromAccountId,
-      toAccountId: toAccount._id,
+      fromAccount,
+      toAccount,
       amount: input.amount,
       reason: input.reason,
-      actorUserId: getRequestUserId(req),
+      sourceType: 'admin_action',
     });
-
-    await Promise.all([
-      QuotaAccount.updateOne(
-        { _id: fromAccount._id },
-        {
-          $set: {
-            reservedCredits: updatedFromReserved,
-            remainingCredits: getAccountUsableRemainingCredits(fromAccount),
-          },
-        },
-      ),
-      QuotaAccount.updateOne(
-        { _id: toAccount._id },
-        {
-          $set: {
-            baseAllocatedCredits: updatedToBase,
-            remainingCredits: updatedToRemaining,
-          },
-        },
-      ),
-      QuotaLedgerEntry.create({
-        periodId,
-        accountId: fromAccount._id,
-        counterpartyAccountId: toAccount._id,
-        entryType: 'allocation',
-        amount: -input.amount,
-        balanceAfter: updatedFromAllocatable,
-        sourceType: 'admin_action',
-        sourceId: allocation._id.toString(),
-        reason: input.reason,
-        actorUserId: getRequestUserId(req),
-      }),
-      QuotaLedgerEntry.create({
-        periodId,
-        accountId: toAccount._id,
-        counterpartyAccountId: fromAccount._id,
-        entryType: 'allocation',
-        amount: input.amount,
-        balanceAfter: updatedToRemaining,
-        sourceType: 'admin_action',
-        sourceId: allocation._id.toString(),
-        reason: input.reason,
-        actorUserId: getRequestUserId(req),
-      }),
-    ]);
 
     await writeQuotaActivityLog(req, {
       action: 'quota_allocation.create',
       resourceType: 'quota_allocation',
-      resourceId: allocation._id.toString(),
+      resourceId: appliedAllocation.allocation._id.toString(),
       metadata: {
         periodId: periodId.toString(),
         fromAccountId: fromAccountId.toString(),
-        toAccountId: toAccount._id.toString(),
+        toAccountId: appliedAllocation.toAccount._id.toString(),
         amount: input.amount,
       },
     });
 
-    const storedToAccount = await QuotaAccount.findById(toAccount._id)
-      .lean<QuotaAccountRecord>()
-      .orFail();
-    const storedFromAccount = await QuotaAccount.findById(fromAccount._id)
-      .lean<QuotaAccountRecord>()
-      .orFail();
-    const storedAllocation = await QuotaAllocation.findById(allocation._id)
-      .lean<QuotaAllocationRecord>()
-      .orFail();
-
     return res.status(201).json({
-      allocation: sanitizeAllocation(storedAllocation),
-      fromAccount: sanitizeAccount(storedFromAccount),
-      toAccount: sanitizeAccount(storedToAccount),
+      allocation: sanitizeAllocation(appliedAllocation.allocation),
+      fromAccount: sanitizeAccount(appliedAllocation.fromAccount),
+      toAccount: sanitizeAccount(appliedAllocation.toAccount),
     });
   } catch (error) {
     return handleQuotaError(error, res, '[createAdminQuotaAllocation]');
@@ -1407,6 +1659,325 @@ export async function rejectAdminQuotaGrantRequest(req: Request, res: Response) 
   }
 }
 
+export async function getAdminQuotaRequests(req: Request, res: Response) {
+  try {
+    const limit = parsePageSize(req.query.limit);
+    const periodId = trimSearch(req.query.periodId);
+    const sourceAccountId = trimSearch(req.query.sourceAccountId);
+    const targetAccountId = trimSearch(req.query.targetAccountId);
+    const status = trimSearch(req.query.status);
+    const cursorFilter = buildCreatedAtCursorFilter<QuotaRequestRecord>(
+      trimSearch(req.query.cursor),
+    );
+    const filters: mongoose.FilterQuery<QuotaRequestRecord>[] = [];
+    const parsedPeriodId = periodId ? parseObjectId(periodId, 'periodId') : undefined;
+    const quotaAccountScopeIds = await resolveQuotaAccountScopeIds(req, parsedPeriodId);
+
+    if (parsedPeriodId) {
+      filters.push({ periodId: parsedPeriodId });
+    }
+
+    if (quotaAccountScopeIds != null) {
+      const visibleAccountObjectIds = toObjectIds(
+        Array.from(quotaAccountScopeIds.visibleAccountIds),
+      );
+      filters.push({
+        $or: [
+          { sourceAccountId: { $in: visibleAccountObjectIds } },
+          { targetAccountId: { $in: visibleAccountObjectIds } },
+        ],
+      });
+    }
+
+    if (sourceAccountId) {
+      filters.push({ sourceAccountId: parseObjectId(sourceAccountId, 'sourceAccountId') });
+    }
+
+    if (targetAccountId) {
+      filters.push({ targetAccountId: parseObjectId(targetAccountId, 'targetAccountId') });
+    }
+
+    if (status && status !== 'all') {
+      if (!['pending', 'approved', 'rejected', 'cancelled'].includes(status)) {
+        throw createStatusError(
+          400,
+          'status must be one of pending, approved, rejected, cancelled, or all',
+        );
+      }
+      filters.push({ status });
+    }
+
+    if (cursorFilter) {
+      filters.push(cursorFilter);
+    }
+
+    const results = await QuotaRequest.find(filters.length > 0 ? { $and: filters } : {})
+      .sort({ createdAt: -1, _id: -1 })
+      .limit(limit + 1)
+      .lean<QuotaRequestRecord[]>();
+    const page = buildPagedResult<QuotaRequestRecord>(results, limit);
+    const accountIds = new Set<string>();
+
+    for (const request of page.items) {
+      accountIds.add(request.sourceAccountId.toString());
+      accountIds.add(request.targetAccountId.toString());
+    }
+
+    const accounts =
+      accountIds.size > 0
+        ? await QuotaAccount.find({ _id: { $in: toObjectIds(Array.from(accountIds)) } }).lean<
+            QuotaAccountRecord[]
+          >()
+        : [];
+    const accountsById = new Map(accounts.map((account) => [account._id.toString(), account]));
+    const accountMetadata = await buildAccountScopeMetadata(accounts);
+
+    return res.status(200).json({
+      requests: page.items.map((request) => {
+        const sourceAccount = accountsById.get(request.sourceAccountId.toString()) ?? null;
+        const targetAccount = accountsById.get(request.targetAccountId.toString()) ?? null;
+
+        return sanitizeQuotaRequest(request, {
+          sourceAccount,
+          targetAccount,
+          sourceAccountMetadata: sourceAccount
+            ? accountMetadata.get(`${sourceAccount.scopeType}:${sourceAccount.scopeId ?? ''}`)
+            : undefined,
+          targetAccountMetadata: targetAccount
+            ? accountMetadata.get(`${targetAccount.scopeType}:${targetAccount.scopeId ?? ''}`)
+            : undefined,
+        });
+      }),
+      nextCursor: page.nextCursor,
+    });
+  } catch (error) {
+    return handleQuotaError(error, res, '[getAdminQuotaRequests]');
+  }
+}
+
+export async function createAdminQuotaRequest(req: Request, res: Response) {
+  try {
+    const input = quotaRequestSchema.parse(req.body);
+    const periodId = parseObjectId(input.periodId, 'periodId');
+    const targetAccountId = parseObjectId(input.targetAccountId, 'targetAccountId');
+    const period = await getPeriodOrThrow(periodId);
+    const targetAccount = await getAccountOrThrow(targetAccountId);
+    const parentAccountId = targetAccount.parentAccountId?.toString();
+    if (!input.sourceAccountId && !parentAccountId) {
+      throw createStatusError(400, 'targetAccountId does not have a parent account');
+    }
+    const sourceAccountId = input.sourceAccountId
+      ? parseObjectId(input.sourceAccountId, 'sourceAccountId')
+      : parseObjectId(parentAccountId as string, 'sourceAccountId');
+    const sourceAccount = await getAccountOrThrow(sourceAccountId);
+
+    assertQuotaRequestAccounts({
+      periodId: period._id,
+      sourceAccount,
+      targetAccount,
+    });
+    const quotaAccountScopeIds = await resolveQuotaAccountScopeIds(req, periodId);
+    assertManagedQuotaAccountInScope(
+      quotaAccountScopeIds,
+      targetAccount._id,
+      'targetAccountId is outside the allowed scope',
+    );
+    assertQuotaAccountInScope(
+      quotaAccountScopeIds,
+      sourceAccount._id,
+      'sourceAccountId is outside the allowed scope',
+    );
+
+    const quotaRequest = await QuotaRequest.create({
+      periodId,
+      sourceAccountId,
+      targetAccountId,
+      requestedByUserId: getRequestUserId(req),
+      reviewedByUserId: null,
+      amount: input.amount,
+      reason: input.reason,
+      status: 'pending',
+      requestedAt: new Date(),
+    });
+
+    await writeQuotaActivityLog(req, {
+      action: 'quota_request.create',
+      resourceType: 'quota_request',
+      resourceId: quotaRequest._id.toString(),
+      metadata: {
+        periodId: periodId.toString(),
+        sourceAccountId: sourceAccountId.toString(),
+        targetAccountId: targetAccountId.toString(),
+        amount: input.amount,
+      },
+    });
+
+    const storedRequest = await QuotaRequest.findById(quotaRequest._id)
+      .lean<QuotaRequestRecord>()
+      .orFail();
+
+    return res.status(201).json({
+      request: sanitizeQuotaRequest(storedRequest, { sourceAccount, targetAccount }),
+    });
+  } catch (error) {
+    return handleQuotaError(error, res, '[createAdminQuotaRequest]');
+  }
+}
+
+export async function approveAdminQuotaRequest(req: Request, res: Response) {
+  try {
+    const requestId = parseObjectId(req.params.requestId, 'requestId');
+    const input = quotaRequestDecisionSchema.parse(req.body);
+    const existingRequest = await QuotaRequest.findById(requestId).lean<QuotaRequestRecord | null>();
+
+    if (!existingRequest) {
+      throw createStatusError(404, 'Quota request not found');
+    }
+
+    if (existingRequest.status !== 'pending') {
+      throw createStatusError(409, 'Quota request is not pending');
+    }
+
+    const periodId = parseObjectId(existingRequest.periodId.toString(), 'periodId');
+    const sourceAccountId = parseObjectId(
+      existingRequest.sourceAccountId.toString(),
+      'sourceAccountId',
+    );
+    const targetAccountId = parseObjectId(
+      existingRequest.targetAccountId.toString(),
+      'targetAccountId',
+    );
+    const [period, sourceAccount, targetAccount] = await Promise.all([
+      getPeriodOrThrow(periodId),
+      getAccountOrThrow(sourceAccountId),
+      getAccountOrThrow(targetAccountId),
+    ]);
+
+    assertQuotaRequestAccounts({
+      periodId: period._id,
+      sourceAccount,
+      targetAccount,
+    });
+    const quotaAccountScopeIds = await resolveQuotaAccountScopeIds(req, periodId);
+    assertManagedQuotaAccountInScope(
+      quotaAccountScopeIds,
+      sourceAccount._id,
+      'sourceAccountId is outside the allowed review scope',
+    );
+
+    const appliedAllocation: AppliedQuotaAllocation = await applyQuotaAllocation({
+      req,
+      periodId,
+      fromAccount: sourceAccount,
+      toAccount: targetAccount,
+      amount: existingRequest.amount,
+      reason: existingRequest.reason,
+      sourceType: 'manager_action',
+      sourceId: requestId.toString(),
+    });
+    const approvedRequest = await QuotaRequest.findByIdAndUpdate(
+      requestId,
+      {
+        $set: {
+          reviewedByUserId: getRequestUserId(req),
+          fulfilledAllocationId: appliedAllocation.allocation._id,
+          status: 'approved',
+          reviewReason: input.reason,
+          reviewedAt: new Date(),
+        },
+      },
+      { new: true },
+    ).lean<QuotaRequestRecord | null>();
+
+    if (!approvedRequest) {
+      throw createStatusError(404, 'Quota request not found');
+    }
+
+    await writeQuotaActivityLog(req, {
+      action: 'quota_request.approve',
+      resourceType: 'quota_request',
+      resourceId: requestId.toString(),
+      metadata: {
+        periodId: periodId.toString(),
+        sourceAccountId: sourceAccountId.toString(),
+        targetAccountId: targetAccountId.toString(),
+        amount: existingRequest.amount,
+        allocationId: appliedAllocation.allocation._id.toString(),
+      },
+    });
+
+    return res.status(200).json({
+      request: sanitizeQuotaRequest(approvedRequest, {
+        sourceAccount: appliedAllocation.fromAccount,
+        targetAccount: appliedAllocation.toAccount,
+      }),
+      allocation: sanitizeAllocation(appliedAllocation.allocation),
+      sourceAccount: sanitizeAccount(appliedAllocation.fromAccount),
+      targetAccount: sanitizeAccount(appliedAllocation.toAccount),
+    });
+  } catch (error) {
+    return handleQuotaError(error, res, '[approveAdminQuotaRequest]');
+  }
+}
+
+export async function rejectAdminQuotaRequest(req: Request, res: Response) {
+  try {
+    const requestId = parseObjectId(req.params.requestId, 'requestId');
+    const input = quotaRequestDecisionSchema.parse(req.body);
+    const existingRequest = await QuotaRequest.findById(requestId).lean<QuotaRequestRecord | null>();
+
+    if (!existingRequest) {
+      throw createStatusError(404, 'Quota request not found');
+    }
+
+    if (existingRequest.status !== 'pending') {
+      throw createStatusError(409, 'Quota request is not pending');
+    }
+    const quotaAccountScopeIds = await resolveQuotaAccountScopeIds(
+      req,
+      parseObjectId(existingRequest.periodId.toString(), 'periodId'),
+    );
+    assertManagedQuotaAccountInScope(
+      quotaAccountScopeIds,
+      existingRequest.sourceAccountId,
+      'sourceAccountId is outside the allowed review scope',
+    );
+
+    const rejectedRequest = await QuotaRequest.findByIdAndUpdate(
+      requestId,
+      {
+        $set: {
+          reviewedByUserId: getRequestUserId(req),
+          status: 'rejected',
+          reviewReason: input.reason,
+          reviewedAt: new Date(),
+        },
+      },
+      { new: true },
+    ).lean<QuotaRequestRecord | null>();
+
+    if (!rejectedRequest) {
+      throw createStatusError(404, 'Quota request not found');
+    }
+
+    await writeQuotaActivityLog(req, {
+      action: 'quota_request.reject',
+      resourceType: 'quota_request',
+      resourceId: requestId.toString(),
+      metadata: {
+        periodId: rejectedRequest.periodId.toString(),
+        sourceAccountId: rejectedRequest.sourceAccountId.toString(),
+        targetAccountId: rejectedRequest.targetAccountId.toString(),
+        amount: rejectedRequest.amount,
+      },
+    });
+
+    return res.status(200).json({ request: sanitizeQuotaRequest(rejectedRequest) });
+  } catch (error) {
+    return handleQuotaError(error, res, '[rejectAdminQuotaRequest]');
+  }
+}
+
 export async function getAdminQuotaLedger(req: Request, res: Response) {
   try {
     const limit = parsePageSize(req.query.limit);
@@ -1419,13 +1990,27 @@ export async function getAdminQuotaLedger(req: Request, res: Response) {
       trimSearch(req.query.cursor),
     );
     const filters: mongoose.FilterQuery<QuotaLedgerEntryRecord>[] = [];
+    const parsedPeriodId = periodId ? parseObjectId(periodId, 'periodId') : undefined;
+    const quotaAccountScopeIds = await resolveQuotaAccountScopeIds(req, parsedPeriodId);
 
-    if (periodId) {
-      filters.push({ periodId: parseObjectId(periodId, 'periodId') });
+    if (parsedPeriodId) {
+      filters.push({ periodId: parsedPeriodId });
+    }
+
+    if (quotaAccountScopeIds != null) {
+      filters.push({
+        accountId: { $in: toObjectIds(Array.from(quotaAccountScopeIds.visibleAccountIds)) },
+      });
     }
 
     if (accountId) {
-      filters.push({ accountId: parseObjectId(accountId, 'accountId') });
+      const parsedAccountId = parseObjectId(accountId, 'accountId');
+      assertQuotaAccountInScope(
+        quotaAccountScopeIds,
+        parsedAccountId,
+        'accountId is outside the allowed scope',
+      );
+      filters.push({ accountId: parsedAccountId });
     }
 
     if (entryType && entryType !== 'all') {

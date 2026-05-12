@@ -28,6 +28,7 @@ const { spendTokens, spendStructuredTokens } = require('~/models/spendTokens');
 const { getMultiplier, getCacheMultiplier } = require('~/models/tx');
 const { getConvoFiles, getConvo } = require('~/models/Conversation');
 const { getAgent, getAgents } = require('~/models/Agent');
+const { checkQuotaBalance } = require('~/models/quotaBalance');
 const db = require('~/models');
 
 /**
@@ -103,6 +104,13 @@ function convertMessages(messages) {
       ...(msg.tool_call_id && { tool_call_id: msg.tool_call_id }),
     };
   });
+}
+
+function getPromptTokenEstimate(indexTokenCountMap) {
+  return Object.values(indexTokenCountMap ?? {}).reduce((total, value) => {
+    const tokenCount = Number(value) || 0;
+    return total + tokenCount;
+  }, 0);
 }
 
 /**
@@ -294,6 +302,18 @@ const OpenAIChatCompletionController = async (req, res) => {
       {},
       toolSet,
     );
+
+    await checkQuotaBalance({
+      req,
+      res,
+      txData: {
+        user: req.user?.id ?? 'api-user',
+        tokenType: 'prompt',
+        amount: getPromptTokenEstimate(indexTokenCountMap),
+        endpoint: agent.provider,
+        model: primaryConfig.model || agent.model_parameters?.model,
+      },
+    });
 
     /**
      * Create a simple handler that processes data

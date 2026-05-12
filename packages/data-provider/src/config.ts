@@ -768,6 +768,7 @@ export type TStartupConfig = {
   interface?: TInterfaceConfig;
   turnstile?: TTurnstileConfig;
   balance?: TBalanceConfig;
+  legacyBalanceEnabled?: boolean;
   transactions?: TTransactionsConfig;
   discordLoginEnabled: boolean;
   facebookLoginEnabled: boolean;

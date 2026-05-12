@@ -10,6 +10,7 @@ const mockRecordCollectedUsage = jest
   .mockResolvedValue({ input_tokens: 100, output_tokens: 50 });
 const mockGetBalanceConfig = jest.fn().mockReturnValue({ enabled: true });
 const mockGetTransactionsConfig = jest.fn().mockReturnValue({ enabled: true });
+const mockCheckQuotaAvailability = jest.fn().mockResolvedValue({ canSpend: true });
 
 jest.mock('nanoid', () => ({
   nanoid: jest.fn(() => 'mock-nanoid-123'),
@@ -50,6 +51,7 @@ jest.mock('@librechat/api', () => ({
   getBalanceConfig: mockGetBalanceConfig,
   getTransactionsConfig: mockGetTransactionsConfig,
   recordCollectedUsage: mockRecordCollectedUsage,
+  checkQuotaAvailability: mockCheckQuotaAvailability,
   createToolExecuteHandler: jest.fn().mockReturnValue({ handle: jest.fn() }),
   // Responses API
   writeDone: jest.fn(),
@@ -289,7 +291,7 @@ describe('createResponse controller', () => {
     it('should call recordCollectedUsage after successful non-streaming completion', async () => {
       await createResponse(req, res);
 
-      expect(mockRecordCollectedUsage).toHaveBeenCalledTimes(1);
+      expect(mockRecordCollectedUsage).toHaveBeenCalledTimes(2);
       expect(mockRecordCollectedUsage).toHaveBeenCalledWith(
         {
           spendTokens: mockSpendTokens,
@@ -363,7 +365,7 @@ describe('createResponse controller', () => {
     it('should call recordCollectedUsage after successful streaming completion', async () => {
       await createResponse(req, res);
 
-      expect(mockRecordCollectedUsage).toHaveBeenCalledTimes(1);
+      expect(mockRecordCollectedUsage).toHaveBeenCalledTimes(2);
       expect(mockRecordCollectedUsage).toHaveBeenCalledWith(
         {
           spendTokens: mockSpendTokens,

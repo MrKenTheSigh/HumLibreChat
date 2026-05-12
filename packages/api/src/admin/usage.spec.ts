@@ -5,6 +5,7 @@ import type { Request, Response } from 'express';
 const mockTransactionFind = jest.fn();
 const mockTransactionAggregate = jest.fn();
 const mockTransactionCountDocuments = jest.fn();
+const mockDepartmentFind = jest.fn();
 const mockUserFind = jest.fn();
 const mockUserFindById = jest.fn();
 const mockLoggerError = jest.fn();
@@ -15,6 +16,9 @@ jest.mock('@librechat/data-schemas', () => ({
       find: mockTransactionFind,
       aggregate: mockTransactionAggregate,
       countDocuments: mockTransactionCountDocuments,
+    },
+    Department: {
+      find: mockDepartmentFind,
     },
     User: {
       find: mockUserFind,
@@ -74,6 +78,7 @@ function createUserQuery<T>(value: T) {
 describe('admin usage handlers', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockDepartmentFind.mockReturnValue(createUserQuery([]));
     delete process.env.ADMIN_USAGE_EXPORT_LIMIT;
   });
 
@@ -209,7 +214,7 @@ describe('admin usage handlers', () => {
 
     expect(mockUserFind).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({ departmentId }),
+      expect.objectContaining({ departmentId: { $in: [departmentId] } }),
     );
     expect(mockTransactionFind.mock.calls[0][0].$and).toEqual(
       expect.arrayContaining([

@@ -48,6 +48,7 @@ export default function AdminUserDetail() {
   const localize = useLocalize();
   const { userId = '' } = useParams();
   const { data: startupConfig } = useGetStartupConfig();
+  const legacyBalanceEnabled = startupConfig?.legacyBalanceEnabled === true;
   const userQuery = useGetAdminUserQuery(userId, { enabled: userId.length > 0 });
 
   const closeModal = () => navigate('/d/admin/users');
@@ -165,19 +166,8 @@ export default function AdminUserDetail() {
                 assignedAt={user.departmentAssignedAt}
               />
 
-              {startupConfig?.balance?.enabled && (
+              {legacyBalanceEnabled && (
                 <AdminUserBalanceCard userId={user.id} tokenCredits={user.balance.tokenCredits} />
-              )}
-
-              {startupConfig?.balance?.enabled !== true && (
-                <section className="rounded-3xl border border-border-medium bg-surface-primary p-5">
-                  <h2 className="text-sm font-medium text-text-primary">
-                    {localize('com_nav_balance')}
-                  </h2>
-                  <p className="mt-2 text-sm leading-6 text-text-secondary">
-                    {localize('com_ui_admin_balance_disabled')}
-                  </p>
-                </section>
               )}
 
               <AdminUserPlanCard
@@ -186,11 +176,13 @@ export default function AdminUserDetail() {
                 assignedAt={user.planAssignedAt}
               />
 
-              <AdminUserProvisioningCard
-                userId={user.id}
-                currentPlan={user.plan}
-                provisioning={user.provisioning}
-              />
+              {legacyBalanceEnabled && (
+                <AdminUserProvisioningCard
+                  userId={user.id}
+                  currentPlan={user.plan}
+                  provisioning={user.provisioning}
+                />
+              )}
 
               <section className="rounded-3xl border border-border-medium bg-surface-primary p-5">
                 <div className="mb-4">

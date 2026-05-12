@@ -5,7 +5,9 @@ import {
   Move,
   Network,
   Plus,
+  Send,
   Search,
+  ShieldCheck,
   RotateCcw,
   Save,
   Users,
@@ -23,11 +25,13 @@ import {
   useNodesState,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import { SystemRoles } from 'librechat-data-provider';
 import type { Edge, Node, NodeProps, ReactFlowInstance } from '@xyflow/react';
 import type {
   AdminDepartment,
   AdminQuotaAccount,
   AdminQuotaAccountScopeType,
+  AdminQuotaRequest,
   AdminUserSummary,
 } from 'librechat-data-provider';
 import AdminHelpButton from '../AdminHelpButton';
@@ -36,15 +40,20 @@ import {
   useGetAdminDepartmentsQuery,
   useGetAdminQuotaAccountsQuery,
   useGetAdminQuotaPeriodsQuery,
+  useGetAdminQuotaRequestsQuery,
   useGetAdminUsersQuery,
 } from '~/data-provider/Admin';
 import {
+  useApproveAdminQuotaRequestMutation,
   useCreateAdminQuotaAllocationMutation,
   useCreateAdminQuotaPeriodMutation,
+  useCreateAdminQuotaRequestMutation,
+  useRejectAdminQuotaRequestMutation,
   useUpdateAdminDepartmentMutation,
   useUpdateAdminUserDepartmentMutation,
 } from '~/data-provider/Admin/mutations';
-import { useLocalize } from '~/hooks';
+import type { TranslationKeys } from '~/hooks';
+import { useAuthContext, useLocalize } from '~/hooks';
 
 type GraphMode = 'view' | 'organization' | 'quota';
 type GraphNodeKind = 'company' | 'department' | 'user' | 'unassigned';
@@ -58,6 +67,7 @@ type OrgGraphNodeData = {
   expanded: boolean;
   canExpand: boolean;
   mode: GraphMode;
+  canAllocateQuota: boolean;
   hasPendingChange: boolean;
   usedCredits: number | null;
   limitCredits: number | null;
@@ -157,6 +167,42 @@ function getAccountAllocatableCredits(account?: AdminQuotaAccount) {
   return account.allocatableLimitCredits ?? getAccountLimitCredits(account) ?? 0;
 }
 
+function getQuotaRequestSourceBefore(request: AdminQuotaRequest) {
+  return getAccountAllocatableCredits(request.sourceAccount ?? undefined);
+}
+
+function getQuotaRequestSourceAfter(request: AdminQuotaRequest) {
+  const sourceBefore = getQuotaRequestSourceBefore(request);
+  if (sourceBefore == null) {
+    return null;
+  }
+
+  return sourceBefore - request.amount;
+}
+
+function getQuotaRequestTargetBefore(request: AdminQuotaRequest) {
+  return getAccountLimitCredits(request.targetAccount ?? undefined);
+}
+
+function getQuotaRequestTargetAfter(request: AdminQuotaRequest) {
+  const targetBefore = getQuotaRequestTargetBefore(request);
+  if (targetBefore == null) {
+    return null;
+  }
+
+  return targetBefore + request.amount;
+}
+
+function CreditChange({ before, after }: { before: number | null; after: number | null }) {
+  return (
+    <div className="flex items-baseline gap-2">
+      <span className="text-base font-medium text-text-secondary">{formatCredits(before)}</span>
+      <span className="text-sm text-text-secondary">{'>'}</span>
+      <span className="text-2xl font-semibold text-text-primary">{formatCredits(after)}</span>
+    </div>
+  );
+}
+
 function getAccountAllocatedCredits(account?: AdminQuotaAccount) {
   if (!account) {
     return null;
@@ -198,6 +244,42 @@ function getResponseMessage(error: unknown) {
   return error.response?.data?.message ?? error.response?.data?.error ?? error.message ?? null;
 }
 
+function getQuotaOperationErrorKey(message: string | null): TranslationKeys | null {
+  if (!message) {
+    return null;
+  }
+
+  if (message === 'Insufficient quota credits') {
+    return 'com_ui_admin_quota_error_insufficient_credits';
+  }
+
+  if (message === 'Quota request is not pending') {
+    return 'com_ui_admin_quota_error_request_not_pending';
+  }
+
+  if (message === 'sourceAccountId is outside the allowed review scope') {
+    return 'com_ui_admin_quota_error_review_scope';
+  }
+
+  if (
+    message === 'sourceAccountId is outside the allowed scope' ||
+    message === 'targetAccountId is outside the allowed scope' ||
+    message === 'accountId is outside the allowed scope'
+  ) {
+    return 'com_ui_admin_quota_error_scope';
+  }
+
+  if (message === 'Quota requests must target the parent account') {
+    return 'com_ui_admin_quota_error_parent_request';
+  }
+
+  if (message === 'Cannot request quota from the same account') {
+    return 'com_ui_admin_quota_error_same_account_request';
+  }
+
+  return null;
+}
+
 function getNodeTone(kind: GraphNodeKind) {
   if (kind === 'company') {
     return 'border-emerald-500/40 bg-emerald-500/10';
@@ -216,6 +298,32 @@ function getNodeTone(kind: GraphNodeKind) {
 
 function getUserDisplayName(user: AdminUserSummary) {
   return user.name || user.username || user.email || user.id;
+}
+
+function getQuotaAccountLabel(
+  account?: AdminQuotaAccount | null,
+  options?: { showUserAlias?: boolean },
+) {
+  if (!account) {
+    return '-';
+  }
+
+  if (account.scopeType === 'company') {
+    return account.scopeLabel || 'Company';
+  }
+
+  if (
+    options?.showUserAlias === true &&
+    account.scopeType === 'user' &&
+    account.scopeLabel &&
+    account.scopeSecondaryLabel &&
+    account.scopeLabel !== account.scopeSecondaryLabel
+  ) {
+    const name = account.scopeSecondaryLabel.split(' / ').at(-1)?.trim();
+    return `${account.scopeLabel} (${name || account.scopeSecondaryLabel})`;
+  }
+
+  return account.scopeLabel || account.scopeSecondaryLabel || account.scopeId || account.id;
 }
 
 function getAccountByScope(
@@ -638,7 +746,7 @@ function OrgGraphNode(props: NodeProps<OrgNode>) {
 
       <div className="mt-4 flex gap-2">
         {footerAction}
-        {data.mode === 'quota' && data.kind !== 'user' ? (
+        {data.mode === 'quota' && data.canAllocateQuota && data.kind !== 'user' ? (
           <button
             type="button"
             disabled={(data.allocatableCredits ?? 0) <= 0}
@@ -684,6 +792,7 @@ function buildGraph(input: {
   onAllocate: (nodeId: string) => void;
   pendingNodeIds: Set<string>;
   pendingAffectedDepartmentIds: Set<string>;
+  canAllocateQuota: boolean;
 }): GraphBuildResult {
   const nodes: OrgNode[] = [];
   const edges: Edge[] = [];
@@ -800,6 +909,7 @@ function buildGraph(input: {
       expanded: params.expanded,
       canExpand: params.canExpand,
       mode: input.mode,
+      canAllocateQuota: input.canAllocateQuota,
       hasPendingChange:
         input.pendingNodeIds.has(params.id) ||
         ((params.kind === 'company' || params.kind === 'department') &&
@@ -1024,6 +1134,11 @@ function buildGraph(input: {
 
 export default function AdminOrganizationGraphPage() {
   const localize = useLocalize();
+  const { user } = useAuthContext();
+  const isAdmin = user?.role === SystemRoles.ADMIN;
+  const canChangeOrganization = isAdmin;
+  const canManageQuota = user?.role === SystemRoles.ADMIN || user?.role === SystemRoles.MANAGER;
+  const canReviewQuotaRequests = canManageQuota;
   const [mode, setMode] = useState<GraphMode>('view');
   const [selectedPeriodId, setSelectedPeriodId] = useState('');
   const [selectedNodeId, setSelectedNodeId] = useState('company');
@@ -1041,6 +1156,13 @@ export default function AdminOrganizationGraphPage() {
   const [allocationTargetId, setAllocationTargetId] = useState('');
   const [allocationAmount, setAllocationAmount] = useState('');
   const [allocationReason, setAllocationReason] = useState('');
+  const [quotaRequestTargetNodeId, setQuotaRequestTargetNodeId] = useState('');
+  const [quotaRequestAmount, setQuotaRequestAmount] = useState('');
+  const [quotaRequestReason, setQuotaRequestReason] = useState('');
+  const [quotaRequestReviewOpen, setQuotaRequestReviewOpen] = useState(false);
+  const [quotaRequestDecisionReasons, setQuotaRequestDecisionReasons] = useState<
+    Record<string, string>
+  >({});
   const [createPeriodOpen, setCreatePeriodOpen] = useState(false);
   const [periodYear, setPeriodYear] = useState(String(new Date().getFullYear()));
   const [periodMonth, setPeriodMonth] = useState(String(new Date().getMonth() + 1));
@@ -1062,11 +1184,18 @@ export default function AdminOrganizationGraphPage() {
   const updateUserDepartmentMutation = useUpdateAdminUserDepartmentMutation();
   const createPeriodMutation = useCreateAdminQuotaPeriodMutation();
   const createAllocationMutation = useCreateAdminQuotaAllocationMutation();
+  const createQuotaRequestMutation = useCreateAdminQuotaRequestMutation();
+  const approveQuotaRequestMutation = useApproveAdminQuotaRequestMutation();
+  const rejectQuotaRequestMutation = useRejectAdminQuotaRequestMutation();
   const periods = useMemo(() => periodsQuery.data?.periods ?? [], [periodsQuery.data?.periods]);
   const activePeriod = periods.find((period) => period.status === 'active') ?? periods[0] ?? null;
   const periodId = selectedPeriodId || activePeriod?.id || '';
   const hasQuotaPeriod = periodId.length > 0;
   const accountsQuery = useGetAdminQuotaAccountsQuery({ periodId }, { enabled: hasQuotaPeriod });
+  const quotaRequestsQuery = useGetAdminQuotaRequestsQuery(
+    { periodId, status: 'pending', limit: 100 },
+    { enabled: hasQuotaPeriod && canReviewQuotaRequests },
+  );
   const departments = useMemo(
     () => departmentsQuery.data?.departments ?? [],
     [departmentsQuery.data?.departments],
@@ -1149,7 +1278,10 @@ export default function AdminOrganizationGraphPage() {
     if (mode === 'quota' && !hasQuotaPeriod) {
       setMode('view');
     }
-  }, [hasQuotaPeriod, mode]);
+    if (mode === 'organization' && !canChangeOrganization) {
+      setMode('view');
+    }
+  }, [canChangeOrganization, hasQuotaPeriod, mode]);
 
   const filteredUsers = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -1243,6 +1375,7 @@ export default function AdminOrganizationGraphPage() {
           ...Object.keys(pendingUserDepartments).map((userId) => `user:${userId}`),
         ]),
         pendingAffectedDepartmentIds,
+        canAllocateQuota: canManageQuota,
       }),
     [
       expandedNodeIds,
@@ -1257,6 +1390,7 @@ export default function AdminOrganizationGraphPage() {
       pendingUserDepartments,
       quotaPreviewAccounts,
       selectedNodeId,
+      canManageQuota,
     ],
   );
 
@@ -1292,6 +1426,15 @@ export default function AdminOrganizationGraphPage() {
   const allocationSource =
     graph.lookup.get(allocationSourceNodeId) ?? graph.lookup.get(selectedNodeId) ?? null;
   const allocationSourceAccount = allocationSource?.account ?? null;
+  const quotaRequestTarget =
+    graph.lookup.get(quotaRequestTargetNodeId) ?? graph.lookup.get(selectedNodeId) ?? null;
+  const quotaRequestTargetAccount = quotaRequestTarget?.account ?? null;
+  const quotaRequestSourceAccount =
+    quotaRequestTargetAccount?.parentAccountId != null
+      ? (accounts.find((account) => account.id === quotaRequestTargetAccount.parentAccountId) ??
+        null)
+      : null;
+  const pendingQuotaRequests = quotaRequestsQuery.data?.requests ?? [];
   const maxAllocationAmount = allocationSourceAccount
     ? Math.max(0, getAccountAllocatableCredits(allocationSourceAccount) ?? 0)
     : 0;
@@ -1336,6 +1479,7 @@ export default function AdminOrganizationGraphPage() {
   const isAllocationAmountOverLimit =
     Number.isFinite(allocationAmountValue) && allocationAmountValue > maxAllocationAmount;
   const canCreateAllocation =
+    canManageQuota &&
     !createAllocationMutation.isLoading &&
     hasQuotaPeriod &&
     allocationSourceAccount != null &&
@@ -1343,6 +1487,17 @@ export default function AdminOrganizationGraphPage() {
     Number.isFinite(allocationAmountValue) &&
     allocationAmountValue > 0 &&
     !isAllocationAmountOverLimit;
+  const quotaRequestAmountValue = Number(quotaRequestAmount);
+  const canCreateQuotaRequest =
+    canManageQuota &&
+    !createQuotaRequestMutation.isLoading &&
+    hasQuotaPeriod &&
+    quotaRequestTargetAccount != null &&
+    quotaRequestTargetAccount.scopeType !== 'company' &&
+    quotaRequestSourceAccount != null &&
+    Number.isFinite(quotaRequestAmountValue) &&
+    quotaRequestAmountValue > 0 &&
+    quotaRequestReason.trim().length > 0;
   const canCreatePeriod =
     !createPeriodMutation.isLoading &&
     Number.isInteger(Number(periodYear)) &&
@@ -1354,7 +1509,11 @@ export default function AdminOrganizationGraphPage() {
     Number(companyCredits) >= 0;
   const modeOptions: Array<{ value: GraphMode; label: string; disabled?: boolean }> = [
     { value: 'view', label: localize('com_ui_admin_org_graph_mode_view') },
-    { value: 'organization', label: localize('com_ui_admin_org_graph_mode_organization') },
+    {
+      value: 'organization',
+      label: localize('com_ui_admin_org_graph_mode_organization'),
+      disabled: !canChangeOrganization,
+    },
     {
       value: 'quota',
       label: localize('com_ui_admin_org_graph_mode_quota'),
@@ -1362,9 +1521,11 @@ export default function AdminOrganizationGraphPage() {
     },
   ];
   const showError = (error: unknown, messageOverride?: string) => {
+    const responseMessage = getResponseMessage(error);
+    const localizedErrorKey = getQuotaOperationErrorKey(responseMessage);
     const message =
       messageOverride ??
-      getResponseMessage(error) ??
+      (localizedErrorKey ? localize(localizedErrorKey) : responseMessage) ??
       localize('com_ui_admin_quota_operation_failed');
     setNotice({
       title: localize('com_ui_error'),
@@ -1397,6 +1558,70 @@ export default function AdminOrganizationGraphPage() {
       setNotice({
         title: localize('com_ui_saved'),
         message: localize('com_ui_admin_quota_allocation_created'),
+      });
+    } catch (error) {
+      showError(error);
+    }
+  };
+
+  const handleOpenQuotaRequest = (nodeId: string) => {
+    setSelectedNodeId(nodeId);
+    setQuotaRequestTargetNodeId(nodeId);
+    setQuotaRequestAmount('');
+    setQuotaRequestReason('');
+  };
+
+  const handleCreateQuotaRequest = async () => {
+    if (!quotaRequestTargetAccount || !quotaRequestSourceAccount) {
+      setNotice({
+        title: localize('com_ui_error'),
+        message: localize('com_ui_admin_org_graph_quota_request_source_missing'),
+      });
+      return;
+    }
+
+    try {
+      await createQuotaRequestMutation.mutateAsync({
+        periodId,
+        targetAccountId: quotaRequestTargetAccount.id,
+        sourceAccountId: quotaRequestSourceAccount.id,
+        amount: Number(quotaRequestAmount),
+        reason: quotaRequestReason,
+      });
+      setQuotaRequestTargetNodeId('');
+      setQuotaRequestAmount('');
+      setQuotaRequestReason('');
+      setNotice({
+        title: localize('com_ui_saved'),
+        message: localize('com_ui_admin_org_graph_quota_request_created'),
+      });
+    } catch (error) {
+      showError(error);
+    }
+  };
+
+  const handleDecideQuotaRequest = async (
+    request: AdminQuotaRequest,
+    decision: 'approve' | 'reject',
+  ) => {
+    try {
+      const reason = quotaRequestDecisionReasons[request.id] ?? '';
+      if (decision === 'approve') {
+        await approveQuotaRequestMutation.mutateAsync({ requestId: request.id, reason });
+      } else {
+        await rejectQuotaRequestMutation.mutateAsync({ requestId: request.id, reason });
+      }
+      setQuotaRequestDecisionReasons((current) => {
+        const next = { ...current };
+        delete next[request.id];
+        return next;
+      });
+      setNotice({
+        title: localize('com_ui_saved'),
+        message:
+          decision === 'approve'
+            ? localize('com_ui_admin_org_graph_quota_request_approved')
+            : localize('com_ui_admin_org_graph_quota_request_rejected'),
       });
     } catch (error) {
       showError(error);
@@ -1648,8 +1873,9 @@ export default function AdminOrganizationGraphPage() {
                 </select>
                 <button
                   type="button"
-                  className="admin-button-secondary flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+                  className="admin-button-secondary flex h-10 w-10 shrink-0 items-center justify-center rounded-xl disabled:cursor-not-allowed disabled:opacity-60"
                   aria-label={localize('com_ui_admin_quota_period_create')}
+                  disabled={!isAdmin}
                   onClick={() => setCreatePeriodOpen(true)}
                 >
                   <Plus className="h-4 w-4" aria-hidden="true" />
@@ -1716,9 +1942,30 @@ export default function AdminOrganizationGraphPage() {
                   }}
                 >
                   {option.label}
+                  {option.value === 'quota' && pendingQuotaRequests.length > 0 ? (
+                    <span className="rounded-full bg-amber-500 px-2 py-0.5 text-xs font-semibold text-white">
+                      {pendingQuotaRequests.length}
+                    </span>
+                  ) : null}
                 </button>
               ))}
             </div>
+            {mode === 'quota' && canReviewQuotaRequests ? (
+              <button
+                type="button"
+                className="admin-button-secondary inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={!hasQuotaPeriod}
+                onClick={() => setQuotaRequestReviewOpen(true)}
+              >
+                <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+                {localize('com_ui_admin_org_graph_quota_requests')}
+                {pendingQuotaRequests.length > 0 ? (
+                  <span className="rounded-full bg-amber-500 px-2 py-0.5 text-xs font-semibold text-white">
+                    {pendingQuotaRequests.length}
+                  </span>
+                ) : null}
+              </button>
+            ) : null}
             {mode === 'organization' ? (
               <div className="flex flex-wrap items-center gap-3 xl:ml-auto xl:mr-[360px]">
                 {pendingChangeCount > 0 ? (
@@ -1906,18 +2153,35 @@ export default function AdminOrganizationGraphPage() {
                   ) : null}
 
                   {mode === 'quota' ? (
-                    <button
-                      type="button"
-                      disabled={
-                        selected.kind === 'user' ||
-                        !selected.account ||
-                        (getAccountAllocatableCredits(selected.account) ?? 0) <= 0
-                      }
-                      className="admin-button-primary w-full rounded-xl px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
-                      onClick={() => handleAllocate(selectedNodeId)}
-                    >
-                      {localize('com_ui_admin_quota_allocate')}
-                    </button>
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        disabled={
+                          !canManageQuota ||
+                          selected.kind === 'user' ||
+                          !selected.account ||
+                          (getAccountAllocatableCredits(selected.account) ?? 0) <= 0
+                        }
+                        className="admin-button-primary w-full rounded-xl px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
+                        onClick={() => handleAllocate(selectedNodeId)}
+                      >
+                        {localize('com_ui_admin_quota_allocate')}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={
+                          !canManageQuota ||
+                          !selected.account ||
+                          selected.account.scopeType === 'company' ||
+                          selected.account.parentAccountId == null
+                        }
+                        className="admin-button-secondary inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
+                        onClick={() => handleOpenQuotaRequest(selectedNodeId)}
+                      >
+                        <Send className="h-4 w-4" aria-hidden="true" />
+                        {localize('com_ui_admin_org_graph_quota_request_create')}
+                      </button>
+                    </div>
                   ) : null}
                 </div>
               ) : (
@@ -2174,6 +2438,229 @@ export default function AdminOrganizationGraphPage() {
                   {localize('com_ui_cancel')}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {quotaRequestTargetNodeId ? (
+        <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-xl rounded-2xl border border-border-light bg-surface-primary p-5 shadow-xl">
+            <div className="flex items-center justify-between gap-4">
+              <h2 className="text-base font-semibold text-text-primary">
+                {localize('com_ui_admin_org_graph_quota_request_create')}
+              </h2>
+              <button
+                type="button"
+                className="admin-button-secondary flex h-9 w-9 items-center justify-center rounded-xl"
+                aria-label={localize('com_ui_close')}
+                onClick={() => setQuotaRequestTargetNodeId('')}
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl border border-border-light bg-background p-3 text-sm">
+                  <div className="text-xs text-text-secondary">
+                    {localize('com_ui_admin_quota_source_account')}
+                  </div>
+                  <div className="mt-1 font-medium text-text-primary">
+                    {getQuotaAccountLabel(quotaRequestSourceAccount)}
+                  </div>
+                  <div className="mt-1 text-xs text-text-secondary">
+                    {localize('com_ui_admin_quota_allocation_available')}:{' '}
+                    <span className="text-text-primary">
+                      {formatCredits(
+                        getAccountAllocatableCredits(quotaRequestSourceAccount ?? undefined),
+                      )}
+                    </span>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-border-light bg-background p-3 text-sm">
+                  <div className="text-xs text-text-secondary">
+                    {localize('com_ui_admin_quota_allocation_target')}
+                  </div>
+                  <div className="mt-1 font-medium text-text-primary">
+                    {getQuotaAccountLabel(quotaRequestTargetAccount)}
+                  </div>
+                </div>
+              </div>
+
+              {!quotaRequestSourceAccount ? (
+                <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-600 dark:text-red-300">
+                  {localize('com_ui_admin_org_graph_quota_request_source_missing')}
+                </div>
+              ) : null}
+
+              <label className={labelClassName}>
+                {localize('com_ui_admin_quota_amount')}
+                <input
+                  className={inputClassName}
+                  type="number"
+                  min="0"
+                  value={quotaRequestAmount}
+                  onChange={(event) => setQuotaRequestAmount(event.target.value)}
+                />
+              </label>
+
+              <label className={labelClassName}>
+                {localize('com_ui_admin_quota_reason')}
+                <textarea
+                  className={`${inputClassName} min-h-[96px] resize-y`}
+                  value={quotaRequestReason}
+                  onChange={(event) => setQuotaRequestReason(event.target.value)}
+                />
+              </label>
+
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  className="admin-button-primary rounded-xl px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={!canCreateQuotaRequest}
+                  onClick={handleCreateQuotaRequest}
+                >
+                  {localize('com_ui_admin_org_graph_quota_request_submit')}
+                </button>
+                <button
+                  type="button"
+                  className="admin-button-secondary rounded-xl px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={createQuotaRequestMutation.isLoading}
+                  onClick={() => setQuotaRequestTargetNodeId('')}
+                >
+                  {localize('com_ui_cancel')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {quotaRequestReviewOpen ? (
+        <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/40 p-4">
+          <div className="flex max-h-[calc(100vh-3rem)] w-full max-w-4xl flex-col rounded-2xl border border-border-light bg-surface-primary p-5 shadow-xl">
+            <div className="flex items-center justify-between gap-4">
+              <h2 className="text-base font-semibold text-text-primary">
+                {localize('com_ui_admin_org_graph_quota_requests')}
+              </h2>
+              <button
+                type="button"
+                className="admin-button-secondary flex h-9 w-9 items-center justify-center rounded-xl"
+                aria-label={localize('com_ui_close')}
+                onClick={() => setQuotaRequestReviewOpen(false)}
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="mt-4 min-h-0 overflow-y-auto">
+              {pendingQuotaRequests.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-border-medium bg-background p-6 text-sm text-text-secondary">
+                  {localize('com_ui_admin_org_graph_quota_requests_empty')}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {pendingQuotaRequests.map((request) => (
+                    <div
+                      key={request.id}
+                      className="rounded-2xl border border-border-light bg-background p-4"
+                    >
+                      <div className="grid gap-3 lg:grid-cols-2">
+                        <div className="rounded-xl border border-border-light bg-surface-primary p-4">
+                          <div className="text-xs font-medium text-text-secondary">
+                            {localize('com_ui_admin_quota_source')}
+                          </div>
+                          <div className="mt-1 text-sm font-medium text-text-primary">
+                            {getQuotaAccountLabel(request.sourceAccount)}
+                          </div>
+                          <div className="mt-4 text-xs text-text-secondary">
+                            {localize('com_ui_admin_org_graph_quota_request_source_change')}
+                          </div>
+                          <CreditChange
+                            before={getQuotaRequestSourceBefore(request)}
+                            after={getQuotaRequestSourceAfter(request)}
+                          />
+                        </div>
+                        <div className="rounded-xl border border-border-light bg-surface-primary p-4">
+                          <div className="text-xs font-medium text-text-secondary">
+                            {localize('com_ui_admin_quota_allocation_target')}
+                          </div>
+                          <div className="mt-1 text-sm font-medium text-text-primary">
+                            {getQuotaAccountLabel(request.targetAccount, { showUserAlias: true })}
+                          </div>
+                          <div className="mt-4 text-xs text-text-secondary">
+                            {localize('com_ui_admin_org_graph_quota_request_target_change')}
+                          </div>
+                          <CreditChange
+                            before={getQuotaRequestTargetBefore(request)}
+                            after={getQuotaRequestTargetAfter(request)}
+                          />
+                        </div>
+                      </div>
+                      <div className="mt-3 grid gap-3 md:grid-cols-[180px_1fr]">
+                        <div className="rounded-xl border border-border-light bg-surface-primary px-3 py-2">
+                          <div className="text-xs text-text-secondary">
+                            {localize('com_ui_admin_org_graph_quota_request_amount')}
+                          </div>
+                          <div className="mt-1 text-sm font-semibold text-text-primary">
+                            {formatCredits(request.amount)}
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-border-light bg-surface-primary px-3 py-2">
+                          <div className="text-xs text-text-secondary">
+                            {localize('com_ui_admin_org_graph_quota_request_reason')}
+                          </div>
+                          <div className="mt-1 text-sm text-text-primary">{request.reason}</div>
+                        </div>
+                      </div>
+                      {request.sourceAccount &&
+                      (getAccountAllocatableCredits(request.sourceAccount) ?? 0) <
+                        request.amount ? (
+                        <div className="mt-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-200">
+                          {localize('com_ui_admin_org_graph_quota_request_insufficient_source')}
+                        </div>
+                      ) : null}
+                      <div className="mt-3 grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+                        <label className={labelClassName}>
+                          {localize('com_ui_admin_org_graph_quota_request_decision_reason')}
+                          <input
+                            className={inputClassName}
+                            value={quotaRequestDecisionReasons[request.id] ?? ''}
+                            onChange={(event) =>
+                              setQuotaRequestDecisionReasons((current) => ({
+                                ...current,
+                                [request.id]: event.target.value,
+                              }))
+                            }
+                          />
+                        </label>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            className="admin-button-primary rounded-xl px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
+                            disabled={
+                              approveQuotaRequestMutation.isLoading ||
+                              (request.sourceAccount != null &&
+                                (getAccountAllocatableCredits(request.sourceAccount) ?? 0) <
+                                  request.amount)
+                            }
+                            onClick={() => handleDecideQuotaRequest(request, 'approve')}
+                          >
+                            {localize('com_ui_approve')}
+                          </button>
+                          <button
+                            type="button"
+                            className="admin-button-secondary rounded-xl px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
+                            disabled={rejectQuotaRequestMutation.isLoading}
+                            onClick={() => handleDecideQuotaRequest(request, 'reject')}
+                          >
+                            {localize('com_ui_reject')}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

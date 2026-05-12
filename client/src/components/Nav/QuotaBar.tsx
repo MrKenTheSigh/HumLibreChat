@@ -41,7 +41,7 @@ export default function QuotaBar({
       )}
     >
       <div className="flex items-center justify-between gap-3 text-sm">
-        <span className="font-medium text-text-primary">Credits</span>
+        <span className="font-medium text-text-primary">{localize('com_nav_quota_credits')}</span>
         <span
           className="text-right text-text-secondary"
           title={`${formatCreditExact(periodRemainingCredits)} / ${formatCreditExact(periodTotalCredits)}`}

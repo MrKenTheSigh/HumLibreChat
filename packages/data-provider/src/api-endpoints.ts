@@ -44,6 +44,7 @@ export const user = () => `${BASE_URL}/api/user`;
 export const userEntitlements = () => `${BASE_URL}/api/user/entitlements`;
 
 export const balance = () => `${BASE_URL}/api/balance`;
+const quotasRoot = `${BASE_URL}/api/quotas`;
 
 const adminRoot = `${BASE_URL}/api/admin`;
 const adminActivityLogsRoot = `${adminRoot}/activity-logs`;
@@ -62,6 +63,11 @@ const managerReviewsRoot = `${BASE_URL}/api/manager-reviews`;
 export const adminUsers = (params: q.AdminUsersListParams) => {
   return `${adminUsersRoot}${buildQuery(params)}`;
 };
+
+export const quotaRequests = (params: q.UserQuotaRequestsListParams = {}) =>
+  `${quotasRoot}/requests${buildQuery(params)}`;
+
+export const quotaRequestCreate = () => `${quotasRoot}/requests`;
 
 export const adminRoles = () => adminRolesRoot;
 
@@ -180,6 +186,17 @@ export const adminQuotaGrantReject = (grantId: string) =>
 
 export const adminQuotaGrantList = (params: q.AdminQuotaGrantsListParams) =>
   `${adminQuotasRoot}/grants${buildQuery(params)}`;
+
+export const adminQuotaRequests = () => `${adminQuotasRoot}/requests`;
+
+export const adminQuotaRequestList = (params: q.AdminQuotaRequestsListParams) =>
+  `${adminQuotasRoot}/requests${buildQuery(params)}`;
+
+export const adminQuotaRequestApprove = (requestId: string) =>
+  `${adminQuotasRoot}/requests/${encodeURIComponent(requestId)}/approve`;
+
+export const adminQuotaRequestReject = (requestId: string) =>
+  `${adminQuotasRoot}/requests/${encodeURIComponent(requestId)}/reject`;
 
 export const adminQuotaLedger = (params: q.AdminQuotaLedgerListParams) =>
   `${adminQuotasRoot}/ledger${buildQuery(params)}`;

@@ -27,7 +27,7 @@ const { createRun, StreamRunManager } = require('~/server/services/Runs');
 const { addTitle } = require('~/server/services/Endpoints/assistants');
 const { createRunBody } = require('~/server/services/createRunBody');
 const { getTransactions } = require('~/models/Transaction');
-const { checkBalance } = require('~/models/balanceMethods');
+const { checkBalance, checkQuotaBalance } = require('~/models/balanceMethods');
 const { getConvo } = require('~/models/Conversation');
 const getLogStores = require('~/cache/getLogStores');
 const { getOpenAIClient } = require('./helpers');
@@ -126,9 +126,6 @@ const chatV2 = async (req, res) => {
 
     const checkBalanceBeforeRun = async () => {
       const balanceConfig = getBalanceConfig(appConfig);
-      if (!balanceConfig?.enabled) {
-        return;
-      }
       const transactions =
         (await getTransactions({
           user: req.user.id,
@@ -148,7 +145,8 @@ const chatV2 = async (req, res) => {
       // Count tokens up to the current context window
       promptTokens = Math.min(promptTokens, getModelMaxTokens(model));
 
-      await checkBalance({
+      const checkSpending = balanceConfig?.enabled ? checkBalance : checkQuotaBalance;
+      await checkSpending({
         req,
         res,
         txData: {

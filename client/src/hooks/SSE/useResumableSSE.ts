@@ -15,7 +15,7 @@ import {
 } from 'librechat-data-provider';
 import type { TMessage, TPayload, TSubmission, EventSubmission } from 'librechat-data-provider';
 import type { EventHandlerParams } from './useEventHandlers';
-import { useGetStartupConfig, useGetUserBalance, queueTitleGeneration } from '~/data-provider';
+import { useGetUserBalance, queueTitleGeneration } from '~/data-provider';
 import type { ActiveJobsResponse } from '~/data-provider';
 import { useAuthContext } from '~/hooks/AuthContext';
 import useEventHandlers from './useEventHandlers';
@@ -122,9 +122,8 @@ export default function useResumableSSE(
     resetLatestMessage,
   });
 
-  const { data: startupConfig } = useGetStartupConfig();
   const balanceQuery = useGetUserBalance({
-    enabled: !!isAuthenticated && startupConfig?.balance?.enabled,
+    enabled: !!isAuthenticated,
   });
 
   /**
@@ -178,7 +177,7 @@ export default function useResumableSSE(
             clearStepMaps();
             // Optimistically remove from active jobs
             removeActiveJob(currentStreamId);
-            (startupConfig?.balance?.enabled ?? false) && balanceQuery.refetch();
+            balanceQuery.refetch();
             sse.close();
             setStreamId(null);
             return;
@@ -337,7 +336,7 @@ export default function useResumableSSE(
        * Order matters: check responseCode first since HTTP errors may also include data
        */
       sse.addEventListener('error', async (e: MessageEvent) => {
-        (startupConfig?.balance?.enabled ?? false) && balanceQuery.refetch();
+        balanceQuery.refetch();
 
         /* @ts-ignore - sse.js types don't expose responseCode */
         const responseCode = e.responseCode;
@@ -540,7 +539,6 @@ export default function useResumableSSE(
       setIsSubmitting,
       getMessages,
       setMessages,
-      startupConfig?.balance?.enabled,
       balanceQuery,
       removeActiveJob,
     ],

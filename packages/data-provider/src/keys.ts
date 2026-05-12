@@ -12,6 +12,7 @@ export enum QueryKeys {
   name = 'name', // user key name
   models = 'models',
   balance = 'balance',
+  quotaRequests = 'quotaRequests',
   endpoints = 'endpoints',
   presets = 'presets',
   searchResults = 'searchResults',
@@ -65,6 +66,7 @@ export enum QueryKeys {
   adminQuotaAccounts = 'adminQuotaAccounts',
   adminQuotaLedger = 'adminQuotaLedger',
   adminQuotaGrants = 'adminQuotaGrants',
+  adminQuotaRequests = 'adminQuotaRequests',
   adminConversations = 'adminConversations',
   adminConversation = 'adminConversation',
   adminConversationMessages = 'adminConversationMessages',

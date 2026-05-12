@@ -10,6 +10,7 @@ const mockRecordCollectedUsage = jest
   .mockResolvedValue({ input_tokens: 100, output_tokens: 50 });
 const mockGetBalanceConfig = jest.fn().mockReturnValue({ enabled: true });
 const mockGetTransactionsConfig = jest.fn().mockReturnValue({ enabled: true });
+const mockCheckQuotaAvailability = jest.fn().mockResolvedValue({ canSpend: true });
 
 jest.mock('nanoid', () => ({
   nanoid: jest.fn(() => 'mock-nanoid-123'),
@@ -53,6 +54,7 @@ jest.mock('@librechat/api', () => ({
   createErrorResponse: jest.fn(),
   getTransactionsConfig: mockGetTransactionsConfig,
   recordCollectedUsage: mockRecordCollectedUsage,
+  checkQuotaAvailability: mockCheckQuotaAvailability,
   buildNonStreamingResponse: jest.fn().mockReturnValue({ id: 'resp-123' }),
   createOpenAIStreamTracker: jest.fn().mockReturnValue({
     addText: jest.fn(),

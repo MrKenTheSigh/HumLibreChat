@@ -46,6 +46,7 @@ describe('getTransactionsConfig', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     delete process.env.CHECK_BALANCE;
+    delete process.env.LEGACY_BALANCE_ENABLED;
     delete process.env.START_BALANCE;
   });
 
@@ -88,6 +89,7 @@ describe('getTransactionsConfig', () => {
 
     describe('balance and transactions interaction', () => {
       it('should force transactions to be enabled when balance is enabled but transactions is disabled', () => {
+        process.env.LEGACY_BALANCE_ENABLED = 'true';
         const appConfig = createTestAppConfig({
           transactions: { enabled: false },
           balance: { enabled: true },
@@ -131,8 +133,8 @@ describe('getTransactionsConfig', () => {
     });
 
     describe('with environment variables for balance', () => {
-      it('should force transactions enabled when CHECK_BALANCE env is true and transactions is false', () => {
-        process.env.CHECK_BALANCE = 'true';
+      it('should force transactions enabled when LEGACY_BALANCE_ENABLED env is true and transactions is false', () => {
+        process.env.LEGACY_BALANCE_ENABLED = 'true';
         const appConfig = createTestAppConfig({
           transactions: { enabled: false },
         });
@@ -144,8 +146,8 @@ describe('getTransactionsConfig', () => {
         );
       });
 
-      it('should allow transactions disabled when CHECK_BALANCE env is false', () => {
-        process.env.CHECK_BALANCE = 'false';
+      it('should allow transactions disabled when LEGACY_BALANCE_ENABLED env is false', () => {
+        process.env.LEGACY_BALANCE_ENABLED = 'false';
         const appConfig = createTestAppConfig({
           transactions: { enabled: false },
         });
@@ -202,12 +204,13 @@ describe('getBalanceConfig', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     delete process.env.CHECK_BALANCE;
+    delete process.env.LEGACY_BALANCE_ENABLED;
     delete process.env.START_BALANCE;
   });
 
   describe('when appConfig is not provided', () => {
     it('should return config based on environment variables', () => {
-      process.env.CHECK_BALANCE = 'true';
+      process.env.LEGACY_BALANCE_ENABLED = 'true';
       process.env.START_BALANCE = '1000';
       const result = getBalanceConfig();
       expect(result).toEqual({
@@ -221,15 +224,15 @@ describe('getBalanceConfig', () => {
       expect(result).toEqual({ enabled: false });
     });
 
-    it('should handle CHECK_BALANCE true without START_BALANCE', () => {
-      process.env.CHECK_BALANCE = 'true';
+    it('should handle LEGACY_BALANCE_ENABLED true without START_BALANCE', () => {
+      process.env.LEGACY_BALANCE_ENABLED = 'true';
       const result = getBalanceConfig();
       expect(result).toEqual({
         enabled: true,
       });
     });
 
-    it('should handle START_BALANCE without CHECK_BALANCE', () => {
+    it('should handle START_BALANCE without LEGACY_BALANCE_ENABLED', () => {
       process.env.START_BALANCE = '5000';
       const result = getBalanceConfig();
       expect(result).toEqual({
@@ -241,7 +244,7 @@ describe('getBalanceConfig', () => {
 
   describe('when appConfig is provided', () => {
     it('should merge appConfig balance with env config', () => {
-      process.env.CHECK_BALANCE = 'true';
+      process.env.LEGACY_BALANCE_ENABLED = 'true';
       process.env.START_BALANCE = '1000';
       const appConfig = createTestAppConfig({
         balance: {
@@ -252,14 +255,14 @@ describe('getBalanceConfig', () => {
       });
       const result = getBalanceConfig(appConfig);
       expect(result).toEqual({
-        enabled: false,
+        enabled: true,
         startBalance: 2000,
         autoRefillEnabled: true,
       });
     });
 
     it('should use env config when appConfig balance is not provided', () => {
-      process.env.CHECK_BALANCE = 'true';
+      process.env.LEGACY_BALANCE_ENABLED = 'true';
       process.env.START_BALANCE = '3000';
       const appConfig = createTestAppConfig();
       const result = getBalanceConfig(appConfig);
@@ -270,7 +273,7 @@ describe('getBalanceConfig', () => {
     });
 
     it('should handle appConfig with null balance', () => {
-      process.env.CHECK_BALANCE = 'true';
+      process.env.LEGACY_BALANCE_ENABLED = 'true';
       const appConfig = createTestAppConfig({
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         balance: null as any,
@@ -278,6 +281,20 @@ describe('getBalanceConfig', () => {
       const result = getBalanceConfig(appConfig);
       expect(result).toEqual({
         enabled: true,
+      });
+    });
+
+    it('should force legacy balance disabled when LEGACY_BALANCE_ENABLED is not true', () => {
+      const appConfig = createTestAppConfig({
+        balance: {
+          enabled: true,
+          startBalance: 2000,
+        },
+      });
+      const result = getBalanceConfig(appConfig);
+      expect(result).toEqual({
+        enabled: false,
+        startBalance: 2000,
       });
     });
   });

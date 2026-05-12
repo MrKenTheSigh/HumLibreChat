@@ -1,5 +1,5 @@
 const express = require('express');
-const { requireAdmin } = require('@librechat/api');
+const { requireAdmin, requireAdminDataAccess } = require('@librechat/api');
 const {
   requireJwtAuth,
   configMiddleware,
@@ -20,10 +20,11 @@ const {
 
 const router = express.Router();
 
-router.use(requireJwtAuth, requireAdmin);
+router.use(requireJwtAuth);
 
-router.get('/', getAdminUsers);
-router.post('/', configMiddleware, createAdminUser);
+router.get('/', requireAdminDataAccess, getAdminUsers);
+router.post('/', requireAdmin, configMiddleware, createAdminUser);
+router.use(requireAdmin);
 router.get('/:userId', configMiddleware, getAdminUser);
 router.patch('/:userId', updateAdminUser);
 router.post('/:userId/balance/add', addAdminUserBalance);

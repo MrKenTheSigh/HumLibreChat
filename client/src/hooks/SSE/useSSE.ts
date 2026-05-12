@@ -6,7 +6,7 @@ import { request, createPayload, removeNullishValues } from 'librechat-data-prov
 import type { TMessage, TPayload, TSubmission, EventSubmission } from 'librechat-data-provider';
 import type { EventHandlerParams } from './useEventHandlers';
 import type { TResData } from '~/common';
-import { useGetStartupConfig, useGetUserBalance } from '~/data-provider';
+import { useGetUserBalance } from '~/data-provider';
 import { useAuthContext } from '~/hooks/AuthContext';
 import useEventHandlers from './useEventHandlers';
 import { clearAllDrafts } from '~/utils';
@@ -67,9 +67,8 @@ export default function useSSE(
     resetLatestMessage,
   });
 
-  const { data: startupConfig } = useGetStartupConfig();
   const balanceQuery = useGetUserBalance({
-    enabled: !!isAuthenticated && startupConfig?.balance?.enabled,
+    enabled: !!isAuthenticated,
   });
 
   useEffect(() => {
@@ -112,7 +111,7 @@ export default function useSSE(
           setIsSubmitting(false);
           setShowStopButton(false);
         }
-        (startupConfig?.balance?.enabled ?? false) && balanceQuery.refetch();
+        balanceQuery.refetch();
         console.log('final', data);
         return;
       } else if (data.created != null) {
@@ -214,7 +213,7 @@ export default function useSSE(
       }
 
       console.log('error in server stream.');
-      (startupConfig?.balance?.enabled ?? false) && balanceQuery.refetch();
+      balanceQuery.refetch();
 
       let data: TResData | undefined = undefined;
       try {

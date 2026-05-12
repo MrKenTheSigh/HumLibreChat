@@ -1,10 +1,16 @@
 import { render, screen } from 'test/layout-test-utils';
+import { useGetStartupConfig } from '~/data-provider';
 import { useGetAdminPlansQuery } from '~/data-provider/Admin';
 import { useLocalize } from '~/hooks';
 import AdminPlansPage from '../AdminPlansPage';
 
 jest.mock('~/data-provider/Admin', () => ({
   useGetAdminPlansQuery: jest.fn(),
+}));
+
+jest.mock('~/data-provider', () => ({
+  ...jest.requireActual('~/data-provider'),
+  useGetStartupConfig: jest.fn(),
 }));
 
 jest.mock('~/hooks', () => ({
@@ -14,11 +20,19 @@ jest.mock('~/hooks', () => ({
 const mockUseGetAdminPlansQuery = useGetAdminPlansQuery as jest.MockedFunction<
   typeof useGetAdminPlansQuery
 >;
+const mockUseGetStartupConfig = useGetStartupConfig as jest.MockedFunction<
+  typeof useGetStartupConfig
+>;
 const mockUseLocalize = useLocalize as jest.MockedFunction<typeof useLocalize>;
 
 describe('AdminPlansPage', () => {
   beforeEach(() => {
     mockUseLocalize.mockReturnValue((key: string) => key);
+    mockUseGetStartupConfig.mockReturnValue({
+      data: {
+        legacyBalanceEnabled: false,
+      },
+    } as ReturnType<typeof useGetStartupConfig>);
     mockUseGetAdminPlansQuery.mockReturnValue({
       isLoading: false,
       data: {

@@ -40,6 +40,7 @@ const { getConvoFiles, saveConvo, getConvo } = require('~/models/Conversation');
 const { spendTokens, spendStructuredTokens } = require('~/models/spendTokens');
 const { getMultiplier, getCacheMultiplier } = require('~/models/tx');
 const { getAgent, getAgents } = require('~/models/Agent');
+const { checkQuotaBalance } = require('~/models/quotaBalance');
 const db = require('~/models');
 
 /** @type {import('@librechat/api').AppConfig | null} */
@@ -51,6 +52,13 @@ let appConfig = null;
  */
 function setAppConfig(config) {
   appConfig = config;
+}
+
+function getPromptTokenEstimate(indexTokenCountMap) {
+  return Object.values(indexTokenCountMap ?? {}).reduce((total, value) => {
+    const tokenCount = Number(value) || 0;
+    return total + tokenCount;
+  }, 0);
 }
 
 /**
@@ -393,6 +401,18 @@ const createResponse = async (req, res) => {
       {},
       toolSet,
     );
+
+    await checkQuotaBalance({
+      req,
+      res,
+      txData: {
+        user: req.user?.id ?? 'api-user',
+        tokenType: 'prompt',
+        amount: getPromptTokenEstimate(indexTokenCountMap),
+        endpoint: agent.provider,
+        model: primaryConfig.model || agent.model_parameters?.model,
+      },
+    });
 
     // Create tracker for streaming or aggregator for non-streaming
     const tracker = actuallyStreaming ? createResponseTracker() : null;

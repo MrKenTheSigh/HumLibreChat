@@ -4,6 +4,7 @@ import {
   quotaGrantSchema,
   quotaLedgerEntrySchema,
   quotaPeriodSchema,
+  quotaRequestSchema,
 } from '~/schema/quota';
 import type {
   IQuotaAccount,
@@ -11,6 +12,7 @@ import type {
   IQuotaGrant,
   IQuotaLedgerEntry,
   IQuotaPeriod,
+  IQuotaRequest,
 } from '~/types';
 
 export function createQuotaPeriodModel(mongoose: typeof import('mongoose')) {
@@ -37,4 +39,11 @@ export function createQuotaAllocationModel(mongoose: typeof import('mongoose')) 
 
 export function createQuotaGrantModel(mongoose: typeof import('mongoose')) {
   return mongoose.models.QuotaGrant || mongoose.model<IQuotaGrant>('QuotaGrant', quotaGrantSchema);
+}
+
+export function createQuotaRequestModel(mongoose: typeof import('mongoose')) {
+  return (
+    mongoose.models.QuotaRequest ||
+    mongoose.model<IQuotaRequest>('QuotaRequest', quotaRequestSchema)
+  );
 }

@@ -127,6 +127,18 @@ export function getUserBalance(): Promise<t.TBalanceResponse> {
   return request.get(endpoints.balance());
 }
 
+export function getUserQuotaRequests(
+  params: q.UserQuotaRequestsListParams,
+): Promise<q.UserQuotaRequestsListResponse> {
+  return request.get(endpoints.quotaRequests(params));
+}
+
+export function createUserQuotaRequest(
+  payload: q.UserQuotaRequestCreateRequest,
+): Promise<q.UserQuotaRequestCreateResponse> {
+  return request.post(endpoints.quotaRequestCreate(), payload);
+}
+
 export function getAdminRoles(): Promise<q.AdminRolesListResponse> {
   return request.get(endpoints.adminRoles());
 }
@@ -420,6 +432,34 @@ export function rejectAdminQuotaGrantRequest(
   payload: q.AdminQuotaGrantDecisionRequest,
 ): Promise<q.AdminQuotaGrantDecisionResponse> {
   return request.post(endpoints.adminQuotaGrantReject(payload.grantId), {
+    reason: payload.reason,
+  });
+}
+
+export function getAdminQuotaRequests(
+  params: q.AdminQuotaRequestsListParams,
+): Promise<q.AdminQuotaRequestsListResponse> {
+  return request.get(endpoints.adminQuotaRequestList(params));
+}
+
+export function createAdminQuotaRequest(
+  payload: q.AdminQuotaRequestCreateRequest,
+): Promise<q.AdminQuotaRequestCreateResponse> {
+  return request.post(endpoints.adminQuotaRequests(), payload);
+}
+
+export function approveAdminQuotaRequest(
+  payload: q.AdminQuotaRequestDecisionRequest,
+): Promise<q.AdminQuotaRequestDecisionResponse> {
+  return request.post(endpoints.adminQuotaRequestApprove(payload.requestId), {
+    reason: payload.reason,
+  });
+}
+
+export function rejectAdminQuotaRequest(
+  payload: q.AdminQuotaRequestDecisionRequest,
+): Promise<q.AdminQuotaRequestDecisionResponse> {
+  return request.post(endpoints.adminQuotaRequestReject(payload.requestId), {
     reason: payload.reason,
   });
 }

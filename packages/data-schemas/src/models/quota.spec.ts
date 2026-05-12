@@ -9,6 +9,7 @@ let QuotaAccount: mongoose.Model<t.IQuotaAccount>;
 let QuotaLedgerEntry: mongoose.Model<t.IQuotaLedgerEntry>;
 let QuotaAllocation: mongoose.Model<t.IQuotaAllocation>;
 let QuotaGrant: mongoose.Model<t.IQuotaGrant>;
+let QuotaRequest: mongoose.Model<t.IQuotaRequest>;
 
 beforeAll(async () => {
   mongoServer = await MongoMemoryServer.create({
@@ -24,6 +25,7 @@ beforeAll(async () => {
   QuotaLedgerEntry = models.QuotaLedgerEntry as mongoose.Model<t.IQuotaLedgerEntry>;
   QuotaAllocation = models.QuotaAllocation as mongoose.Model<t.IQuotaAllocation>;
   QuotaGrant = models.QuotaGrant as mongoose.Model<t.IQuotaGrant>;
+  QuotaRequest = models.QuotaRequest as mongoose.Model<t.IQuotaRequest>;
 });
 
 afterAll(async () => {
@@ -39,6 +41,7 @@ beforeEach(async () => {
     QuotaLedgerEntry.syncIndexes(),
     QuotaAllocation.syncIndexes(),
     QuotaGrant.syncIndexes(),
+    QuotaRequest.syncIndexes(),
   ]);
 });
 
@@ -119,6 +122,14 @@ describe('Quota models', () => {
       status: 'approved',
       expiresAt: period.periodEnd,
     });
+    const request = await QuotaRequest.create({
+      periodId: period._id,
+      sourceAccountId: companyAccount._id,
+      targetAccountId: userAccount._id,
+      requestedByUserId: actorUserId,
+      amount: 300,
+      reason: 'Need more room for batch work',
+    });
     const ledger = await QuotaLedgerEntry.create({
       periodId: period._id,
       accountId: userAccount._id,
@@ -134,6 +145,8 @@ describe('Quota models', () => {
     expect(allocation.status).toBe('active');
     expect(grant.status).toBe('approved');
     expect(grant.expiresAt.toISOString()).toBe(period.periodEnd.toISOString());
+    expect(request.status).toBe('pending');
+    expect(request.sourceAccountId.toString()).toBe(companyAccount._id.toString());
     expect(ledger.entryType).toBe('usage');
     expect(ledger.amount).toBe(-15);
   });

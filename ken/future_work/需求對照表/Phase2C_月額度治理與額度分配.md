@@ -439,3 +439,39 @@ ActivityLog 需要新增或覆蓋以下 resource / action：
 - 部門額度的緩衝額度是否一開始就啟用，或先只保留欄位。
 - 額度提醒門檻是否全公司共用，或可由部門自訂。
 - 是否將「直接加點數」在第一版就改名為「額外授予額度」。
+
+## 2026-05-12 收斂紀錄
+
+若本次只剩約兩小時，收斂目標應先保證「新額度真的影響聊天」：
+
+- 對話送出前：舊 balance 開啟時維持既有 `checkBalance`，並在同一流程內檢查新 quota。
+- 對話送出前：舊 balance 關閉時仍需執行新 quota preflight，避免有 active quota period/account 卻沒有阻擋。
+- 用量寫入後：維持既有 `Transaction` 寫入後的 quota ledger 扣抵，依模型費率換算後扣 user / department / company account chain。
+- 非主要 UI 收尾先暫緩，避免在核心額度扣抵與阻擋未穩前繼續擴 UI。
+
+本次已補強的重點：
+
+- 一般聊天入口在 `balance.enabled === false` 時也會檢查新 quota。
+- Assistants v1 / v2 在 `balance.enabled === false` 時也會檢查新 quota。
+- OpenAI-compatible agents 與 Responses API 增加 prompt token preflight quota check。
+- legacy `spendTokens` / `spendStructuredTokens` 與 bulk `recordCollectedUsage` 路徑都已驗證會寫入 quota usage。
+
+仍需保留的後續工作：
+
+- 對話前只能以 prompt token 預估，completion 實際成本仍需在回寫 transaction 後扣抵；若要更嚴格，需要設計 completion buffer 或 max output 預扣。
+- quota 扣抵目前依序更新帳戶，後續需改成 MongoDB transaction 或條件式原子扣抵，避免併發時超分配或超用。
+- quota warning / block ledger 已有基礎，但尚未完整接通知與前端顯示。
+- OpenAI-compatible / Responses API 的 quota preflight 目前用 `indexTokenCountMap` 估算 prompt 成本，仍需實測多輪對話與工具呼叫的估算精度。
+- 新 quota 與舊 plan / `Balance.tokenCredits` 的 UI 呈現仍需再收斂，避免使用者看到兩套數字。
+
+2026-05-12 追加收斂：
+
+- 已加入 `LEGACY_BALANCE_ENABLED` 作為舊版 `Balance.tokenCredits` 流程的開關，預設關閉。
+- 舊版額度關閉時，前端會隱藏方案的「起始點數」與使用者舊 balance 相關操作，避免干擾新版 quota 流程。
+- 舊版額度關閉時，指派或清除方案不再寫入舊 `Balance`；既有 `startingCredits` 欄位先保留作相容資料。
+- 尚未完成：方案「起始點數」應正式改造成新版每月 quota template / 使用者基本上限。
+- 尚未完成：指派或變更方案時，需依使用者所屬部門檢查可分配額度，成功後建立或調整使用者 quota allocation。
+- 尚未完成：部門介面需統計底下使用者方案已保留的上限，供主管判斷還能分配哪些方案或額外額度。
+- 已修正：`LEGACY_BALANCE_ENABLED=false` 時，`/api/balance` 即使查到舊 `Balance` 資料，也不再回傳舊 token credits 給前端。
+- 尚未完成：舊版 admin balance add / set API 仍存在；目前 UI 已隱藏且新版 quota 不依賴它，後續應改成明確停用或轉接新版 quota grant 流程。
+- 尚未完成：部分工具型用量（例如 agent tool image generation）目前可透過 transaction 後扣抵新版 quota，但仍需補事前 quota preflight，避免工具呼叫本身超額才在事後反映。

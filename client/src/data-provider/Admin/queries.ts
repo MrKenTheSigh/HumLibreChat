@@ -328,6 +328,22 @@ export const useGetAdminQuotaGrantsQuery = (
   );
 };
 
+export const useGetAdminQuotaRequestsQuery = (
+  params: t.AdminQuotaRequestsListParams,
+  config?: UseQueryOptions<t.AdminQuotaRequestsListResponse>,
+): QueryObserverResult<t.AdminQuotaRequestsListResponse> => {
+  const enabled = config?.enabled ?? true;
+
+  return useQuery<t.AdminQuotaRequestsListResponse>(
+    [QueryKeys.adminQuotaRequests, params],
+    () => dataService.getAdminQuotaRequests(params),
+    {
+      ...config,
+      enabled,
+    },
+  );
+};
+
 export const useGetAdminConversationsQuery = (
   params: t.AdminConversationListParams,
   config?: UseQueryOptions<t.AdminConversationListResponse>,

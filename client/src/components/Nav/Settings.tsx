@@ -34,6 +34,7 @@ export default function Settings({ open, onOpenChange }: TDialogProps) {
   const [activeTab, setActiveTab] = useState(SettingsTabValues.GENERAL);
   const tabRefs = useRef({});
   const { hasAnyPersonalizationFeature, hasMemoryOptOut } = usePersonalizationAccess();
+  const legacyBalanceEnabled = startupConfig?.legacyBalanceEnabled === true;
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
     const tabs: SettingsTabValues[] = [
@@ -43,7 +44,7 @@ export default function Settings({ open, onOpenChange }: TDialogProps) {
       SettingsTabValues.SPEECH,
       ...(hasAnyPersonalizationFeature ? [SettingsTabValues.PERSONALIZATION] : []),
       SettingsTabValues.DATA,
-      ...(startupConfig?.balance?.enabled ? [SettingsTabValues.BALANCE] : []),
+      ...(legacyBalanceEnabled ? [SettingsTabValues.BALANCE] : []),
       SettingsTabValues.ACCOUNT,
     ];
     const currentIndex = tabs.indexOf(activeTab);
@@ -107,7 +108,7 @@ export default function Settings({ open, onOpenChange }: TDialogProps) {
       icon: <DataIcon />,
       label: 'com_nav_setting_data',
     },
-    ...(startupConfig?.balance?.enabled
+    ...(legacyBalanceEnabled
       ? [
           {
             value: SettingsTabValues.BALANCE,
@@ -243,7 +244,7 @@ export default function Settings({ open, onOpenChange }: TDialogProps) {
                     <Tabs.Content value={SettingsTabValues.DATA} tabIndex={-1}>
                       <Data />
                     </Tabs.Content>
-                    {startupConfig?.balance?.enabled && (
+                    {legacyBalanceEnabled && (
                       <Tabs.Content value={SettingsTabValues.BALANCE} tabIndex={-1}>
                         <Balance />
                       </Tabs.Content>

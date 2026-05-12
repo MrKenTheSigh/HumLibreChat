@@ -21,13 +21,18 @@ const publicSharedLinksEnabled =
 
 const sharePointFilePickerEnabled = isEnabled(process.env.ENABLE_SHAREPOINT_FILEPICKER);
 const openidReuseTokens = isEnabled(process.env.OPENID_REUSE_TOKENS);
+const legacyBalanceEnabled = isEnabled(process.env.LEGACY_BALANCE_ENABLED);
 
 router.get('/', async function (req, res) {
   const cache = getLogStores(CacheKeys.CONFIG_STORE);
   const appTitle = process.env.APP_TITLE || DEFAULT_APP_TITLE;
 
   const cachedStartupConfig = await cache.get(CacheKeys.STARTUP_CONFIG);
-  if (cachedStartupConfig && cachedStartupConfig.appTitle === appTitle) {
+  if (
+    cachedStartupConfig &&
+    cachedStartupConfig.appTitle === appTitle &&
+    cachedStartupConfig.legacyBalanceEnabled === legacyBalanceEnabled
+  ) {
     res.send(cachedStartupConfig);
     return;
   }
@@ -99,6 +104,7 @@ router.get('/', async function (req, res) {
       turnstile: appConfig?.turnstileConfig,
       modelSpecs: appConfig?.modelSpecs,
       balance: balanceConfig,
+      legacyBalanceEnabled,
       sharedLinksEnabled,
       publicSharedLinksEnabled,
       analyticsGtmId: process.env.ANALYTICS_GTM_ID,

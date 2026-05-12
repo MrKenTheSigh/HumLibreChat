@@ -9,6 +9,7 @@ import {
 } from '@librechat/client';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { AdminChannel, AdminPlanModelEntitlement, TError } from 'librechat-data-provider';
+import { useGetStartupConfig } from '~/data-provider';
 import {
   useCreateAdminPlanMutation,
   useDeleteAdminPlanMutation,
@@ -123,6 +124,8 @@ export default function AdminPlanForm() {
   const localize = useLocalize();
   const { planId = '' } = useParams();
   const isCreateMode = planId.length === 0;
+  const startupConfig = useGetStartupConfig();
+  const legacyBalanceEnabled = startupConfig.data?.legacyBalanceEnabled === true;
   const [form, setForm] = useState<PlanFormState>(emptyPlanState);
   const planQuery = useGetAdminPlanQuery(planId, {
     enabled: isCreateMode !== true && planId.length > 0,
@@ -233,13 +236,15 @@ export default function AdminPlanForm() {
                       <StatusBadge
                         label={`${selectedCount} ${localize('com_ui_admin_plan_model_entitlements').toLowerCase()}`}
                       />
-                      <StatusBadge
-                        label={`${localize('com_ui_admin_starting_credits')}: ${
-                          form.startingCredits.trim().length === 0
-                            ? localize('com_ui_none')
-                            : form.startingCredits
-                        }`}
-                      />
+                      {legacyBalanceEnabled && (
+                        <StatusBadge
+                          label={`${localize('com_ui_admin_starting_credits')}: ${
+                            form.startingCredits.trim().length === 0
+                              ? localize('com_ui_none')
+                              : form.startingCredits
+                          }`}
+                        />
+                      )}
                     </div>
                   </div>
                 </div>
@@ -253,6 +258,14 @@ export default function AdminPlanForm() {
               onSubmit={(event) => {
                 event.preventDefault();
 
+                const startingCredits = legacyBalanceEnabled
+                  ? form.startingCredits.trim().length === 0
+                    ? null
+                    : Number(form.startingCredits)
+                  : isCreateMode
+                    ? null
+                    : (planQuery.data?.startingCredits ?? null);
+
                 const payload = {
                   name: form.name.trim(),
                   slug: form.slug.trim(),
@@ -263,8 +276,7 @@ export default function AdminPlanForm() {
                   channelIds: [],
                   modelEntitlements: form.modelEntitlements,
                   notes: form.notes.trim(),
-                  startingCredits:
-                    form.startingCredits.trim().length === 0 ? null : Number(form.startingCredits),
+                  startingCredits,
                 };
 
                 if (isCreateMode) {
@@ -335,7 +347,11 @@ export default function AdminPlanForm() {
                       />
                     </label>
 
-                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <div
+                      className={`mt-4 grid gap-4 ${
+                        legacyBalanceEnabled ? 'md:grid-cols-2' : 'md:grid-cols-1'
+                      }`}
+                    >
                       <label className="flex flex-col gap-2 text-sm text-text-secondary">
                         {localize('com_ui_admin_sort_order')}
                         <input
@@ -347,21 +363,23 @@ export default function AdminPlanForm() {
                           className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
                         />
                       </label>
-                      <label className="flex flex-col gap-2 text-sm text-text-secondary">
-                        {localize('com_ui_admin_starting_credits')}
-                        <input
-                          type="number"
-                          min="0"
-                          value={form.startingCredits}
-                          onChange={(event) =>
-                            setForm((current) => ({
-                              ...current,
-                              startingCredits: event.target.value,
-                            }))
-                          }
-                          className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
-                        />
-                      </label>
+                      {legacyBalanceEnabled && (
+                        <label className="flex flex-col gap-2 text-sm text-text-secondary">
+                          {localize('com_ui_admin_starting_credits')}
+                          <input
+                            type="number"
+                            min="0"
+                            value={form.startingCredits}
+                            onChange={(event) =>
+                              setForm((current) => ({
+                                ...current,
+                                startingCredits: event.target.value,
+                              }))
+                            }
+                            className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
+                          />
+                        </label>
+                      )}
                     </div>
                   </section>
 

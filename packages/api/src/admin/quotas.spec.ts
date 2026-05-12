@@ -18,9 +18,14 @@ const mockQuotaGrantCreate = jest.fn();
 const mockQuotaGrantFind = jest.fn();
 const mockQuotaGrantFindById = jest.fn();
 const mockQuotaGrantFindByIdAndUpdate = jest.fn();
+const mockQuotaRequestCreate = jest.fn();
+const mockQuotaRequestFind = jest.fn();
+const mockQuotaRequestFindById = jest.fn();
+const mockQuotaRequestFindByIdAndUpdate = jest.fn();
 const mockQuotaLedgerEntryCreate = jest.fn();
 const mockQuotaLedgerEntryFind = jest.fn();
 const mockDepartmentFind = jest.fn();
+const mockDepartmentFindById = jest.fn();
 const mockDepartmentFindOne = jest.fn();
 const mockUserFind = jest.fn();
 const mockUserFindById = jest.fn();
@@ -35,6 +40,7 @@ jest.mock('@librechat/data-schemas', () => ({
     },
     Department: {
       find: mockDepartmentFind,
+      findById: mockDepartmentFindById,
       findOne: mockDepartmentFindOne,
     },
     QuotaAccount: {
@@ -54,6 +60,12 @@ jest.mock('@librechat/data-schemas', () => ({
       find: mockQuotaGrantFind,
       findById: mockQuotaGrantFindById,
       findByIdAndUpdate: mockQuotaGrantFindByIdAndUpdate,
+    },
+    QuotaRequest: {
+      create: mockQuotaRequestCreate,
+      find: mockQuotaRequestFind,
+      findById: mockQuotaRequestFindById,
+      findByIdAndUpdate: mockQuotaRequestFindByIdAndUpdate,
     },
     QuotaLedgerEntry: {
       create: mockQuotaLedgerEntryCreate,
@@ -83,7 +95,10 @@ const {
   createAdminQuotaAllocation,
   createAdminQuotaGrant,
   createAdminQuotaGrantRequest,
+  createAdminQuotaRequest,
   createAdminQuotaPeriod,
+  approveAdminQuotaRequest,
+  getAdminQuotaRequests,
   getAdminQuotaAccounts,
   getAdminQuotaLedger,
 } = quotaHandlers;
@@ -115,6 +130,14 @@ function createLeanQuery<T>(value: T) {
 function createSortLeanQuery<T>(value: T) {
   return {
     sort: jest.fn().mockReturnThis(),
+    lean: jest.fn().mockResolvedValue(value),
+  };
+}
+
+function createSortLimitLeanQuery<T>(value: T) {
+  return {
+    sort: jest.fn().mockReturnThis(),
+    limit: jest.fn().mockReturnThis(),
     lean: jest.fn().mockResolvedValue(value),
   };
 }
@@ -177,7 +200,7 @@ describe('admin quota handlers', () => {
     mockQuotaAccountFindById.mockReturnValue(createLeanOrFailQuery(companyAccountRecord));
 
     const req = {
-      user: { id: actorUserId.toString() },
+      user: { id: actorUserId.toString(), role: 'ADMIN' },
       body: {
         year: 2026,
         month: 4,
@@ -263,6 +286,7 @@ describe('admin quota handlers', () => {
     });
 
     const req = {
+      user: { role: 'ADMIN' },
       body: {
         year: 2026,
         createFullYear: true,
@@ -290,6 +314,7 @@ describe('admin quota handlers', () => {
 
   it('returns a readable validation error when the annual quota period year is missing', async () => {
     const req = {
+      user: { role: 'ADMIN' },
       body: {
         createFullYear: true,
         companyCredits: 10000,
@@ -380,6 +405,7 @@ describe('admin quota handlers', () => {
     );
 
     const req = {
+      user: { role: 'ADMIN' },
       body: {
         year: 2026,
         month: 5,
@@ -416,6 +442,7 @@ describe('admin quota handlers', () => {
       .mockReturnValueOnce(createSelectLeanQuery({ _id: new mongoose.Types.ObjectId() }));
 
     const req = {
+      user: { role: 'ADMIN' },
       body: {
         year: 2026,
         createFullYear: true,
@@ -495,6 +522,7 @@ describe('admin quota handlers', () => {
     });
 
     const req = {
+      user: { role: 'ADMIN' },
       query: { periodId: periodId.toString() },
     } as unknown as Request;
     const res = createMockResponse();
@@ -622,6 +650,7 @@ describe('admin quota handlers', () => {
     });
 
     const req = {
+      user: { role: 'ADMIN' },
       query: { periodId: periodId.toString(), limit: '10' },
     } as unknown as Request;
     const res = createMockResponse();
@@ -750,6 +779,7 @@ describe('admin quota handlers', () => {
     });
 
     const req = {
+      user: { role: 'ADMIN' },
       query: { periodId: periodId.toString(), limit: '10' },
     } as unknown as Request;
     const res = createMockResponse();
@@ -826,8 +856,15 @@ describe('admin quota handlers', () => {
 
     mockQuotaPeriodFindById.mockReturnValue(createLeanQuery(periodRecord));
     mockQuotaAccountFindById.mockReturnValue(createLeanQuery(fromAccount));
+    mockDepartmentFindById.mockReturnValue(
+      createSelectLeanQuery({
+        _id: new mongoose.Types.ObjectId(),
+        parentDepartmentId: null,
+      }),
+    );
 
     const req = {
+      user: { role: 'ADMIN' },
       body: {
         periodId: periodId.toString(),
         fromAccountId: fromAccountId.toString(),
@@ -874,6 +911,7 @@ describe('admin quota handlers', () => {
     mockQuotaAccountFindById.mockReturnValue(createLeanQuery(fromAccount));
 
     const req = {
+      user: { role: 'ADMIN' },
       body: {
         periodId: periodId.toString(),
         fromAccountId: fromAccountId.toString(),
@@ -931,6 +969,7 @@ describe('admin quota handlers', () => {
     );
 
     const req = {
+      user: { role: 'ADMIN' },
       body: {
         periodId: periodId.toString(),
         fromAccountId: fromAccountId.toString(),
@@ -993,6 +1032,7 @@ describe('admin quota handlers', () => {
     );
 
     const req = {
+      user: { role: 'ADMIN' },
       body: {
         periodId: periodId.toString(),
         fromAccountId: fromAccountId.toString(),
@@ -1048,6 +1088,7 @@ describe('admin quota handlers', () => {
     );
 
     const req = {
+      user: { role: 'ADMIN' },
       body: {
         periodId: periodId.toString(),
         fromAccountId: fromAccountId.toString(),
@@ -1128,14 +1169,20 @@ describe('admin quota handlers', () => {
     mockQuotaPeriodFindById.mockReturnValue(createLeanQuery(periodRecord));
     mockQuotaAccountFindById
       .mockReturnValueOnce(createLeanQuery(fromAccount))
-      .mockReturnValueOnce(createLeanOrFailQuery(storedToAccount))
-      .mockReturnValueOnce(createLeanOrFailQuery(storedFromAccount));
+      .mockReturnValueOnce(createLeanOrFailQuery(storedFromAccount))
+      .mockReturnValueOnce(createLeanOrFailQuery(storedToAccount));
     mockQuotaAccountFindOne.mockReturnValue(createLeanQuery(toAccount));
+    mockDepartmentFindById.mockReturnValue(
+      createSelectLeanQuery({
+        _id: new mongoose.Types.ObjectId(scopeId),
+        parentDepartmentId: null,
+      }),
+    );
     mockQuotaAllocationCreate.mockResolvedValue({ _id: allocationId });
     mockQuotaAllocationFindById.mockReturnValue(createLeanOrFailQuery(allocationRecord));
 
     const req = {
-      user: { id: actorUserId.toString() },
+      user: { id: actorUserId.toString(), role: 'ADMIN' },
       body: {
         periodId: periodId.toString(),
         fromAccountId: fromAccountId.toString(),
@@ -1186,6 +1233,410 @@ describe('admin quota handlers', () => {
       }),
     );
     expect(res.status).toHaveBeenCalledWith(201);
+  });
+
+  it('creates a pending quota request against the parent account', async () => {
+    const actorUserId = new mongoose.Types.ObjectId();
+    const periodId = new mongoose.Types.ObjectId();
+    const sourceAccountId = new mongoose.Types.ObjectId();
+    const targetAccountId = new mongoose.Types.ObjectId();
+    const requestId = new mongoose.Types.ObjectId();
+    const periodRecord = {
+      _id: periodId,
+      periodKey: '2026-04',
+      timezone: 'UTC',
+      periodStart: new Date('2026-04-01T00:00:00.000Z'),
+      periodEnd: new Date('2026-04-30T23:59:59.999Z'),
+      status: 'active',
+    };
+    const sourceAccount = {
+      _id: sourceAccountId,
+      periodId,
+      scopeType: 'department',
+      scopeId: new mongoose.Types.ObjectId().toString(),
+      baseAllocatedCredits: 100,
+      extraGrantedCredits: 0,
+      reservedCredits: 20,
+      usedCredits: 0,
+      remainingCredits: 100,
+      bufferCredits: 0,
+    };
+    const targetAccount = {
+      _id: targetAccountId,
+      periodId,
+      scopeType: 'user',
+      scopeId: new mongoose.Types.ObjectId().toString(),
+      parentAccountId: sourceAccountId,
+      baseAllocatedCredits: 20,
+      extraGrantedCredits: 0,
+      reservedCredits: 0,
+      usedCredits: 0,
+      remainingCredits: 20,
+      bufferCredits: 0,
+    };
+    const requestRecord = {
+      _id: requestId,
+      periodId,
+      sourceAccountId,
+      targetAccountId,
+      requestedByUserId: actorUserId,
+      reviewedByUserId: null,
+      amount: 15,
+      reason: 'More capacity for project work',
+      status: 'pending',
+      requestedAt: new Date('2026-04-10T00:00:00.000Z'),
+    };
+
+    mockQuotaPeriodFindById.mockReturnValue(createLeanQuery(periodRecord));
+    mockQuotaAccountFindById
+      .mockReturnValueOnce(createLeanQuery(targetAccount))
+      .mockReturnValueOnce(createLeanQuery(sourceAccount));
+    mockQuotaRequestCreate.mockResolvedValue({ _id: requestId });
+    mockQuotaRequestFindById.mockReturnValue(createLeanOrFailQuery(requestRecord));
+
+    const req = {
+      user: { id: actorUserId.toString(), role: 'ADMIN' },
+      body: {
+        periodId: periodId.toString(),
+        targetAccountId: targetAccountId.toString(),
+        amount: 15,
+        reason: 'More capacity for project work',
+      },
+    } as unknown as Request;
+    const res = createMockResponse();
+
+    await createAdminQuotaRequest(req, res);
+
+    expect(mockQuotaRequestCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        periodId,
+        sourceAccountId,
+        targetAccountId,
+        requestedByUserId: actorUserId,
+        amount: 15,
+        status: 'pending',
+      }),
+    );
+    expect(mockActivityLogCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'quota_request.create',
+        resourceType: 'quota_request',
+      }),
+    );
+    expect(res.status).toHaveBeenCalledWith(201);
+  });
+
+  it('filters manager quota requests to managed accounts and their parent accounts', async () => {
+    const managerUserId = new mongoose.Types.ObjectId();
+    const rootDepartmentId = new mongoose.Types.ObjectId();
+    const childDepartmentId = new mongoose.Types.ObjectId();
+    const siblingDepartmentId = new mongoose.Types.ObjectId();
+    const childUserId = new mongoose.Types.ObjectId();
+    const periodId = new mongoose.Types.ObjectId();
+    const companyAccountId = new mongoose.Types.ObjectId();
+    const rootDepartmentAccountId = new mongoose.Types.ObjectId();
+    const childDepartmentAccountId = new mongoose.Types.ObjectId();
+    const childUserAccountId = new mongoose.Types.ObjectId();
+
+    mockUserFindById.mockReturnValue(
+      createSelectLeanQuery({ _id: managerUserId, departmentId: rootDepartmentId }),
+    );
+    mockDepartmentFind.mockReturnValue(
+      createSelectLeanQuery([
+        { _id: rootDepartmentId, parentDepartmentId: null },
+        { _id: childDepartmentId, parentDepartmentId: rootDepartmentId },
+        { _id: siblingDepartmentId, parentDepartmentId: null },
+      ]),
+    );
+    mockUserFind.mockReturnValue(createSelectLeanQuery([{ _id: childUserId }]));
+    mockQuotaAccountFind.mockReturnValue(
+      createSelectLeanQuery([
+        {
+          _id: rootDepartmentAccountId,
+          parentAccountId: companyAccountId,
+        },
+        {
+          _id: childDepartmentAccountId,
+          parentAccountId: rootDepartmentAccountId,
+        },
+        {
+          _id: childUserAccountId,
+          parentAccountId: childDepartmentAccountId,
+        },
+      ]),
+    );
+    mockQuotaRequestFind.mockReturnValue(createSortLimitLeanQuery([]));
+
+    const req = {
+      user: { id: managerUserId.toString(), role: 'MANAGER' },
+      query: {
+        periodId: periodId.toString(),
+        status: 'pending',
+        limit: '100',
+      },
+    } as unknown as Request;
+    const res = createMockResponse();
+
+    await getAdminQuotaRequests(req, res);
+
+    expect(mockQuotaRequestFind).toHaveBeenCalledWith({
+      $and: expect.arrayContaining([
+        { periodId },
+        {
+          $or: [
+            {
+              sourceAccountId: {
+                $in: expect.arrayContaining([
+                  companyAccountId,
+                  rootDepartmentAccountId,
+                  childDepartmentAccountId,
+                  childUserAccountId,
+                ]),
+              },
+            },
+            {
+              targetAccountId: {
+                $in: expect.arrayContaining([
+                  companyAccountId,
+                  rootDepartmentAccountId,
+                  childDepartmentAccountId,
+                  childUserAccountId,
+                ]),
+              },
+            },
+          ],
+        },
+        { status: 'pending' },
+      ]),
+    });
+    expect(res.status).toHaveBeenCalledWith(200);
+  });
+
+  it('approves a pending quota request by allocating from source to target', async () => {
+    const actorUserId = new mongoose.Types.ObjectId();
+    const periodId = new mongoose.Types.ObjectId();
+    const sourceAccountId = new mongoose.Types.ObjectId();
+    const targetAccountId = new mongoose.Types.ObjectId();
+    const requestId = new mongoose.Types.ObjectId();
+    const allocationId = new mongoose.Types.ObjectId();
+    const periodRecord = {
+      _id: periodId,
+      periodKey: '2026-04',
+      timezone: 'UTC',
+      periodStart: new Date('2026-04-01T00:00:00.000Z'),
+      periodEnd: new Date('2026-04-30T23:59:59.999Z'),
+      status: 'active',
+    };
+    const sourceAccount = {
+      _id: sourceAccountId,
+      periodId,
+      scopeType: 'department',
+      scopeId: new mongoose.Types.ObjectId().toString(),
+      baseAllocatedCredits: 100,
+      extraGrantedCredits: 0,
+      reservedCredits: 20,
+      usedCredits: 5,
+      remainingCredits: 95,
+      bufferCredits: 0,
+      warningThresholds: [0.8],
+      hardLimitEnabled: true,
+    };
+    const targetAccount = {
+      _id: targetAccountId,
+      periodId,
+      scopeType: 'user',
+      scopeId: new mongoose.Types.ObjectId().toString(),
+      parentAccountId: sourceAccountId,
+      baseAllocatedCredits: 20,
+      extraGrantedCredits: 0,
+      reservedCredits: 0,
+      usedCredits: 2,
+      remainingCredits: 18,
+      bufferCredits: 0,
+      warningThresholds: [0.8],
+      hardLimitEnabled: true,
+    };
+    const requestRecord = {
+      _id: requestId,
+      periodId,
+      sourceAccountId,
+      targetAccountId,
+      requestedByUserId: new mongoose.Types.ObjectId(),
+      reviewedByUserId: null,
+      amount: 15,
+      reason: 'More capacity for project work',
+      status: 'pending',
+      requestedAt: new Date('2026-04-10T00:00:00.000Z'),
+    };
+    const approvedRequest = {
+      ...requestRecord,
+      reviewedByUserId: actorUserId,
+      fulfilledAllocationId: allocationId,
+      status: 'approved',
+      reviewReason: 'Approved',
+      reviewedAt: new Date('2026-04-10T01:00:00.000Z'),
+    };
+    const allocationRecord = {
+      _id: allocationId,
+      periodId,
+      fromAccountId: sourceAccountId,
+      toAccountId: targetAccountId,
+      amount: 15,
+      status: 'active',
+      reason: requestRecord.reason,
+      actorUserId,
+    };
+    const storedSourceAccount = { ...sourceAccount, reservedCredits: 35 };
+    const storedTargetAccount = {
+      ...targetAccount,
+      baseAllocatedCredits: 35,
+      remainingCredits: 33,
+    };
+
+    mockQuotaRequestFindById.mockReturnValue(createLeanQuery(requestRecord));
+    mockQuotaPeriodFindById.mockReturnValue(createLeanQuery(periodRecord));
+    mockQuotaAccountFindById
+      .mockReturnValueOnce(createLeanQuery(sourceAccount))
+      .mockReturnValueOnce(createLeanQuery(targetAccount))
+      .mockReturnValueOnce(createLeanOrFailQuery(storedSourceAccount))
+      .mockReturnValueOnce(createLeanOrFailQuery(storedTargetAccount));
+    mockQuotaAllocationCreate.mockResolvedValue({ _id: allocationId });
+    mockQuotaAllocationFindById.mockReturnValue(createLeanOrFailQuery(allocationRecord));
+    mockQuotaRequestFindByIdAndUpdate.mockReturnValue(createLeanQuery(approvedRequest));
+
+    const req = {
+      user: { id: actorUserId.toString(), role: 'ADMIN' },
+      params: { requestId: requestId.toString() },
+      body: { reason: 'Approved' },
+    } as unknown as Request;
+    const res = createMockResponse();
+
+    await approveAdminQuotaRequest(req, res);
+
+    expect(mockQuotaLedgerEntryCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accountId: sourceAccountId,
+        counterpartyAccountId: targetAccountId,
+        amount: -15,
+        sourceType: 'manager_action',
+        sourceId: requestId.toString(),
+      }),
+    );
+    expect(mockQuotaRequestFindByIdAndUpdate).toHaveBeenCalledWith(
+      requestId,
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          status: 'approved',
+          fulfilledAllocationId: allocationId,
+        }),
+      }),
+      { new: true },
+    );
+    expect(mockActivityLogCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'quota_request.approve',
+        resourceType: 'quota_request',
+      }),
+    );
+    expect(res.status).toHaveBeenCalledWith(200);
+  });
+
+  it('blocks manager quota request approval when source account is outside their managed scope', async () => {
+    const managerUserId = new mongoose.Types.ObjectId();
+    const rootDepartmentId = new mongoose.Types.ObjectId();
+    const childDepartmentId = new mongoose.Types.ObjectId();
+    const siblingDepartmentId = new mongoose.Types.ObjectId();
+    const scopedUserId = new mongoose.Types.ObjectId();
+    const periodId = new mongoose.Types.ObjectId();
+    const managedDepartmentAccountId = new mongoose.Types.ObjectId();
+    const outOfScopeSourceAccountId = new mongoose.Types.ObjectId();
+    const outOfScopeTargetAccountId = new mongoose.Types.ObjectId();
+    const requestId = new mongoose.Types.ObjectId();
+    const periodRecord = {
+      _id: periodId,
+      periodKey: '2026-04',
+      timezone: 'UTC',
+      periodStart: new Date('2026-04-01T00:00:00.000Z'),
+      periodEnd: new Date('2026-04-30T23:59:59.999Z'),
+      status: 'active',
+    };
+    const sourceAccount = {
+      _id: outOfScopeSourceAccountId,
+      periodId,
+      scopeType: 'department',
+      scopeId: siblingDepartmentId.toString(),
+      baseAllocatedCredits: 100,
+      extraGrantedCredits: 0,
+      reservedCredits: 0,
+      usedCredits: 0,
+      remainingCredits: 100,
+      bufferCredits: 0,
+      warningThresholds: [0.8],
+      hardLimitEnabled: true,
+    };
+    const targetAccount = {
+      _id: outOfScopeTargetAccountId,
+      periodId,
+      scopeType: 'user',
+      scopeId: new mongoose.Types.ObjectId().toString(),
+      parentAccountId: outOfScopeSourceAccountId,
+      baseAllocatedCredits: 20,
+      extraGrantedCredits: 0,
+      reservedCredits: 0,
+      usedCredits: 0,
+      remainingCredits: 20,
+      bufferCredits: 0,
+      warningThresholds: [0.8],
+      hardLimitEnabled: true,
+    };
+    const requestRecord = {
+      _id: requestId,
+      periodId,
+      sourceAccountId: outOfScopeSourceAccountId,
+      targetAccountId: outOfScopeTargetAccountId,
+      requestedByUserId: new mongoose.Types.ObjectId(),
+      reviewedByUserId: null,
+      amount: 15,
+      reason: 'More capacity for project work',
+      status: 'pending',
+      requestedAt: new Date('2026-04-10T00:00:00.000Z'),
+    };
+
+    mockQuotaRequestFindById.mockReturnValue(createLeanQuery(requestRecord));
+    mockQuotaPeriodFindById.mockReturnValue(createLeanQuery(periodRecord));
+    mockQuotaAccountFindById
+      .mockReturnValueOnce(createLeanQuery(sourceAccount))
+      .mockReturnValueOnce(createLeanQuery(targetAccount));
+    mockUserFindById.mockReturnValue(
+      createSelectLeanQuery({ _id: managerUserId, departmentId: rootDepartmentId }),
+    );
+    mockDepartmentFind.mockReturnValue(
+      createSelectLeanQuery([
+        { _id: rootDepartmentId, parentDepartmentId: null },
+        { _id: childDepartmentId, parentDepartmentId: rootDepartmentId },
+        { _id: siblingDepartmentId, parentDepartmentId: null },
+      ]),
+    );
+    mockUserFind.mockReturnValue(createSelectLeanQuery([{ _id: scopedUserId }]));
+    mockQuotaAccountFind.mockReturnValue(
+      createSelectLeanQuery([{ _id: managedDepartmentAccountId, parentAccountId: null }]),
+    );
+
+    const req = {
+      user: { id: managerUserId.toString(), role: 'MANAGER' },
+      params: { requestId: requestId.toString() },
+      body: { reason: 'Approved' },
+    } as unknown as Request;
+    const res = createMockResponse();
+
+    await approveAdminQuotaRequest(req, res);
+
+    expect(mockQuotaAllocationCreate).not.toHaveBeenCalled();
+    expect(mockQuotaRequestFindByIdAndUpdate).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.status().json).toHaveBeenCalledWith({
+      message: 'sourceAccountId is outside the allowed review scope',
+    });
   });
 
   it('creates an approved company quota grant and updates the company account', async () => {
@@ -1243,7 +1694,7 @@ describe('admin quota handlers', () => {
     mockQuotaGrantFindById.mockReturnValue(createLeanOrFailQuery(grantRecord));
 
     const req = {
-      user: { id: actorUserId.toString() },
+      user: { id: actorUserId.toString(), role: 'ADMIN' },
       body: {
         periodId: periodId.toString(),
         targetAccountId: accountId.toString(),
@@ -1320,7 +1771,7 @@ describe('admin quota handlers', () => {
     mockQuotaGrantFindById.mockReturnValue(createLeanOrFailQuery(grantRecord));
 
     const req = {
-      user: { id: actorUserId.toString() },
+      user: { id: actorUserId.toString(), role: 'ADMIN' },
       body: {
         periodId: periodId.toString(),
         targetAccountId: accountId.toString(),
@@ -1378,6 +1829,7 @@ describe('admin quota handlers', () => {
     mockQuotaAccountFindById.mockReturnValue(createLeanQuery(targetAccount));
 
     const req = {
+      user: { role: 'ADMIN' },
       body: {
         periodId: periodId.toString(),
         targetAccountId: accountId.toString(),
@@ -1457,7 +1909,7 @@ describe('admin quota handlers', () => {
     mockQuotaGrantFindById.mockReturnValueOnce(createLeanOrFailQuery(approvedGrant));
 
     const req = {
-      user: { id: actorUserId.toString() },
+      user: { id: actorUserId.toString(), role: 'ADMIN' },
       params: { grantId: grantId.toString() },
       body: { reason: 'Approved by admin' },
     } as unknown as Request;

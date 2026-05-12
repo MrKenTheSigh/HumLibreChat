@@ -18,6 +18,7 @@ import {
   trimSearch,
 } from './utils';
 import { writeRequestActivityLog } from './activityLogs';
+import { resolveAdminDataScope, resolveScopedUserIds } from './scope';
 
 const {
   User,
@@ -372,6 +373,7 @@ function handleAdminError(error: unknown, res: Response, context: string) {
 
 export async function getAdminUsers(req: Request, res: Response) {
   try {
+    const scope = await resolveAdminDataScope(req);
     const limit = parsePageSize(req.query.limit);
     const search = trimSearch(req.query.search);
     const role = trimSearch(req.query.role);
@@ -382,6 +384,11 @@ export async function getAdminUsers(req: Request, res: Response) {
     );
 
     const filters: mongoose.FilterQuery<AdminUserListItem>[] = [];
+    const scopedUserIds = await resolveScopedUserIds(scope);
+
+    if (scopedUserIds != null) {
+      filters.push({ _id: { $in: scopedUserIds } });
+    }
 
     if (search) {
       const regex = new RegExp(search, 'i');
@@ -934,13 +941,16 @@ export async function assignAdminUserPlan(req: Request, res: Response) {
     const { planId: planIdParam } = adminUserPlanAssignSchema.parse(req.body);
     const { userId } = await getExistingUserOrThrow(req.params.userId);
     const { planId, plan } = await getExistingPlanOrThrow(planIdParam);
+    const legacyBalanceEnabled = getBalanceConfig((req as AppAwareRequest).config)?.enabled === true;
     const assignedAt = new Date();
     const [existingUser, currentBalance] = await Promise.all([
       User.findById(userId).select('_id adminPlanId').lean<{
         _id: mongoose.Types.ObjectId;
         adminPlanId?: mongoose.Types.ObjectId | null;
       } | null>(),
-      Balance.findOne({ user: userId }).lean<AdminBalanceRecord | null>(),
+      legacyBalanceEnabled
+        ? Balance.findOne({ user: userId }).lean<AdminBalanceRecord | null>()
+        : Promise.resolve(null),
     ]);
 
     if (!existingUser) {
@@ -969,7 +979,7 @@ export async function assignAdminUserPlan(req: Request, res: Response) {
       throw createStatusError(404, 'User not found');
     }
 
-    if (shouldReplacePlanBalance) {
+    if (legacyBalanceEnabled && shouldReplacePlanBalance) {
       const nextBalanceState = buildPlanBalanceUpdate({
         balance: currentBalance,
         nextPlanCredits,
@@ -995,13 +1005,18 @@ export async function assignAdminUserPlan(req: Request, res: Response) {
 export async function clearAdminUserPlan(req: Request, res: Response) {
   try {
     const { userId } = await getExistingUserOrThrow(req.params.userId);
-    const currentBalance = await Balance.findOne({
-      user: userId,
-    }).lean<AdminBalanceRecord | null>();
-    const nextBalanceState = buildPlanBalanceUpdate({
-      balance: currentBalance,
-      nextPlanCredits: 0,
-    });
+    const legacyBalanceEnabled = getBalanceConfig((req as AppAwareRequest).config)?.enabled === true;
+    const currentBalance = legacyBalanceEnabled
+      ? await Balance.findOne({
+          user: userId,
+        }).lean<AdminBalanceRecord | null>()
+      : null;
+    const nextBalanceState = legacyBalanceEnabled
+      ? buildPlanBalanceUpdate({
+          balance: currentBalance,
+          nextPlanCredits: 0,
+        })
+      : null;
 
     const updatedUser = await User.findByIdAndUpdate(
       userId,
@@ -1020,13 +1035,15 @@ export async function clearAdminUserPlan(req: Request, res: Response) {
       throw createStatusError(404, 'User not found');
     }
 
-    await Balance.findOneAndUpdate(
-      { user: userId },
-      {
-        $set: nextBalanceState,
-      },
-      { upsert: true, new: true },
-    ).lean<AdminBalanceRecord | null>();
+    if (nextBalanceState != null) {
+      await Balance.findOneAndUpdate(
+        { user: userId },
+        {
+          $set: nextBalanceState,
+        },
+        { upsert: true, new: true },
+      ).lean<AdminBalanceRecord | null>();
+    }
 
     return res.status(200).json(sanitizePlanAssignment(userId, null, null));
   } catch (error) {

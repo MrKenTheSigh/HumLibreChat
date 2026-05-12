@@ -4,6 +4,7 @@ export * from './cdn';
 export * from './auth';
 /* Admin */
 export * from './admin';
+export * from './quotaRequests';
 /* API Keys */
 export * from './apiKeys';
 /* MCP */

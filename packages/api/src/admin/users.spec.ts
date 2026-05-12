@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { SystemRoles } from 'librechat-data-provider';
 import type { Request, Response } from 'express';
 
 const mockUserFind = jest.fn();
@@ -198,6 +199,7 @@ describe('admin users handlers', () => {
       );
 
       const req = {
+        user: { role: SystemRoles.ADMIN },
         query: {
           search: 'admin',
           role: 'ADMIN',
@@ -701,6 +703,7 @@ describe('admin users handlers', () => {
     it('assigns a valid plan to a user', async () => {
       const userId = new mongoose.Types.ObjectId();
       const planId = new mongoose.Types.ObjectId();
+      mockGetBalanceConfig.mockReturnValue({ enabled: true });
       mockUserFindById.mockReturnValue(
         createSelectLeanQuery({
           _id: userId,
@@ -776,6 +779,48 @@ describe('admin users handlers', () => {
       });
     });
 
+    it('assigns a plan without updating legacy balance when legacy balance is disabled', async () => {
+      const userId = new mongoose.Types.ObjectId();
+      const planId = new mongoose.Types.ObjectId();
+      mockGetBalanceConfig.mockReturnValue({ enabled: false });
+      mockUserFindById.mockReturnValue(
+        createSelectLeanQuery({
+          _id: userId,
+          email: 'user@example.com',
+        }),
+      );
+      mockAdminPlanFindById.mockReturnValue(
+        createSelectLeanQuery({
+          _id: planId,
+          name: 'Pro',
+          slug: 'pro',
+          startingCredits: 5000,
+        }),
+      );
+      mockUserFindByIdAndUpdate.mockReturnValue(
+        createSelectLeanQuery({
+          _id: userId,
+          adminPlanAssignedAt: new Date('2026-03-26T03:00:00.000Z'),
+        }),
+      );
+
+      const req = {
+        params: {
+          userId: userId.toString(),
+        },
+        body: {
+          planId: planId.toString(),
+        },
+      } as unknown as Request;
+      const res = createMockResponse();
+
+      await assignAdminUserPlan(req, res);
+
+      expect(mockBalanceFindOne).not.toHaveBeenCalled();
+      expect(mockBalanceFindOneAndUpdate).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(200);
+    });
+
     it('returns 404 for unknown plans', async () => {
       const userId = new mongoose.Types.ObjectId();
       mockUserFindById.mockReturnValue(
@@ -806,6 +851,7 @@ describe('admin users handlers', () => {
   describe('clearAdminUserPlan', () => {
     it('clears the assigned plan from a user', async () => {
       const userId = new mongoose.Types.ObjectId();
+      mockGetBalanceConfig.mockReturnValue({ enabled: true });
       mockUserFindById.mockReturnValue(
         createSelectLeanQuery({
           _id: userId,
@@ -853,6 +899,29 @@ describe('admin users handlers', () => {
         plan: null,
         assignedAt: null,
       });
+    });
+
+    it('clears a plan without updating legacy balance when legacy balance is disabled', async () => {
+      const userId = new mongoose.Types.ObjectId();
+      mockGetBalanceConfig.mockReturnValue({ enabled: false });
+      mockUserFindByIdAndUpdate.mockReturnValue(
+        createSelectLeanQuery({
+          _id: userId,
+        }),
+      );
+
+      const req = {
+        params: {
+          userId: userId.toString(),
+        },
+      } as unknown as Request;
+      const res = createMockResponse();
+
+      await clearAdminUserPlan(req, res);
+
+      expect(mockBalanceFindOne).not.toHaveBeenCalled();
+      expect(mockBalanceFindOneAndUpdate).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(200);
     });
   });
 

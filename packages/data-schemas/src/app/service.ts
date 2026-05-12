@@ -49,9 +49,15 @@ export const AppService = async (params?: {
     | FileSources.firebase
     | FileSources.azure_blob;
   const startBalance = process.env.START_BALANCE;
-  const balance = config.balance ?? {
-    enabled: process.env.CHECK_BALANCE?.toLowerCase().trim() === 'true',
-    startBalance: startBalance ? parseInt(startBalance, 10) : undefined,
+  const legacyBalanceEnabled =
+    process.env.LEGACY_BALANCE_ENABLED?.toLowerCase().trim() === 'true';
+  const envStartBalance = startBalance ? parseInt(startBalance, 10) : undefined;
+  const balance = {
+    ...(config.balance ?? {
+      startBalance: envStartBalance,
+    }),
+    ...(envStartBalance != null ? { startBalance: envStartBalance } : {}),
+    enabled: legacyBalanceEnabled,
   };
   const transactions = config.transactions ?? configDefaults.transactions;
   const imageOutputType = config?.imageOutputType ?? configDefaults.imageOutputType;

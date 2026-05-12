@@ -41,6 +41,7 @@ import {
   createQuotaGrantModel,
   createQuotaLedgerEntryModel,
   createQuotaPeriodModel,
+  createQuotaRequestModel,
 } from './quota';
 
 /**
@@ -88,5 +89,6 @@ export function createModels(mongoose: typeof import('mongoose')) {
     QuotaLedgerEntry: createQuotaLedgerEntryModel(mongoose),
     QuotaAllocation: createQuotaAllocationModel(mongoose),
     QuotaGrant: createQuotaGrantModel(mongoose),
+    QuotaRequest: createQuotaRequestModel(mongoose),
   };
 }

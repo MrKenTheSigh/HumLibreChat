@@ -577,3 +577,50 @@ export const useRejectAdminQuotaGrantRequestMutation = (): UseMutationResult<
     },
   });
 };
+
+export const useCreateAdminQuotaRequestMutation = (): UseMutationResult<
+  t.AdminQuotaRequestCreateResponse,
+  t.TError | undefined,
+  t.AdminQuotaRequestCreateRequest,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+
+  return useMutation((variables) => dataService.createAdminQuotaRequest(variables), {
+    onSuccess: () => {
+      queryClient.invalidateQueries([QueryKeys.adminQuotaRequests]);
+    },
+  });
+};
+
+export const useApproveAdminQuotaRequestMutation = (): UseMutationResult<
+  t.AdminQuotaRequestDecisionResponse,
+  t.TError | undefined,
+  t.AdminQuotaRequestDecisionRequest,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+
+  return useMutation((variables) => dataService.approveAdminQuotaRequest(variables), {
+    onSuccess: () => {
+      queryClient.invalidateQueries([QueryKeys.adminQuotaAccounts]);
+      queryClient.invalidateQueries([QueryKeys.adminQuotaLedger]);
+      queryClient.invalidateQueries([QueryKeys.adminQuotaRequests]);
+    },
+  });
+};
+
+export const useRejectAdminQuotaRequestMutation = (): UseMutationResult<
+  t.AdminQuotaRequestDecisionResponse,
+  t.TError | undefined,
+  t.AdminQuotaRequestDecisionRequest,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+
+  return useMutation((variables) => dataService.rejectAdminQuotaRequest(variables), {
+    onSuccess: () => {
+      queryClient.invalidateQueries([QueryKeys.adminQuotaRequests]);
+    },
+  });
+};

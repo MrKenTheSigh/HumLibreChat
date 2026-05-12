@@ -12,7 +12,7 @@ import { isEnabled } from '~/utils';
  * Retrieves the balance configuration object
  * */
 export function getBalanceConfig(appConfig?: AppConfig): Partial<TCustomConfig['balance']> | null {
-  const isLegacyEnabled = isEnabled(process.env.CHECK_BALANCE);
+  const isLegacyEnabled = isEnabled(process.env.LEGACY_BALANCE_ENABLED);
   const startBalance = process.env.START_BALANCE;
   /** @type {} */
   const config: Partial<TCustomConfig['balance']> = removeNullishValues({
@@ -22,7 +22,11 @@ export function getBalanceConfig(appConfig?: AppConfig): Partial<TCustomConfig['
   if (!appConfig) {
     return config;
   }
-  return { ...config, ...(appConfig?.['balance'] ?? {}) };
+  const mergedConfig = { ...config, ...(appConfig?.['balance'] ?? {}) };
+  return {
+    ...mergedConfig,
+    enabled: isLegacyEnabled,
+  };
 }
 
 /**

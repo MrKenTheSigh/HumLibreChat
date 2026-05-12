@@ -21,6 +21,7 @@ const memories = require('./memories');
 const presets = require('./presets');
 const prompts = require('./prompts');
 const balance = require('./balance');
+const quotas = require('./quotas');
 const actions = require('./actions');
 const apiKeys = require('./apiKeys');
 const banner = require('./banner');
@@ -70,6 +71,7 @@ module.exports = {
   config,
   models,
   prompts,
+  quotas,
   actions,
   presets,
   balance,

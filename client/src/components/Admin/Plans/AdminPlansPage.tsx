@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Layers3, Search, Sparkles } from 'lucide-react';
 import { Outlet, useNavigate } from 'react-router-dom';
+import { useGetStartupConfig } from '~/data-provider';
 import { useGetAdminPlansQuery } from '~/data-provider/Admin';
 import { useLocalize } from '~/hooks';
 import AdminHelpButton from '../AdminHelpButton';
@@ -25,7 +26,9 @@ export default function AdminPlansPage() {
   const pageSize = 20;
   const navigate = useNavigate();
   const localize = useLocalize();
+  const startupConfig = useGetStartupConfig();
   const plansQuery = useGetAdminPlansQuery();
+  const legacyBalanceEnabled = startupConfig.data?.legacyBalanceEnabled === true;
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const plans = plansQuery.data?.plans ?? [];
@@ -172,23 +175,29 @@ export default function AdminPlansPage() {
                         />
                       </div>
 
-                      <div className="grid gap-3 text-sm md:grid-cols-3">
+                      <div
+                        className={`grid gap-3 text-sm ${
+                          legacyBalanceEnabled ? 'md:grid-cols-3' : 'md:grid-cols-2'
+                        }`}
+                      >
                         <div className="rounded-xl border border-border-light bg-surface-primary px-3 py-2">
                           <div className="text-xs uppercase tracking-wide text-text-secondary">
                             {localize('com_ui_admin_sort_order')}
                           </div>
                           <div className="mt-1 text-text-primary">{plan.sortOrder}</div>
                         </div>
-                        <div className="rounded-xl border border-border-light bg-surface-primary px-3 py-2">
-                          <div className="text-xs uppercase tracking-wide text-text-secondary">
-                            {localize('com_ui_admin_starting_credits')}
+                        {legacyBalanceEnabled && (
+                          <div className="rounded-xl border border-border-light bg-surface-primary px-3 py-2">
+                            <div className="text-xs uppercase tracking-wide text-text-secondary">
+                              {localize('com_ui_admin_starting_credits')}
+                            </div>
+                            <div className="mt-1 text-text-primary">
+                              {plan.startingCredits == null
+                                ? localize('com_ui_none')
+                                : plan.startingCredits.toLocaleString()}
+                            </div>
                           </div>
-                          <div className="mt-1 text-text-primary">
-                            {plan.startingCredits == null
-                              ? localize('com_ui_none')
-                              : plan.startingCredits.toLocaleString()}
-                          </div>
-                        </div>
+                        )}
                         <div className="rounded-xl border border-border-light bg-surface-primary px-3 py-2">
                           <div className="text-xs uppercase tracking-wide text-text-secondary">
                             {localize('com_ui_admin_updated_at')}

@@ -1,18 +1,17 @@
 import { memo } from 'react';
-import { useGetStartupConfig, useGetUserBalance } from '~/data-provider';
+import { useGetUserBalance } from '~/data-provider';
 import { useAuthContext } from '~/hooks/AuthContext';
 import QuotaBar from '~/components/Nav/QuotaBar';
 
 function ChatQuotaBar() {
   const { isAuthenticated } = useAuthContext();
-  const { data: startupConfig } = useGetStartupConfig();
   const balanceQuery = useGetUserBalance({
-    enabled: !!isAuthenticated && startupConfig?.balance?.enabled === true,
+    enabled: !!isAuthenticated,
   });
 
   const quota = balanceQuery.data?.quota;
 
-  if (startupConfig?.balance?.enabled !== true || quota == null) {
+  if (quota == null) {
     return null;
   }
 

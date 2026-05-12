@@ -10,6 +10,7 @@ import {
 import type { AdminUserSummary } from 'librechat-data-provider';
 import type { ReactNode } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
+import { useGetStartupConfig } from '~/data-provider';
 import { useLocalize } from '~/hooks';
 import {
   useGetAdminRolesQuery,
@@ -54,8 +55,8 @@ function MetricCard(props: { label: string; value: ReactNode; emphasis?: boolean
   );
 }
 
-function AdminUserListRow(props: { user: AdminUserSummary }) {
-  const { user } = props;
+function AdminUserListRow(props: { user: AdminUserSummary; legacyBalanceEnabled: boolean }) {
+  const { user, legacyBalanceEnabled } = props;
   const navigate = useNavigate();
   const localize = useLocalize();
   const userDetailQuery = useGetAdminUserQuery(user.id, { enabled: true });
@@ -91,7 +92,13 @@ function AdminUserListRow(props: { user: AdminUserSummary }) {
         />
       </div>
 
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(260px,0.9fr)]">
+      <div
+        className={
+          legacyBalanceEnabled
+            ? 'grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(260px,0.9fr)]'
+            : 'grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)_minmax(260px,0.9fr)]'
+        }
+      >
         <MetricCard
           label={localize('com_ui_role')}
           value={<div className="text-lg font-semibold text-text-primary">{user.role ?? '-'}</div>}
@@ -111,11 +118,13 @@ function AdminUserListRow(props: { user: AdminUserSummary }) {
           }
           emphasis={true}
         />
-        <MetricCard
-          label={localize('com_nav_balance')}
-          value={<div className="text-lg font-semibold text-text-primary">{balanceLabel}</div>}
-          emphasis={true}
-        />
+        {legacyBalanceEnabled && (
+          <MetricCard
+            label={localize('com_nav_balance')}
+            value={<div className="text-lg font-semibold text-text-primary">{balanceLabel}</div>}
+            emphasis={true}
+          />
+        )}
         <MetricCard
           label={localize('com_ui_admin_user_metadata_title')}
           value={
@@ -148,6 +157,8 @@ function AdminUserListRow(props: { user: AdminUserSummary }) {
 export default function AdminUsersPage() {
   const navigate = useNavigate();
   const localize = useLocalize();
+  const { data: startupConfig } = useGetStartupConfig();
+  const legacyBalanceEnabled = startupConfig?.legacyBalanceEnabled === true;
   const [search, setSearch] = useState('');
   const [role, setRole] = useState('all');
   const [emailVerified, setEmailVerified] = useState('');
@@ -274,7 +285,11 @@ export default function AdminUsersPage() {
             ) : (
               <div className="flex flex-col gap-3">
                 {users.map((user) => (
-                  <AdminUserListRow key={user.id} user={user} />
+                  <AdminUserListRow
+                    key={user.id}
+                    user={user}
+                    legacyBalanceEnabled={legacyBalanceEnabled}
+                  />
                 ))}
               </div>
             )}

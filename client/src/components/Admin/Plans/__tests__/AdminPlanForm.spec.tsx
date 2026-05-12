@@ -7,6 +7,7 @@ import {
   useGetAdminPlanQuery,
   useUpdateAdminPlanMutation,
 } from '~/data-provider/Admin';
+import { useGetStartupConfig } from '~/data-provider';
 import { useLocalize } from '~/hooks';
 import AdminPlanForm from '../AdminPlanForm';
 
@@ -30,6 +31,11 @@ jest.mock('~/data-provider/Admin', () => ({
   useUpdateAdminPlanMutation: jest.fn(),
 }));
 
+jest.mock('~/data-provider', () => ({
+  ...jest.requireActual('~/data-provider'),
+  useGetStartupConfig: jest.fn(),
+}));
+
 jest.mock('~/hooks', () => ({
   useLocalize: jest.fn(),
 }));
@@ -46,6 +52,9 @@ const mockUseGetAdminChannelsQuery = useGetAdminChannelsQuery as jest.MockedFunc
 const mockUseGetAdminPlanQuery = useGetAdminPlanQuery as jest.MockedFunction<
   typeof useGetAdminPlanQuery
 >;
+const mockUseGetStartupConfig = useGetStartupConfig as jest.MockedFunction<
+  typeof useGetStartupConfig
+>;
 const mockUseLocalize = useLocalize as jest.MockedFunction<typeof useLocalize>;
 const mockUseUpdateAdminPlanMutation = useUpdateAdminPlanMutation as jest.MockedFunction<
   typeof useUpdateAdminPlanMutation
@@ -55,6 +64,11 @@ describe('AdminPlanForm', () => {
   beforeEach(() => {
     mockUseParams.mockReturnValue({ planId: 'plan-1' });
     mockUseLocalize.mockReturnValue((key: string) => key);
+    mockUseGetStartupConfig.mockReturnValue({
+      data: {
+        legacyBalanceEnabled: false,
+      },
+    } as ReturnType<typeof useGetStartupConfig>);
     mockUseCreateAdminPlanMutation.mockReturnValue({
       isLoading: false,
       mutate: jest.fn(),
@@ -192,7 +206,7 @@ describe('AdminPlanForm', () => {
 
     render(<AdminPlanForm />);
 
-    expect(screen.getByText('com_ui_admin_create_plan')).toBeInTheDocument();
+    expect(screen.getAllByText('com_ui_admin_create_plan').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'com_ui_create' })).toBeInTheDocument();
   });
 });

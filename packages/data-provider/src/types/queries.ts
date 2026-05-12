@@ -371,6 +371,7 @@ export type AdminQuotaLedgerSourceType =
   | 'system';
 export type AdminQuotaAllocationStatus = 'active' | 'replaced' | 'cancelled';
 export type AdminQuotaGrantStatus = 'requested' | 'approved' | 'rejected' | 'cancelled';
+export type AdminQuotaRequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
 
 export type AdminQuotaPeriod = {
   id: string;
@@ -432,6 +433,26 @@ export type AdminQuotaGrant = {
   reason: string;
   status: AdminQuotaGrantStatus;
   expiresAt: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+export type AdminQuotaRequest = {
+  id: string;
+  periodId: string;
+  sourceAccountId: string;
+  sourceAccount?: AdminQuotaAccount | null;
+  targetAccountId: string;
+  targetAccount?: AdminQuotaAccount | null;
+  requestedByUserId: string | null;
+  reviewedByUserId: string | null;
+  fulfilledAllocationId: string | null;
+  amount: number;
+  reason: string;
+  reviewReason: string;
+  status: AdminQuotaRequestStatus;
+  requestedAt: string;
+  reviewedAt: string | null;
   createdAt: string | null;
   updatedAt: string | null;
 };
@@ -544,6 +565,65 @@ export type AdminQuotaGrantDecisionRequest = {
 export type AdminQuotaGrantDecisionResponse = {
   grant: AdminQuotaGrant;
   account?: AdminQuotaAccount;
+};
+
+export type AdminQuotaRequestsListParams = {
+  cursor?: string;
+  limit?: number;
+  periodId?: string;
+  sourceAccountId?: string;
+  targetAccountId?: string;
+  status?: AdminQuotaRequestStatus | 'all';
+};
+
+export type AdminQuotaRequestsListResponse = {
+  requests: AdminQuotaRequest[];
+  nextCursor: string | null;
+};
+
+export type AdminQuotaRequestCreateRequest = {
+  periodId: string;
+  targetAccountId: string;
+  sourceAccountId?: string;
+  amount: number;
+  reason: string;
+};
+
+export type AdminQuotaRequestCreateResponse = {
+  request: AdminQuotaRequest;
+};
+
+export type AdminQuotaRequestDecisionRequest = {
+  requestId: string;
+  reason?: string;
+};
+
+export type AdminQuotaRequestDecisionResponse = {
+  request: AdminQuotaRequest;
+  allocation?: AdminQuotaAllocation;
+  sourceAccount?: AdminQuotaAccount;
+  targetAccount?: AdminQuotaAccount;
+};
+
+export type UserQuotaRequestsListParams = {
+  cursor?: string;
+  limit?: number;
+  periodId?: string;
+  status?: AdminQuotaRequestStatus | 'all';
+};
+
+export type UserQuotaRequestsListResponse = {
+  requests: AdminQuotaRequest[];
+  nextCursor: string | null;
+};
+
+export type UserQuotaRequestCreateRequest = {
+  amount: number;
+  reason: string;
+};
+
+export type UserQuotaRequestCreateResponse = {
+  request: AdminQuotaRequest;
 };
 
 export type AdminQuotaLedgerListParams = {

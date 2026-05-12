@@ -17,16 +17,23 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import type { TranslationKeys } from '~/hooks/useLocalize';
-import { Link, NavLink, Navigate, Outlet } from 'react-router-dom';
+import { Link, NavLink, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { SystemRoles } from 'librechat-data-provider';
 import { useAuthContext, useLocalize } from '~/hooks';
 import { cn } from '~/utils';
+import { useGetAdminQuotaRequestsQuery } from '~/data-provider/Admin';
+import {
+  canAccessAdminConsole,
+  canAccessAdminRoute,
+  getAdminConsoleDefaultPath,
+} from './adminAccess';
 
 type NavItem = {
   icon: typeof Users;
   labelKey: TranslationKeys;
   to: string;
   roles?: SystemRoles[];
+  badge?: 'pendingQuotaRequests';
 };
 
 type NavGroup = {
@@ -45,27 +52,51 @@ const navItemClassName = ({ isActive, isCollapsed }: { isActive: boolean; isColl
       : 'text-text-secondary hover:text-text-primary',
   );
 
-const adminDataRoles = new Set<string>([
-  SystemRoles.ADMIN,
-  SystemRoles.AUDITOR,
-  SystemRoles.MANAGER,
-]);
-
 const allNavGroups: NavGroup[] = [
   {
     headingKey: 'com_ui_admin_people',
     items: [
-      { icon: Users, labelKey: 'com_ui_admin_users', to: '/d/admin/users' },
-      { icon: Building2, labelKey: 'com_ui_admin_departments', to: '/d/admin/departments' },
-      { icon: ShieldCheck, labelKey: 'com_ui_admin_roles', to: '/d/admin/roles' },
+      {
+        icon: Users,
+        labelKey: 'com_ui_admin_users',
+        to: '/d/admin/users',
+        roles: [SystemRoles.ADMIN],
+      },
+      {
+        icon: Building2,
+        labelKey: 'com_ui_admin_departments',
+        to: '/d/admin/departments',
+        roles: [SystemRoles.ADMIN],
+      },
+      {
+        icon: ShieldCheck,
+        labelKey: 'com_ui_admin_roles',
+        to: '/d/admin/roles',
+        roles: [SystemRoles.ADMIN],
+      },
     ],
   },
   {
     headingKey: 'com_ui_admin_access',
     items: [
-      { icon: Layers3, labelKey: 'com_ui_admin_plans', to: '/d/admin/plans' },
-      { icon: Blocks, labelKey: 'com_ui_admin_channels', to: '/d/admin/channels' },
-      { icon: Coins, labelKey: 'com_ui_admin_quotas', to: '/d/admin/quotas' },
+      {
+        icon: Layers3,
+        labelKey: 'com_ui_admin_plans',
+        to: '/d/admin/plans',
+        roles: [SystemRoles.ADMIN],
+      },
+      {
+        icon: Blocks,
+        labelKey: 'com_ui_admin_channels',
+        to: '/d/admin/channels',
+        roles: [SystemRoles.ADMIN],
+      },
+      {
+        icon: Coins,
+        labelKey: 'com_ui_admin_quotas',
+        to: '/d/admin/quotas',
+        roles: [SystemRoles.ADMIN, SystemRoles.MANAGER],
+      },
     ],
   },
   {
@@ -75,8 +106,14 @@ const allNavGroups: NavGroup[] = [
         icon: MessagesSquare,
         labelKey: 'com_ui_admin_conversations',
         to: '/d/admin/conversations',
+        roles: [SystemRoles.ADMIN, SystemRoles.MANAGER, SystemRoles.AUDITOR],
       },
-      { icon: BarChart3, labelKey: 'com_ui_admin_usage', to: '/d/admin/usage' },
+      {
+        icon: BarChart3,
+        labelKey: 'com_ui_admin_usage',
+        to: '/d/admin/usage',
+        roles: [SystemRoles.ADMIN, SystemRoles.MANAGER, SystemRoles.AUDITOR],
+      },
       {
         icon: ClipboardCheck,
         labelKey: 'com_ui_admin_manager_reviews',
@@ -98,7 +135,8 @@ const allNavGroups: NavGroup[] = [
         icon: Network,
         labelKey: 'com_ui_admin_org_graph',
         to: '/d/admin/org-graph',
-        roles: [SystemRoles.ADMIN],
+        roles: [SystemRoles.ADMIN, SystemRoles.MANAGER, SystemRoles.AUDITOR],
+        badge: 'pendingQuotaRequests',
       },
     ],
   },
@@ -107,7 +145,22 @@ const allNavGroups: NavGroup[] = [
 export default function AdminView() {
   const localize = useLocalize();
   const { isAuthenticated, user } = useAuthContext();
+  const location = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const userRole = user?.role as SystemRoles | undefined;
+  const defaultAdminPath = getAdminConsoleDefaultPath(user?.role);
+  const canReviewQuotaRequests = userRole === SystemRoles.ADMIN || userRole === SystemRoles.MANAGER;
+  const pendingQuotaRequestsQuery = useGetAdminQuotaRequestsQuery(
+    { status: 'pending', limit: 100 },
+    {
+      enabled: isAuthenticated && canAccessAdminConsole(user?.role) && canReviewQuotaRequests,
+      refetchInterval: 30000,
+      refetchOnWindowFocus: true,
+    },
+  );
+  const pendingQuotaRequestCount = canReviewQuotaRequests
+    ? (pendingQuotaRequestsQuery.data?.requests.length ?? 0)
+    : 0;
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -130,14 +183,15 @@ export default function AdminView() {
     return null;
   }
 
-  if (user?.role !== SystemRoles.ADMIN) {
-    if (!adminDataRoles.has(user?.role ?? '')) {
-      return <Navigate to="/c/new" replace={true} />;
-    }
+  if (!canAccessAdminConsole(user?.role)) {
+    return <Navigate to="/c/new" replace={true} />;
   }
 
-  const userRole = user?.role as SystemRoles | undefined;
-  const navGroups = (user?.role === SystemRoles.ADMIN ? allNavGroups : allNavGroups.slice(2))
+  if (!canAccessAdminRoute(userRole, location.pathname)) {
+    return <Navigate to={defaultAdminPath} replace={true} />;
+  }
+
+  const navGroups = allNavGroups
     .map((group) => ({
       ...group,
       items: group.items.filter(
@@ -186,6 +240,8 @@ export default function AdminView() {
                 <div className="flex flex-col gap-1.5">
                   {group.items.map((item) => {
                     const Icon = item.icon;
+                    const showPendingQuotaBadge =
+                      item.badge === 'pendingQuotaRequests' && pendingQuotaRequestCount > 0;
 
                     return (
                       <NavLink
@@ -195,8 +251,22 @@ export default function AdminView() {
                         aria-label={isCollapsed ? localize(item.labelKey) : undefined}
                         className={(props) => navItemClassName({ ...props, isCollapsed })}
                       >
-                        <Icon className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                        {!isCollapsed ? <span>{localize(item.labelKey)}</span> : null}
+                        <span className="relative inline-flex flex-shrink-0">
+                          <Icon className="h-4 w-4" aria-hidden="true" />
+                          {showPendingQuotaBadge ? (
+                            <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border border-surface-primary bg-amber-500" />
+                          ) : null}
+                        </span>
+                        {!isCollapsed ? (
+                          <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                            <span className="truncate">{localize(item.labelKey)}</span>
+                            {showPendingQuotaBadge ? (
+                              <span className="rounded-full bg-amber-500 px-2 py-0.5 text-xs font-semibold text-white">
+                                {pendingQuotaRequestCount}
+                              </span>
+                            ) : null}
+                          </span>
+                        ) : null}
                       </NavLink>
                     );
                   })}

@@ -13,6 +13,7 @@ export type QuotaLedgerEntryType =
 export type QuotaLedgerSourceType = 'transaction' | 'admin_action' | 'manager_action' | 'system';
 export type QuotaAllocationStatus = 'active' | 'replaced' | 'cancelled';
 export type QuotaGrantStatus = 'requested' | 'approved' | 'rejected' | 'cancelled';
+export type QuotaRequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
 
 export interface IQuotaPeriod extends Document {
   periodKey: string;
@@ -80,6 +81,23 @@ export interface IQuotaGrant extends Document {
   reason: string;
   status: QuotaGrantStatus;
   expiresAt: Date;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export interface IQuotaRequest extends Document {
+  periodId: Types.ObjectId;
+  sourceAccountId: Types.ObjectId;
+  targetAccountId: Types.ObjectId;
+  requestedByUserId?: Types.ObjectId | null;
+  reviewedByUserId?: Types.ObjectId | null;
+  fulfilledAllocationId?: Types.ObjectId | null;
+  amount: number;
+  reason: string;
+  reviewReason?: string;
+  status: QuotaRequestStatus;
+  requestedAt: Date;
+  reviewedAt?: Date | null;
   createdAt?: Date;
   updatedAt?: Date;
 }

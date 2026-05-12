@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { SystemRoles } from 'librechat-data-provider';
 import type { Request, Response } from 'express';
 
 const mockDepartmentCreate = jest.fn();
@@ -86,7 +87,10 @@ describe('admin departments handlers', () => {
       ]),
     );
 
-    const req = { query: { search: 'it', enabled: 'true' } } as unknown as Request;
+    const req = {
+      user: { role: SystemRoles.ADMIN },
+      query: { search: 'it', enabled: 'true' },
+    } as unknown as Request;
     const res = createMockResponse();
 
     await getAdminDepartments(req, res);

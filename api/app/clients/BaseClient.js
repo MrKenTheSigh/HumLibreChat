@@ -32,7 +32,7 @@ const {
   getFiles,
 } = require('~/models');
 const { getStrategyFunctions } = require('~/server/services/Files/strategies');
-const { checkBalance } = require('~/models/balanceMethods');
+const { checkBalance, checkQuotaBalance } = require('~/models/balanceMethods');
 const { truncateToolCallOutputs } = require('./prompts');
 const TextStream = require('./TextStream');
 
@@ -698,11 +698,9 @@ class BaseClient {
     }
 
     const balanceConfig = getBalanceConfig(appConfig);
-    if (
-      balanceConfig?.enabled &&
-      supportsBalanceCheck[this.options.endpointType ?? this.options.endpoint]
-    ) {
-      await checkBalance({
+    if (supportsBalanceCheck[this.options.endpointType ?? this.options.endpoint]) {
+      const checkSpending = balanceConfig?.enabled ? checkBalance : checkQuotaBalance;
+      await checkSpending({
         req: this.options.req,
         res: this.options.res,
         txData: {

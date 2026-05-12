@@ -4,6 +4,7 @@ const commands = {
   'clear-quotas': () => require('./commands/clear-quotas'),
   'inspect-org-users': () => require('./commands/inspect-org-users'),
   'inspect-quota-periods': () => require('./commands/inspect-quota-periods'),
+  'inspect-user-quota': () => require('./commands/inspect-user-quota'),
 };
 
 async function main() {

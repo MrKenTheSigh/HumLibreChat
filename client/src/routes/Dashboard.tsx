@@ -1,11 +1,11 @@
 import { Navigate } from 'react-router-dom';
-import { SystemRoles } from 'librechat-data-provider';
 import {
   PromptsView,
   PromptForm,
   CreatePromptForm,
   EmptyPromptPreview,
 } from '~/components/Prompts';
+import UserQuotaDashboard from '~/components/Quota/UserQuotaDashboard';
 import {
   AdminActivityLogsPage,
   AdminManagerReviewsPage,
@@ -26,11 +26,12 @@ import {
   AdminView,
 } from '~/components/Admin';
 import { useAuthContext } from '~/hooks';
+import { getAdminConsoleDefaultPath } from '~/components/Admin/adminAccess';
 import DashboardRoute from './Layouts/Dashboard';
 
 function AdminIndexRedirect() {
   const { user } = useAuthContext();
-  const target = user?.role === SystemRoles.ADMIN ? '/d/admin/users' : '/d/admin/conversations';
+  const target = getAdminConsoleDefaultPath(user?.role);
 
   return <Navigate to={target} replace={true} />;
 }
@@ -82,6 +83,10 @@ const dashboardRoutes = {
       ],
     },
     */
+    {
+      path: 'quota',
+      element: <UserQuotaDashboard />,
+    },
     {
       path: 'admin',
       element: <AdminView />,

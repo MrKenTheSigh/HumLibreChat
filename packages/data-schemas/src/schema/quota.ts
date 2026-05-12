@@ -5,6 +5,7 @@ import type {
   IQuotaGrant,
   IQuotaLedgerEntry,
   IQuotaPeriod,
+  IQuotaRequest,
 } from '~/types';
 
 const quotaPeriodSchema = new Schema<IQuotaPeriod>(
@@ -293,10 +294,89 @@ const quotaGrantSchema = new Schema<IQuotaGrant>(
 
 quotaGrantSchema.index({ periodId: 1, targetAccountId: 1, status: 1 });
 
+const quotaRequestSchema = new Schema<IQuotaRequest>(
+  {
+    periodId: {
+      type: Schema.Types.ObjectId,
+      ref: 'QuotaPeriod',
+      required: true,
+      index: true,
+    },
+    sourceAccountId: {
+      type: Schema.Types.ObjectId,
+      ref: 'QuotaAccount',
+      required: true,
+      index: true,
+    },
+    targetAccountId: {
+      type: Schema.Types.ObjectId,
+      ref: 'QuotaAccount',
+      required: true,
+      index: true,
+    },
+    requestedByUserId: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+      index: true,
+    },
+    reviewedByUserId: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+      index: true,
+    },
+    fulfilledAllocationId: {
+      type: Schema.Types.ObjectId,
+      ref: 'QuotaAllocation',
+      default: null,
+      index: true,
+    },
+    amount: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+    reason: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    reviewReason: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    status: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected', 'cancelled'],
+      required: true,
+      default: 'pending',
+      index: true,
+    },
+    requestedAt: {
+      type: Date,
+      required: true,
+      default: Date.now,
+      index: true,
+    },
+    reviewedAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
+  },
+  { timestamps: true },
+);
+
+quotaRequestSchema.index({ periodId: 1, sourceAccountId: 1, status: 1 });
+quotaRequestSchema.index({ periodId: 1, targetAccountId: 1, status: 1 });
+
 export {
   quotaAccountSchema,
   quotaAllocationSchema,
   quotaGrantSchema,
   quotaLedgerEntrySchema,
   quotaPeriodSchema,
+  quotaRequestSchema,
 };

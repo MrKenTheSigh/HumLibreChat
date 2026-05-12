@@ -677,10 +677,18 @@ export type TBalanceResponse = {
   lastRefill?: Date;
   refillAmount?: number;
   quota?: {
+    periodId?: string;
+    quotaAccountId?: string;
     periodTotalCredits: number;
     periodUsedCredits: number;
     periodRemainingCredits: number;
     usageRatio: number;
     resetAt?: string | null;
+  };
+  quotaState?: {
+    status: 'inactive_period';
+    periodId: string;
+    periodKey?: string | null;
+    periodStatus?: string | null;
   };
 };
