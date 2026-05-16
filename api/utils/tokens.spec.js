@@ -598,6 +598,18 @@ describe('findMatchingPattern - longest match wins', () => {
     );
     expect(result).toBe('gemini-2.0-flash-lite');
   });
+
+  test('should resolve Ollama Gemma 4 context windows', () => {
+    expect(getModelMaxTokens('gemma4:e4b')).toBe(
+      maxTokensMap[EModelEndpoint.openAI]['gemma4:e4b'],
+    );
+    expect(getModelMaxTokens('gemma4:26b')).toBe(
+      maxTokensMap[EModelEndpoint.openAI]['gemma4:26b'],
+    );
+    expect(getModelMaxTokens('gemma4:31b')).toBe(
+      maxTokensMap[EModelEndpoint.openAI]['gemma4:31b'],
+    );
+  });
 });
 
 describe('findMatchingPattern - bestLength selection', () => {

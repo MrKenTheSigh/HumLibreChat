@@ -20,6 +20,7 @@ import {
   useDeleteAdminChannelMutation,
   useGetAdminChannelInventoryQuery,
   useGetAdminChannelQuery,
+  useGetAdminChannelsQuery,
   useUpdateAdminChannelMutation,
 } from '~/data-provider/Admin';
 import { useLocalize } from '~/hooks';
@@ -57,6 +58,7 @@ type ChannelFormState = {
   connection: {
     runtimeEndpoint: string;
     baseURL: string;
+    ocrMaxPages: string;
     instanceName: string;
     apiVersion: string;
     region: string;
@@ -151,6 +153,7 @@ const emptyChannelState: ChannelFormState = {
   connection: {
     runtimeEndpoint: getRuntimeEndpoint('azureOpenAI'),
     baseURL: '',
+    ocrMaxPages: '5',
     instanceName: '',
     apiVersion: '',
     region: '',
@@ -313,6 +316,9 @@ export default function AdminChannelForm() {
   const [clientError, setClientError] = useState<string | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
   const channelInventoryQuery = useGetAdminChannelInventoryQuery();
+  const channelsQuery = useGetAdminChannelsQuery({
+    enabled: isCreateMode !== true && channelId.length > 0,
+  });
   const channelQuery = useGetAdminChannelQuery(channelId, {
     enabled: isCreateMode !== true && channelId.length > 0,
   });
@@ -320,43 +326,53 @@ export default function AdminChannelForm() {
   const updateMutation = useUpdateAdminChannelMutation();
   const deleteMutation = useDeleteAdminChannelMutation();
 
+  const channelListFallback = channelsQuery.data?.channels.find(
+    (channel) => channel.id === channelId,
+  );
+  const loadedChannel = channelQuery.data ?? channelListFallback;
+  const isChannelLoading =
+    isCreateMode !== true &&
+    loadedChannel == null &&
+    (channelQuery.isLoading || channelsQuery.isLoading);
+
   useEffect(() => {
-    if (!channelQuery.data) {
+    if (!loadedChannel) {
       return;
     }
 
     setForm({
-      name: channelQuery.data.name,
-      slug: channelQuery.data.slug,
-      providerType: channelQuery.data.providerType,
-      description: channelQuery.data.description,
-      enabled: channelQuery.data.enabled,
-      sortOrder: String(channelQuery.data.sortOrder),
+      name: loadedChannel.name,
+      slug: loadedChannel.slug,
+      providerType: loadedChannel.providerType,
+      description: loadedChannel.description,
+      enabled: loadedChannel.enabled,
+      sortOrder: String(loadedChannel.sortOrder),
       connection: {
-        runtimeEndpoint: channelQuery.data.connection.runtimeEndpoint,
-        baseURL: channelQuery.data.connection.baseURL,
-        instanceName: channelQuery.data.connection.instanceName,
-        apiVersion: channelQuery.data.connection.apiVersion,
-        region: channelQuery.data.connection.region,
-        modelFetch: channelQuery.data.connection.modelFetch,
-        headers: channelQuery.data.connection.headers,
+        runtimeEndpoint: loadedChannel.connection.runtimeEndpoint,
+        baseURL: loadedChannel.connection.baseURL,
+        ocrMaxPages: String(loadedChannel.connection.ocrMaxPages ?? 5),
+        instanceName: loadedChannel.connection.instanceName,
+        apiVersion: loadedChannel.connection.apiVersion,
+        region: loadedChannel.connection.region,
+        modelFetch: loadedChannel.connection.modelFetch,
+        headers: loadedChannel.connection.headers,
       },
       secrets: {
-        apiKey: channelQuery.data.secrets.apiKey,
-        apiKeyRef: channelQuery.data.secrets.apiKeyRef,
-        accessKeyId: channelQuery.data.secrets.accessKeyId,
-        accessKeyIdRef: channelQuery.data.secrets.accessKeyIdRef,
-        secretAccessKey: channelQuery.data.secrets.secretAccessKey,
-        secretAccessKeyRef: channelQuery.data.secrets.secretAccessKeyRef,
-        sessionToken: channelQuery.data.secrets.sessionToken,
-        sessionTokenRef: channelQuery.data.secrets.sessionTokenRef,
+        apiKey: loadedChannel.secrets.apiKey,
+        apiKeyRef: loadedChannel.secrets.apiKeyRef,
+        accessKeyId: loadedChannel.secrets.accessKeyId,
+        accessKeyIdRef: loadedChannel.secrets.accessKeyIdRef,
+        secretAccessKey: loadedChannel.secrets.secretAccessKey,
+        secretAccessKeyRef: loadedChannel.secrets.secretAccessKeyRef,
+        sessionToken: loadedChannel.secrets.sessionToken,
+        sessionTokenRef: loadedChannel.secrets.sessionTokenRef,
       },
       models:
-        channelQuery.data.models.length > 0
-          ? channelQuery.data.models.map(toModelFormState)
+        loadedChannel.models.length > 0
+          ? loadedChannel.models.map(toModelFormState)
           : [createEmptyModelState()],
     });
-  }, [channelQuery.data]);
+  }, [loadedChannel]);
 
   useEffect(() => {
     if (form.providerType === 'custom') {
@@ -450,11 +466,11 @@ export default function AdminChannelForm() {
           </OGDialogTitle>
 
           <div className="shrink-0 border-b border-border-light px-6 py-5">
-            {!isCreateMode && channelQuery.isLoading ? (
+            {!isCreateMode && isChannelLoading ? (
               <div className="rounded-2xl border border-dashed border-border-medium bg-background p-6 text-sm text-text-secondary">
                 {localize('com_ui_loading')}
               </div>
-            ) : !isCreateMode && !channelQuery.data ? (
+            ) : !isCreateMode && !loadedChannel ? (
               <p className="text-sm text-text-secondary">{localize('com_ui_no_results_found')}</p>
             ) : (
               <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
@@ -496,7 +512,7 @@ export default function AdminChannelForm() {
             )}
           </div>
 
-          {!(!isCreateMode && (channelQuery.isLoading || !channelQuery.data)) && (
+          {!(!isCreateMode && (isChannelLoading || !loadedChannel)) && (
             <form
               className="flex min-h-0 flex-1 flex-col"
               onSubmit={(event) => {
@@ -519,6 +535,7 @@ export default function AdminChannelForm() {
                   connection: {
                     runtimeEndpoint: form.connection.runtimeEndpoint.trim(),
                     baseURL: form.connection.baseURL.trim(),
+                    ocrMaxPages: Number(form.connection.ocrMaxPages || '5'),
                     instanceName: form.connection.instanceName.trim(),
                     apiVersion: form.connection.apiVersion.trim(),
                     region: form.connection.region.trim(),
@@ -632,6 +649,10 @@ export default function AdminChannelForm() {
                                     nextProviderType === 'ollama'
                                       ? true
                                       : current.connection.modelFetch,
+                                  ocrMaxPages:
+                                    nextProviderType === 'ollama'
+                                      ? current.connection.ocrMaxPages || '5'
+                                      : current.connection.ocrMaxPages,
                                 },
                                 secrets:
                                   nextProviderType === 'ollama'
@@ -757,6 +778,30 @@ export default function AdminChannelForm() {
                               }
                             />
                             {localize('com_ui_admin_channel_model_fetch')}
+                          </label>
+                        )}
+                        {form.providerType === 'ollama' && (
+                          <label className="flex flex-col gap-2 text-sm text-text-secondary">
+                            {localize('com_ui_admin_channel_ocr_max_pages')}
+                            <input
+                              type="number"
+                              min={1}
+                              step={1}
+                              value={form.connection.ocrMaxPages}
+                              onChange={(event) =>
+                                setForm((current) => ({
+                                  ...current,
+                                  connection: {
+                                    ...current.connection,
+                                    ocrMaxPages: event.target.value,
+                                  },
+                                }))
+                              }
+                              className="rounded-xl border border-border-medium bg-background px-3 py-2 text-sm text-text-primary"
+                            />
+                            <span className="text-xs text-text-secondary">
+                              {localize('com_ui_admin_channel_ocr_max_pages_hint')}
+                            </span>
                           </label>
                         )}
                       </>

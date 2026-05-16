@@ -34,6 +34,15 @@ describe('inferMimeType', () => {
     expect(inferMimeType('Main.java', '')).toBe('text/x-java');
   });
 
+  it('should infer from extension when browser type is generic octet-stream', () => {
+    expect(inferMimeType('document.odt', 'application/octet-stream')).toBe(
+      'application/vnd.oasis.opendocument.text',
+    );
+    expect(inferMimeType('spreadsheet.ods', 'application/octet-stream')).toBe(
+      'application/vnd.oasis.opendocument.spreadsheet',
+    );
+  });
+
   it('should return empty string for unknown extension with no browser type', () => {
     expect(inferMimeType('file.xyz', '')).toBe('');
   });

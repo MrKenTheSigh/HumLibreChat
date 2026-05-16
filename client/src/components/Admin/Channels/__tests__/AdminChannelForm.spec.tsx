@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import type * as t from 'librechat-data-provider';
 import { MemoryRouter } from 'react-router-dom';
 import AdminChannelForm from '../AdminChannelForm';
@@ -8,7 +8,8 @@ const mockUseCreateAdminChannelMutation = jest.fn();
 const mockUseDeleteAdminChannelMutation = jest.fn();
 const mockUseGetAdminChannelInventoryQuery = jest.fn();
 const mockUseGetAdminChannelQuery = jest.fn();
-const mockUseParams = jest.fn(() => ({ channelId: 'channel-1' }));
+const mockUseGetAdminChannelsQuery = jest.fn();
+const mockUseParams = jest.fn((): { channelId?: string } => ({ channelId: 'channel-1' }));
 const mockUseUpdateAdminChannelMutation = jest.fn();
 
 jest.mock('~/data-provider/Admin', () => ({
@@ -17,6 +18,7 @@ jest.mock('~/data-provider/Admin', () => ({
   useGetAdminChannelInventoryQuery: (...args: unknown[]) =>
     mockUseGetAdminChannelInventoryQuery(...args),
   useGetAdminChannelQuery: (...args: unknown[]) => mockUseGetAdminChannelQuery(...args),
+  useGetAdminChannelsQuery: (...args: unknown[]) => mockUseGetAdminChannelsQuery(...args),
   useUpdateAdminChannelMutation: (...args: unknown[]) => mockUseUpdateAdminChannelMutation(...args),
 }));
 
@@ -75,6 +77,12 @@ describe('AdminChannelForm', () => {
           },
         ],
       } satisfies t.AdminChannelInventoryResponse,
+    });
+    mockUseGetAdminChannelsQuery.mockReturnValue({
+      data: {
+        channels: [],
+      } satisfies t.AdminChannelsListResponse,
+      isLoading: false,
     });
     mockUseDeleteAdminChannelMutation.mockReturnValue({
       mutate: jest.fn(),
@@ -158,11 +166,72 @@ describe('AdminChannelForm', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText('com_ui_admin_create_channel')).toBeInTheDocument();
+    expect(screen.getAllByText('com_ui_admin_create_channel').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'com_ui_create' })).toBeInTheDocument();
   });
 
-  it('locks the runtime endpoint field for azure channels', async () => {
+  it('uses the channel list payload when the detail query has not returned yet', () => {
+    mockUseGetAdminChannelQuery.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+    });
+    mockUseGetAdminChannelsQuery.mockReturnValue({
+      data: {
+        channels: [
+          {
+            id: 'channel-1',
+            name: 'Fallback Azure',
+            slug: 'fallback-azure',
+            providerType: 'azureOpenAI',
+            description: '',
+            enabled: true,
+            sortOrder: 1,
+            connection: {
+              runtimeEndpoint: 'azureOpenAI',
+              baseURL: '',
+              instanceName: 'az-fallback',
+              apiVersion: '2025-01-01-preview',
+              region: '',
+              modelFetch: false,
+              headers: [],
+            },
+            secrets: {
+              apiKey: '',
+              apiKeyRef: '${AZURE_OPENAI_API_KEY}',
+              accessKeyId: '',
+              accessKeyIdRef: '',
+              secretAccessKey: '',
+              secretAccessKeyRef: '',
+              sessionToken: '',
+              sessionTokenRef: '',
+            },
+            models: [
+              {
+                model: 'gpt-4o',
+                enabled: true,
+                deploymentName: 'gpt-4o',
+                pricingOverride: null,
+              },
+            ],
+            createdAt: null,
+            updatedAt: null,
+          },
+        ],
+      } satisfies t.AdminChannelsListResponse,
+      isLoading: false,
+    });
+
+    render(
+      <MemoryRouter>
+        <AdminChannelForm />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByDisplayValue('Fallback Azure')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('az-fallback')).toBeInTheDocument();
+  });
+
+  it('locks the runtime endpoint field for azure channels', () => {
     mockUseGetAdminChannelQuery.mockReturnValue({
       data: {
         id: 'channel-1',
@@ -212,9 +281,7 @@ describe('AdminChannelForm', () => {
     );
 
     expect(screen.getByDisplayValue('azureOpenAI')).toBeDisabled();
-    await waitFor(() => {
-      expect(screen.getByText('com_ui_admin_channel_builtin_model_help')).toBeInTheDocument();
-    });
+    expect(screen.getByText('com_ui_admin_channel_models_builtin_available')).toBeInTheDocument();
   });
 
   it('shows bedrock-specific region and aws secret fields', () => {
@@ -260,7 +327,6 @@ describe('AdminChannelForm', () => {
 
     expect(screen.getByDisplayValue('google')).toBeDisabled();
     expect(screen.getAllByRole('combobox').length).toBeGreaterThan(1);
-    expect(screen.getByText('com_ui_admin_channel_builtin_model_help')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('com_ui_admin_channel_model_placeholder')).toBeInTheDocument();
     expect(screen.getByText('com_ui_admin_channel_models_builtin_available')).toBeInTheDocument();
     expect(screen.getByLabelText('com_ui_api_key')).toHaveAttribute('type', 'password');

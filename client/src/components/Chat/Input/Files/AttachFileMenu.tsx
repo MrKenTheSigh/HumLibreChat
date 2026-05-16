@@ -39,7 +39,7 @@ import { SharePointPickerDialog } from '~/components/SharePoint';
 import { useGetStartupConfig } from '~/data-provider';
 import { ephemeralAgentByConvoId } from '~/store';
 import { MenuItemProps } from '~/common';
-import { cn } from '~/utils';
+import { AUTO_CONTEXT_UPLOAD_RESOURCE, cn, isOllamaGemmaUploadTarget } from '~/utils';
 
 type FileUploadType =
   | 'image'
@@ -51,6 +51,7 @@ type FileUploadType =
 interface AttachFileMenuProps {
   agentId?: string | null;
   endpoint?: string | null;
+  model?: string | null;
   disabled?: boolean | null;
   conversationId: string;
   endpointType?: EModelEndpoint | string;
@@ -61,6 +62,7 @@ interface AttachFileMenuProps {
 const AttachFileMenu = ({
   agentId,
   endpoint,
+  model,
   disabled,
   endpointType,
   conversationId,
@@ -136,6 +138,24 @@ const AttachFileMenu = ({
 
       const isAzureWithResponsesApi =
         currentProvider === EModelEndpoint.azureOpenAI && useResponsesApi;
+      const usesAutoUpload = isOllamaGemmaUploadTarget({
+        endpoint,
+        endpointType,
+        provider: currentProvider,
+        model,
+      });
+
+      if (usesAutoUpload) {
+        items.push({
+          label: localize('com_ui_upload_files'),
+          onClick: () => {
+            setToolResource(AUTO_CONTEXT_UPLOAD_RESOURCE as EToolResources);
+            onAction();
+          },
+          icon: <FileImageIcon className="icon-md" />,
+        });
+        return items;
+      }
 
       if (
         isDocumentSupportedProvider(endpointType) ||
@@ -234,6 +254,7 @@ const AttachFileMenu = ({
   }, [
     localize,
     endpoint,
+    model,
     provider,
     endpointType,
     capabilities,

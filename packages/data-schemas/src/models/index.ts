@@ -11,6 +11,7 @@ import { createMCPServerModel } from './mcpServer';
 import { createRoleModel } from './role';
 import { createActionModel } from './action';
 import { createAdminChannelModel } from './adminChannel';
+import { createAdminSystemSettingModel } from './adminSystemSetting';
 import { createAssistantModel } from './assistant';
 import { createFileModel } from './file';
 import { createBannerModel } from './banner';
@@ -62,6 +63,7 @@ export function createModels(mongoose: typeof import('mongoose')) {
     Role: createRoleModel(mongoose),
     Action: createActionModel(mongoose),
     AdminChannel: createAdminChannelModel(mongoose),
+    AdminSystemSetting: createAdminSystemSettingModel(mongoose),
     Assistant: createAssistantModel(mongoose),
     File: createFileModel(mongoose),
     Banner: createBannerModel(mongoose),

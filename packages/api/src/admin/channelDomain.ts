@@ -60,12 +60,18 @@ const emptySecrets: AdminChannelSecrets = {
   sessionTokenRef: '',
 };
 
+const DEFAULT_OCR_MAX_PAGES = 5;
+
 function normalizeString(value: string | null | undefined): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
 function normalizeNumber(value: number | null | undefined): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function normalizePositiveInteger(value: number | null | undefined, fallback: number): number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : fallback;
 }
 
 function normalizeProviderType(channel: RawAdminChannelDocument): AdminChannelProviderType {
@@ -129,6 +135,7 @@ function normalizeConnection(
   return {
     runtimeEndpoint,
     baseURL: normalizeString(connection?.baseURL),
+    ocrMaxPages: normalizePositiveInteger(connection?.ocrMaxPages, DEFAULT_OCR_MAX_PAGES),
     instanceName: normalizeString(connection?.instanceName),
     apiVersion: normalizeString(connection?.apiVersion),
     region: normalizeString(connection?.region),

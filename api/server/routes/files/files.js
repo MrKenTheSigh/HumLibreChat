@@ -33,8 +33,28 @@ const { getAssistant } = require('~/models/Assistant');
 const { getAgent } = require('~/models/Agent');
 const { getLogStores } = require('~/cache');
 const { Readable } = require('stream');
+const { addFileEventConnection } = require('~/server/services/Files/events');
 
 const router = express.Router();
+
+router.get('/events', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders?.();
+
+  res.write(': connected\n\n');
+
+  const removeConnection = addFileEventConnection({ userId: req.user.id, res });
+  const heartbeat = setInterval(() => {
+    res.write(': heartbeat\n\n');
+  }, 25000);
+
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    removeConnection();
+  });
+});
 
 router.get('/', async (req, res) => {
   try {

@@ -233,6 +233,16 @@ export function deleteAdminRole(roleName: string): Promise<q.AdminRoleDeleteResp
   return request.delete(endpoints.adminRole(roleName));
 }
 
+export function getAdminSystemSettings(): Promise<q.AdminSystemSettingsResponse> {
+  return request.get(endpoints.adminSystemSettings());
+}
+
+export function updateAdminMemorySystemSetting(
+  payload: q.AdminMemorySystemSettingUpdateRequest,
+): Promise<q.AdminMemorySystemSettingUpdateResponse> {
+  return request.patch(endpoints.adminMemorySystemSetting(), payload);
+}
+
 export function getAdminUsers(params: q.AdminUsersListParams): Promise<q.AdminUsersListResponse> {
   return request.get(endpoints.adminUsers(params));
 }

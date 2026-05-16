@@ -42,6 +42,24 @@ export const useGetAdminRolesQuery = (
   );
 };
 
+export const useGetAdminSystemSettingsQuery = (
+  config?: UseQueryOptions<t.AdminSystemSettingsResponse>,
+): QueryObserverResult<t.AdminSystemSettingsResponse> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+
+  return useQuery<t.AdminSystemSettingsResponse>(
+    [QueryKeys.adminSystemSettings],
+    () => dataService.getAdminSystemSettings(),
+    {
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      refetchOnMount: true,
+      ...config,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled,
+    },
+  );
+};
+
 export const useGetAdminActivityLogsQuery = (
   params: t.AdminActivityLogsListParams,
   config?: UseQueryOptions<t.AdminActivityLogsListResponse>,

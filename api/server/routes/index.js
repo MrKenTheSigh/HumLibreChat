@@ -8,6 +8,7 @@ const adminChannels = require('./admin/channels');
 const adminPlans = require('./admin/plans');
 const adminQuotas = require('./admin/quotas');
 const adminRoles = require('./admin/roles');
+const adminSystemSettings = require('./admin/system-settings');
 const adminManagerReviews = require('./admin/manager-reviews');
 const adminUsers = require('./admin/users');
 const adminConversations = require('./admin/conversations');
@@ -50,6 +51,7 @@ module.exports = {
   adminPlans,
   adminQuotas,
   adminRoles,
+  adminSystemSettings,
   adminManagerReviews,
   adminUsers,
   adminConversations,

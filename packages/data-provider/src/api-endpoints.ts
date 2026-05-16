@@ -58,6 +58,7 @@ const adminPlansRoot = `${adminRoot}/plans`;
 const adminQuotasRoot = `${adminRoot}/quotas`;
 const adminUsageRoot = `${adminRoot}/usage`;
 const adminRolesRoot = `${adminRoot}/roles`;
+const adminSystemSettingsRoot = `${adminRoot}/system-settings`;
 const managerReviewsRoot = `${BASE_URL}/api/manager-reviews`;
 
 export const adminUsers = (params: q.AdminUsersListParams) => {
@@ -70,6 +71,10 @@ export const quotaRequests = (params: q.UserQuotaRequestsListParams = {}) =>
 export const quotaRequestCreate = () => `${quotasRoot}/requests`;
 
 export const adminRoles = () => adminRolesRoot;
+
+export const adminSystemSettings = () => adminSystemSettingsRoot;
+
+export const adminMemorySystemSetting = () => `${adminSystemSettingsRoot}/memory`;
 
 export const adminActivityLogs = (params: q.AdminActivityLogsListParams) => {
   return `${adminActivityLogsRoot}${buildQuery(params)}`;

@@ -2,7 +2,14 @@ const { isEnabled } = require('@librechat/api');
 const { logger } = require('@librechat/data-schemas');
 const { CacheKeys } = require('librechat-data-provider');
 const getLogStores = require('~/cache/getLogStores');
-const { saveConvo } = require('~/models');
+const { getConvo, saveConvo } = require('~/models');
+
+const isGeneratedTitlePlaceholder = (title) => {
+  if (!title) {
+    return true;
+  }
+  return ['New Chat', '新對話', '新的聊天'].includes(title);
+};
 
 /**
  * Add title to conversation in a way that avoids memory retention
@@ -19,6 +26,12 @@ const addTitle = async (req, { text, response, client }) => {
 
   // Skip title generation for temporary conversations
   if (req?.body?.isTemporary) {
+    return;
+  }
+
+  const existingConvo = await getConvo(req.user.id, response.conversationId);
+  if (existingConvo && !isGeneratedTitlePlaceholder(existingConvo.title)) {
+    logger.debug(`[${response.conversationId}] Skipping title generation; title already exists`);
     return;
   }
 

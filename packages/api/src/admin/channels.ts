@@ -67,6 +67,7 @@ const channelModelSchema = z.object({
 const channelConnectionSchema = z.object({
   runtimeEndpoint: z.string().trim().min(1, 'runtime endpoint is required'),
   baseURL: z.string().trim().optional().default(''),
+  ocrMaxPages: z.number().int('OCR max pages must be an integer').positive('OCR max pages must be positive').optional().default(5),
   instanceName: z.string().trim().optional().default(''),
   apiVersion: z.string().trim().optional().default(''),
   region: z.string().trim().optional().default(''),

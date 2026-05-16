@@ -97,6 +97,7 @@ function AttachFileChat({
         endpoint={endpoint}
         disabled={disableInputs}
         endpointType={endpointType}
+        model={conversation?.model}
         conversationId={conversationId}
         agentId={conversation?.agent_id}
         endpointFileConfig={endpointFileConfig}

@@ -19,6 +19,41 @@ describe('formatMessage', () => {
     });
   });
 
+  it('includes extracted file context in user message content', () => {
+    const input = {
+      message: {
+        sender: 'user',
+        text: 'Please summarize this file.',
+        fileContext: 'Attached document(s):\n```md\n# "POC.pdf"\nOCR text\n```',
+      },
+      userName: 'John',
+    };
+    const result = formatMessage(input);
+    expect(result).toEqual({
+      role: 'user',
+      content:
+        'Attached document(s):\n```md\n# "POC.pdf"\nOCR text\n```\n\nPlease summarize this file.',
+      name: 'John',
+    });
+  });
+
+  it('includes extracted file context in LangChain user message content', () => {
+    const input = {
+      message: {
+        sender: 'user',
+        text: 'Read this.',
+        fileContext: 'Attached document(s):\n```md\n# "file.docx"\nDocument text\n```',
+      },
+      userName: 'John',
+      langChain: true,
+    };
+    const result = formatMessage(input);
+    expect(result).toBeInstanceOf(HumanMessage);
+    expect(result.lc_kwargs.content).toEqual(
+      'Attached document(s):\n```md\n# "file.docx"\nDocument text\n```\n\nRead this.',
+    );
+  });
+
   it('sanitizes the name by replacing invalid characters (per OpenAI)', () => {
     const input = {
       message: {

@@ -45,6 +45,35 @@ export interface ToolExecuteOptions {
   toolEndCallback?: ToolEndCallback;
 }
 
+function normalizeToolCallName(name: string): string {
+  const parts = name.split(':');
+  if (parts.length === 2 && parts[0] && parts[0] === parts[1]) {
+    return parts[0];
+  }
+  if (parts.length === 2 && parts[0] === 'web_search' && parts[1] === 'search') {
+    return 'web_search';
+  }
+  return name;
+}
+
+function normalizeToolCallArgs(
+  name: string,
+  args: Record<string, unknown>,
+): Record<string, unknown> {
+  if (name !== 'web_search' || typeof args.query === 'string') {
+    return args;
+  }
+  if (Array.isArray(args.queries)) {
+    const query = args.queries.find(
+      (item): item is string => typeof item === 'string' && item.length > 0,
+    );
+    if (query) {
+      return { ...args, query };
+    }
+  }
+  return args;
+}
+
 /**
  * Creates the ON_TOOL_EXECUTE handler for event-driven tool execution.
  * This handler receives batched tool calls, loads the required tools,
@@ -60,7 +89,9 @@ export function createToolExecuteHandler(options: ToolExecuteOptions): EventHand
       try {
         await runOutsideTracing(async () => {
           try {
-            const toolNames = [...new Set(toolCalls.map((tc: ToolCallRequest) => tc.name))];
+            const toolNames = [
+              ...new Set(toolCalls.map((tc: ToolCallRequest) => normalizeToolCallName(tc.name))),
+            ];
             const { loadedTools, configurable: toolConfigurable } = await loadTools(
               toolNames,
               agentId,
@@ -70,7 +101,8 @@ export function createToolExecuteHandler(options: ToolExecuteOptions): EventHand
 
             const results: ToolExecuteResult[] = await Promise.all(
               toolCalls.map(async (tc: ToolCallRequest) => {
-                const tool = toolMap.get(tc.name);
+                const toolName = normalizeToolCallName(tc.name);
+                const tool = toolMap.get(toolName);
 
                 if (!tool) {
                   logger.warn(
@@ -93,8 +125,8 @@ export function createToolExecuteHandler(options: ToolExecuteOptions): EventHand
 
                   if (
                     tc.codeSessionContext &&
-                    (tc.name === Constants.EXECUTE_CODE ||
-                      tc.name === Constants.PROGRAMMATIC_TOOL_CALLING)
+                    (toolName === Constants.EXECUTE_CODE ||
+                      toolName === Constants.PROGRAMMATIC_TOOL_CALLING)
                   ) {
                     toolCallConfig.session_id = tc.codeSessionContext.session_id;
                     if (tc.codeSessionContext.files && tc.codeSessionContext.files.length > 0) {
@@ -102,7 +134,7 @@ export function createToolExecuteHandler(options: ToolExecuteOptions): EventHand
                     }
                   }
 
-                  if (tc.name === Constants.PROGRAMMATIC_TOOL_CALLING) {
+                  if (toolName === Constants.PROGRAMMATIC_TOOL_CALLING) {
                     const toolRegistry = mergedConfigurable?.toolRegistry as
                       | LCToolRegistry
                       | undefined;
@@ -120,7 +152,8 @@ export function createToolExecuteHandler(options: ToolExecuteOptions): EventHand
                     }
                   }
 
-                  const result = await tool.invoke(tc.args, {
+                  const args = normalizeToolCallArgs(toolName, tc.args);
+                  const result = await tool.invoke(args, {
                     toolCall: toolCallConfig,
                     configurable: mergedConfigurable,
                     metadata,
@@ -130,7 +163,7 @@ export function createToolExecuteHandler(options: ToolExecuteOptions): EventHand
                     await toolEndCallback(
                       {
                         output: {
-                          name: tc.name,
+                          name: toolName,
                           tool_call_id: tc.id,
                           content: result.content,
                           artifact: result.artifact,

@@ -52,7 +52,10 @@ const formatMessage = ({ message, userName, assistantName, endpoint, langChain =
     _role = roleMapping[lc_id[2]];
   }
   const role = _role ?? (sender && sender?.toLowerCase() === 'user' ? 'user' : 'assistant');
-  const content = _content ?? text ?? '';
+  let content = _content ?? text ?? '';
+  if (role === 'user' && typeof message.fileContext === 'string' && message.fileContext.trim()) {
+    content = `${message.fileContext}\n\n${content}`;
+  }
   const formattedMessage = {
     role,
     content,

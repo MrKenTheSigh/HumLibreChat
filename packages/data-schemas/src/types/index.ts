@@ -20,6 +20,7 @@ export * from './agentCategory';
 export * from './role';
 export * from './action';
 export * from './adminChannel';
+export * from './adminSystemSetting';
 export * from './adminPlan';
 export * from './assistant';
 export * from './file';

@@ -13,6 +13,7 @@ import {
   Layers3,
   MessagesSquare,
   Shield,
+  Settings,
   Users,
   ShieldCheck,
 } from 'lucide-react';
@@ -89,6 +90,12 @@ const allNavGroups: NavGroup[] = [
         icon: Blocks,
         labelKey: 'com_ui_admin_channels',
         to: '/d/admin/channels',
+        roles: [SystemRoles.ADMIN],
+      },
+      {
+        icon: Settings,
+        labelKey: 'com_ui_admin_system_settings',
+        to: '/d/admin/system-settings',
         roles: [SystemRoles.ADMIN],
       },
       {

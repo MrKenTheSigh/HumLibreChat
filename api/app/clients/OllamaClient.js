@@ -30,12 +30,32 @@ const ollamaPayloadSchema = z.object({
  * @throws {Error}
  */
 const getValidBase64 = (imageUrl) => {
+  if (typeof imageUrl !== 'string') {
+    return;
+  }
+
   const parts = imageUrl.split(';base64,');
 
   if (parts.length === 2) {
     return parts[1];
-  } else {
-    logger.error('Invalid or no Base64 string found in URL.');
+  }
+};
+
+const normalizeRole = (role) => {
+  if (role === 'developer') {
+    return 'system';
+  }
+
+  if (role === 'system' || role === 'user' || role === 'assistant' || role === 'tool') {
+    return role;
+  }
+
+  return 'user';
+};
+
+const appendTextContent = (textParts, value) => {
+  if (typeof value === 'string' && value.trim() !== '') {
+    textParts.push(value.trim());
   }
 };
 
@@ -87,32 +107,77 @@ class OllamaClient {
     const ollamaMessages = [];
 
     for (const message of messages) {
+      const role = normalizeRole(message.role);
+
       if (typeof message.content === 'string') {
-        ollamaMessages.push({
-          role: message.role,
+        const ollamaMessage = {
+          role,
           content: message.content,
-        });
+        };
+        if (message.tool_calls) {
+          ollamaMessage.tool_calls = message.tool_calls;
+        }
+        if (role === 'tool') {
+          ollamaMessage.tool_name = message.name;
+        }
+        ollamaMessages.push(ollamaMessage);
         continue;
       }
 
-      let aggregatedText = '';
+      const textParts = [];
       let imageUrls = [];
 
-      for (const content of message.content) {
-        if (content.type === 'text') {
-          aggregatedText += content.text + ' ';
-        } else if (content.type === 'image_url') {
-          imageUrls.push(getValidBase64(content.image_url.url));
+      const contentList = Array.isArray(message.content) ? message.content : [];
+
+      if (!Array.isArray(message.content)) {
+        const ollamaMessage = {
+          role,
+          content: message.content ?? '',
+        };
+        if (message.tool_calls) {
+          ollamaMessage.tool_calls = message.tool_calls;
+        }
+        if (role === 'tool') {
+          ollamaMessage.tool_name = message.name;
+        }
+        ollamaMessages.push(ollamaMessage);
+        continue;
+      }
+
+      for (const content of contentList) {
+        if (typeof content === 'string') {
+          appendTextContent(textParts, content);
+        } else if (content?.type === 'text' || content?.type === 'input_text') {
+          appendTextContent(textParts, content.text);
+        } else if (content?.type === 'image_url') {
+          const imageBase64 = getValidBase64(content.image_url?.url);
+          if (imageBase64) {
+            imageUrls.push(imageBase64);
+          }
+        } else {
+          appendTextContent(textParts, content?.text);
         }
       }
 
       const ollamaMessage = {
-        role: message.role,
-        content: aggregatedText.trim(),
+        role,
+        content: textParts.join('\n\n'),
       };
+
+      if (message.tool_calls) {
+        ollamaMessage.tool_calls = message.tool_calls;
+      }
+
+      if (role === 'tool') {
+        ollamaMessage.tool_name = message.name;
+      }
 
       if (imageUrls.length > 0) {
         ollamaMessage.images = imageUrls;
+      }
+
+      if (ollamaMessage.content === '' && !ollamaMessage.images) {
+        continue;
       }
 
       ollamaMessages.push(ollamaMessage);

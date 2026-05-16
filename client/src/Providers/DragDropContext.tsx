@@ -9,6 +9,7 @@ interface DragDropContextValue {
   conversationId: string | null | undefined;
   agentId: string | null | undefined;
   endpoint: string | null | undefined;
+  model: string | null | undefined;
   endpointType?: EModelEndpoint | string | undefined;
   useResponsesApi?: boolean;
 }
@@ -68,6 +69,7 @@ export function DragDropProvider({ children }: { children: React.ReactNode }) {
       conversationId: conversation?.conversationId,
       agentId: conversation?.agent_id,
       endpoint: conversation?.endpoint,
+      model: conversation?.model,
       endpointType: endpointType,
       useResponsesApi: useResponsesApi,
     }),
@@ -75,6 +77,7 @@ export function DragDropProvider({ children }: { children: React.ReactNode }) {
       conversation?.conversationId,
       conversation?.agent_id,
       conversation?.endpoint,
+      conversation?.model,
       useResponsesApi,
       endpointType,
     ],

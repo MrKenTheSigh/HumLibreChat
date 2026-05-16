@@ -123,6 +123,7 @@ describe('admin channels handlers', () => {
             connection: {
               runtimeEndpoint: 'azureOpenAI',
               baseURL: '',
+              ocrMaxPages: 5,
               instanceName: 'az-coai',
               apiVersion: '2025-01-01-preview',
               region: '',
@@ -298,6 +299,7 @@ describe('admin channels handlers', () => {
         connection: {
           runtimeEndpoint: 'azureOpenAI',
           baseURL: '',
+          ocrMaxPages: 5,
           instanceName: 'az-coai',
           apiVersion: '2025-01-01-preview',
           region: '',

@@ -141,6 +141,429 @@ describe('getOpenAIConfig', () => {
     expect(result.llmConfig.reasoning).toBeUndefined();
   });
 
+  it('should normalize Ollama OpenAI-compatible message payloads before fetch', async () => {
+    const originalFetch = global.fetch;
+    const fetchMock = jest.fn().mockResolvedValue(new Response('{}'));
+    global.fetch = fetchMock;
+
+    try {
+      const result = getOpenAIConfig(
+        mockApiKey,
+        {
+          reverseProxyUrl: 'http://localhost:11434/v1',
+        },
+        'ollama',
+      );
+
+      expect(result.configOptions.fetch).toBeDefined();
+
+      await result.configOptions.fetch?.('http://localhost:11434/v1/chat/completions', {
+        method: 'POST',
+        body: JSON.stringify({
+          model: 'gemma4:e4b',
+          tools: [{ type: 'function', function: { name: 'web_search' } }],
+          tool_choice: 'auto',
+          parallel_tool_calls: true,
+          messages: [
+            {
+              role: 'developer',
+              content: [{ type: 'text', text: 'Follow instructions.' }],
+            },
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: 'test' },
+                { type: 'image_url', image_url: { url: '/images/not-base64.png' } },
+              ],
+            },
+            {
+              role: 'user',
+              content: [{ type: 'image_url', image_url: { url: '/images/empty.png' } }],
+            },
+            {
+              role: 'assistant',
+              content: null,
+              tool_calls: [{ id: 'call_1', type: 'function', function: { name: 'web_search' } }],
+            },
+            {
+              role: 'tool',
+              name: 'web_search',
+              tool_call_id: 'call_1',
+              content: [
+                '=== Web Results, Turn 0 ===',
+                '',
+                '# Search 0: "臺北市- 縣市預報| 交通部中央氣象署"',
+                '',
+                'Anchor: \\ue202turn0search0',
+                'URL: https://www.cwa.gov.tw/V8/C/W/County/County.html?CID=63',
+                'Summary: 今日白天 陰短暫陣雨 22 - 26°C 降雨機率30%舒適。',
+                'Source: 中央氣象署全球資訊網',
+                '',
+                '## Highlights',
+                'noisy highlight text',
+              ].join('\n'),
+            },
+          ],
+        }),
+      } as RequestInit);
+
+      const init = fetchMock.mock.calls[0][1] as RequestInit;
+      const normalizedBody = JSON.parse(init.body as string);
+      expect(normalizedBody.tools).toBeUndefined();
+      expect(normalizedBody.tool_choice).toBe('none');
+      expect(normalizedBody.parallel_tool_calls).toBeUndefined();
+      expect(normalizedBody.messages).toEqual([
+        { role: 'system', content: 'Follow instructions.' },
+        { role: 'user', content: 'test' },
+        {
+          role: 'user',
+          content: expect.stringContaining(
+            'Summary: 今日白天 陰短暫陣雨 22 - 26°C 降雨機率30%舒適。',
+          ),
+        },
+      ]);
+      expect(JSON.stringify(normalizedBody.messages)).not.toContain('tool_calls');
+      expect(normalizedBody.messages.at(-1).content).not.toContain('noisy highlight text');
+      expect(normalizedBody.messages.at(-1).content).toContain(
+        'The tool result is a set of candidate web results',
+      );
+      expect(normalizedBody.messages.at(-1).content).toContain(
+        'Ignore unrelated historical data, climate averages',
+      );
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  it('should retry Ollama post-tool responses that still contain tool calls', async () => {
+    const originalFetch = global.fetch;
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  role: 'assistant',
+                  content: '',
+                  tool_calls: [
+                    {
+                      id: 'call_2',
+                      type: 'function',
+                      function: { name: 'web_search', arguments: '{"query":"wrong"}' },
+                    },
+                  ],
+                },
+              },
+            ],
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { role: 'assistant', content: '台北市今天陰短暫陣雨。' } }],
+          }),
+        ),
+      );
+    global.fetch = fetchMock;
+
+    try {
+      const result = getOpenAIConfig(
+        mockApiKey,
+        {
+          reverseProxyUrl: 'http://localhost:11434/v1',
+        },
+        'ollama',
+      );
+
+      const response = await result.configOptions.fetch?.(
+        'http://localhost:11434/v1/chat/completions',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            model: 'gemma4:e4b',
+            tools: [{ type: 'function', function: { name: 'web_search' } }],
+            messages: [
+              { role: 'user', content: '用網路查詢今天台北市的天氣' },
+              {
+                role: 'assistant',
+                content: '',
+                tool_calls: [{ id: 'call_1', type: 'function', function: { name: 'web_search' } }],
+              },
+              {
+                role: 'tool',
+                name: 'web_search',
+                tool_call_id: 'call_1',
+                content: '今日白天 陰短暫陣雨 22 - 26°C，降雨機率30%。',
+              },
+            ],
+          }),
+        } as RequestInit,
+      );
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      const retryInit = fetchMock.mock.calls[1][1] as RequestInit;
+      const retryBody = JSON.parse(retryInit.body as string);
+      expect(retryBody.tools).toBeUndefined();
+      expect(retryBody.tool_choice).toBeUndefined();
+      expect(retryBody.messages.at(-1)).toMatchObject({
+        role: 'user',
+        content: expect.stringContaining('Tools are no longer available'),
+      });
+      await expect(response?.json()).resolves.toMatchObject({
+        choices: [{ message: { content: '台北市今天陰短暫陣雨。' } }],
+      });
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  it('should retry Ollama streaming post-tool responses that still contain tool calls', async () => {
+    const originalFetch = global.fetch;
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          [
+            'data: {"choices":[{"delta":{"tool_calls":[{"id":"call_2","type":"function","function":{"name":"web_search","arguments":"{}"}}]}}]}',
+            '',
+            'data: [DONE]',
+            '',
+          ].join('\n'),
+          { headers: { 'content-type': 'text/event-stream' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response('data: {"choices":[{"delta":{"content":"台北市今天陰短暫陣雨。"}}]}\n\n', {
+          headers: { 'content-type': 'text/event-stream' },
+        }),
+      );
+    global.fetch = fetchMock;
+
+    try {
+      const result = getOpenAIConfig(
+        mockApiKey,
+        {
+          reverseProxyUrl: 'http://localhost:11434/v1',
+        },
+        'ollama',
+      );
+
+      const response = await result.configOptions.fetch?.(
+        'http://localhost:11434/v1/chat/completions',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            model: 'gemma4:e4b',
+            stream: true,
+            tools: [{ type: 'function', function: { name: 'web_search' } }],
+            messages: [
+              { role: 'user', content: '用網路查詢今天台北市的天氣' },
+              {
+                role: 'assistant',
+                content: '',
+                tool_calls: [{ id: 'call_1', type: 'function', function: { name: 'web_search' } }],
+              },
+              {
+                role: 'tool',
+                name: 'web_search',
+                tool_call_id: 'call_1',
+                content: '今日白天 陰短暫陣雨 22 - 26°C，降雨機率30%。',
+              },
+            ],
+          }),
+        } as RequestInit,
+      );
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      const retryBody = JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string);
+      expect(retryBody.stream).toBe(true);
+      expect(retryBody.tools).toBeUndefined();
+      expect(retryBody.messages.at(-1)).toMatchObject({
+        role: 'user',
+        content: expect.stringContaining('Tools are no longer available'),
+      });
+      await expect(response?.text()).resolves.toContain('台北市今天陰短暫陣雨');
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  it('should not send OpenAI-native web search tools to Ollama', () => {
+    const result = getOpenAIConfig(
+      mockApiKey,
+      {
+        reverseProxyUrl: 'http://localhost:11434/v1',
+        modelOptions: {
+          model: 'gemma4:e4b',
+          web_search: true,
+        },
+      },
+      'ollama',
+    );
+
+    expect(result.tools).toEqual([]);
+    expect((result.llmConfig as Record<string, unknown>).useResponsesApi).toBeUndefined();
+    expect(result.configOptions.fetch).toBeDefined();
+  });
+
+  it('should ignore previous tool results when a later user message starts a new turn', async () => {
+    const originalFetch = global.fetch;
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValue(new Response('{"choices":[{"message":{"content":"ok"}}]}'));
+    global.fetch = fetchMock;
+
+    try {
+      const result = getOpenAIConfig(
+        mockApiKey,
+        {
+          reverseProxyUrl: 'http://localhost:11434/v1',
+        },
+        'ollama',
+      );
+
+      await result.configOptions.fetch?.('http://localhost:11434/v1/chat/completions', {
+        method: 'POST',
+        body: JSON.stringify({
+          model: 'gemma4:e4b',
+          tools: [{ type: 'function', function: { name: 'web_search' } }],
+          messages: [
+            { role: 'user', content: '用網路查詢今天台北市的天氣' },
+            {
+              role: 'assistant',
+              content: '',
+              tool_calls: [
+                { id: 'call_weather', type: 'function', function: { name: 'web_search' } },
+              ],
+            },
+            {
+              role: 'tool',
+              name: 'web_search',
+              tool_call_id: 'call_weather',
+              content: 'Summary: 台北市今日白天陰短暫陣雨。',
+            },
+            { role: 'assistant', content: '台北市今天陰短暫陣雨。' },
+            { role: 'user', content: '現在美股台積電 ADR 價格是多少' },
+          ],
+        }),
+      } as RequestInit);
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const forwardedBody = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+      expect(forwardedBody.tools).toEqual([{ type: 'function', function: { name: 'web_search' } }]);
+      expect(forwardedBody.tool_choice).toBeUndefined();
+      expect(JSON.stringify(forwardedBody.messages)).not.toContain(
+        'Summary: 台北市今日白天陰短暫陣雨',
+      );
+      expect(forwardedBody.messages).toEqual([
+        { role: 'user', content: '用網路查詢今天台北市的天氣' },
+        { role: 'assistant', content: '' },
+        { role: 'assistant', content: '台北市今天陰短暫陣雨。' },
+        { role: 'user', content: '現在美股台積電 ADR 價格是多少' },
+      ]);
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  it('should keep Ollama streaming web_search tools available for a new search request', async () => {
+    const originalFetch = global.fetch;
+    const fetchMock = jest.fn().mockResolvedValue(new Response('data: [DONE]\n\n'));
+    global.fetch = fetchMock;
+
+    try {
+      const result = getOpenAIConfig(
+        mockApiKey,
+        {
+          reverseProxyUrl: 'http://localhost:11434/v1',
+        },
+        'ollama',
+      );
+
+      await result.configOptions.fetch?.('http://localhost:11434/v1/chat/completions', {
+        method: 'POST',
+        body: JSON.stringify({
+          model: 'gemma4:e4b',
+          stream: true,
+          tools: [{ type: 'function', function: { name: 'web_search' } }],
+          messages: [{ role: 'user', content: '透過網路搜尋現在美股台積電 ADR 價格是多少' }],
+        }),
+      } as RequestInit);
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const forwardedBody = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+      expect(forwardedBody).toMatchObject({
+        model: 'gemma4:e4b',
+        stream: true,
+        tools: [{ type: 'function', function: { name: 'web_search' } }],
+        messages: [{ role: 'user', content: '透過網路搜尋現在美股台積電 ADR 價格是多少' }],
+      });
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  it('should flatten only current-turn Ollama tool results', async () => {
+    const originalFetch = global.fetch;
+    const fetchMock = jest.fn().mockResolvedValue(new Response('{}'));
+    global.fetch = fetchMock;
+
+    try {
+      const result = getOpenAIConfig(
+        mockApiKey,
+        {
+          reverseProxyUrl: 'http://localhost:11434/v1',
+        },
+        'ollama',
+      );
+
+      await result.configOptions.fetch?.('http://localhost:11434/v1/chat/completions', {
+        method: 'POST',
+        body: JSON.stringify({
+          model: 'gemma4:e4b',
+          tools: [{ type: 'function', function: { name: 'web_search' } }],
+          messages: [
+            { role: 'user', content: '用網路查詢今天台北市的天氣' },
+            { role: 'assistant', content: '台北市今天陰短暫陣雨。' },
+            { role: 'user', content: '現在美股台積電 ADR 價格是多少' },
+            {
+              role: 'assistant',
+              content: '',
+              tool_calls: [
+                { id: 'call_price', type: 'function', function: { name: 'web_search' } },
+              ],
+            },
+            {
+              role: 'tool',
+              name: 'web_search',
+              tool_call_id: 'call_price',
+              content: 'Summary: 台積電 ADR 目前價格為 288.00 美元。',
+            },
+          ],
+        }),
+      } as RequestInit);
+
+      const forwardedBody = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+      expect(forwardedBody.tools).toBeUndefined();
+      expect(forwardedBody.tool_choice).toBe('none');
+      expect(forwardedBody.messages).toEqual([
+        { role: 'user', content: '用網路查詢今天台北市的天氣' },
+        { role: 'assistant', content: '台北市今天陰短暫陣雨。' },
+        { role: 'user', content: '現在美股台積電 ADR 價格是多少' },
+        { role: 'assistant', content: '' },
+        {
+          role: 'user',
+          content: expect.stringContaining('Summary: 台積電 ADR 目前價格為 288.00 美元。'),
+        },
+      ]);
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
   it('should use reasoning object for openAI endpoint with useResponsesApi=true', () => {
     const modelOptions = {
       reasoning_effort: ReasoningEffort.high,

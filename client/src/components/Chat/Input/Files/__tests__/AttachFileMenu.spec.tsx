@@ -10,6 +10,7 @@ jest.mock('~/hooks', () => ({
   useAgentCapabilities: jest.fn(),
   useGetAgentsConfig: jest.fn(),
   useFileHandling: jest.fn(),
+  useHasAccess: jest.fn(),
   useLocalize: jest.fn(),
 }));
 
@@ -67,6 +68,7 @@ const mockUseAgentToolPermissions = jest.requireMock('~/hooks').useAgentToolPerm
 const mockUseAgentCapabilities = jest.requireMock('~/hooks').useAgentCapabilities;
 const mockUseGetAgentsConfig = jest.requireMock('~/hooks').useGetAgentsConfig;
 const mockUseFileHandling = jest.requireMock('~/hooks').useFileHandling;
+const mockUseHasAccess = jest.requireMock('~/hooks').useHasAccess;
 const mockUseLocalize = jest.requireMock('~/hooks').useLocalize;
 const mockUseSharePointFileHandling = jest.requireMock(
   '~/hooks/Files/useSharePointFileHandling',
@@ -78,6 +80,7 @@ const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false 
 function setupMocks(overrides: { provider?: string } = {}) {
   const translations: Record<string, string> = {
     com_ui_upload_provider: 'Upload to Provider',
+    com_ui_upload_files: 'Upload Files',
     com_ui_upload_image_input: 'Upload Image',
     com_ui_upload_ocr_text: 'Upload as Text',
     com_ui_upload_file_search: 'Upload for File Search',
@@ -93,6 +96,7 @@ function setupMocks(overrides: { provider?: string } = {}) {
   });
   mockUseGetAgentsConfig.mockReturnValue({ agentsConfig: {} });
   mockUseFileHandling.mockReturnValue({ handleFileChange: jest.fn() });
+  mockUseHasAccess.mockReturnValue(true);
   mockUseSharePointFileHandling.mockReturnValue({
     handleSharePointFiles: jest.fn(),
     isProcessing: false,
@@ -180,6 +184,19 @@ describe('AttachFileMenu', () => {
       renderMenu({ endpointType: EModelEndpoint.azureOpenAI, useResponsesApi: false });
       openMenu();
       expect(screen.getByText('Upload Image')).toBeInTheDocument();
+    });
+
+    it('shows one neutral upload option for Ollama Gemma', () => {
+      setupMocks({ provider: 'ollama' });
+      renderMenu({
+        endpoint: 'ollama',
+        endpointType: EModelEndpoint.custom,
+        model: 'gemma4:e4b',
+      });
+      openMenu();
+      expect(screen.getByText('Upload Files')).toBeInTheDocument();
+      expect(screen.queryByText('Upload to Provider')).not.toBeInTheDocument();
+      expect(screen.queryByText('Upload Image')).not.toBeInTheDocument();
     });
   });
 

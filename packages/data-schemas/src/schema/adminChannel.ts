@@ -81,6 +81,10 @@ const adminChannelConnectionSchema = new Schema(
       trim: true,
       default: '',
     },
+    ocrMaxPages: {
+      type: Number,
+      default: 5,
+    },
     instanceName: {
       type: String,
       trim: true,
@@ -196,6 +200,7 @@ const adminChannelSchema = new Schema<IAdminChannel>(
       default: () => ({
         runtimeEndpoint: '',
         baseURL: '',
+        ocrMaxPages: 5,
         instanceName: '',
         apiVersion: '',
         region: '',

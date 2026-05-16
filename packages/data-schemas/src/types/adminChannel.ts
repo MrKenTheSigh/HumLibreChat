@@ -24,6 +24,7 @@ export type IAdminChannelHeader = {
 export type IAdminChannelConnection = {
   runtimeEndpoint: string;
   baseURL?: string;
+  ocrMaxPages?: number;
   instanceName?: string;
   apiVersion?: string;
   region?: string;

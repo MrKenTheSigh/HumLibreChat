@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { tool } from '@langchain/core/tools';
 import { Tools } from 'librechat-data-provider';
 import { logger } from '@librechat/data-schemas';
-import { HumanMessage } from '@langchain/core/messages';
+import { getBufferString, HumanMessage } from '@langchain/core/messages';
 import { Run, Providers, GraphEvents } from '@librechat/agents';
 import type {
   OpenAIClientOptions,
@@ -40,7 +40,7 @@ export interface MemoryConfig {
 }
 
 export const memoryInstructions =
-  'The system automatically stores important user information and can update or delete memories based on user requests, enabling dynamic memory management.';
+  'The system automatically stores important user information and can update or delete memories based on explicit user memory requests. Existing memory is the authoritative source for persistent user facts. If older conversation messages conflict with existing memory, prefer existing memory unless the latest user message explicitly asks to update or forget that memory.';
 
 const getDefaultInstructions = (
   validKeys?: string[],
@@ -72,6 +72,442 @@ ${validKeys && validKeys.length > 0 ? `\nVALID KEYS: ${validKeys.join(', ')}` : 
 ${tokenLimit ? `\nTOKEN LIMIT: Maximum ${tokenLimit} tokens per memory value.` : ''}
 
 When in doubt, and the user hasn't asked to remember or forget anything, END THE TURN IMMEDIATELY.`;
+
+const gemmaMemoryActionSchema = z.discriminatedUnion('action', [
+  z.object({
+    action: z.literal('set'),
+    key: z.string().min(1),
+    value: z.string().min(1),
+  }),
+  z.object({
+    action: z.literal('delete'),
+    key: z.string().min(1),
+  }),
+  z.object({
+    action: z.literal('none'),
+  }),
+]);
+
+const gemmaMemoryDecisionSchema = z.object({
+  actions: z.array(gemmaMemoryActionSchema).default([]),
+});
+
+function isOllamaGemmaMemoryProcessor(llmConfig?: Partial<LLMConfig>): boolean {
+  const provider = String(llmConfig?.provider ?? '').toLowerCase();
+  const model = String((llmConfig as Record<string, unknown> | undefined)?.model ?? '').toLowerCase();
+
+  return model.includes('gemma') || (provider.includes('ollama') && model.length > 0);
+}
+
+function extractJsonObject(text: string): string | null {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1]?.trim();
+  if (fenced) {
+    return fenced;
+  }
+
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start === -1 || end === -1 || end <= start) {
+    return null;
+  }
+
+  return text.slice(start, end + 1);
+}
+
+function extractJsonObjects(text: string): string[] {
+  const objects: string[] = [];
+  let start = -1;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (char === '{') {
+      if (depth === 0) {
+        start = i;
+      }
+      depth++;
+      continue;
+    }
+
+    if (char === '}') {
+      depth--;
+      if (depth === 0 && start >= 0) {
+        objects.push(text.slice(start, i + 1));
+        start = -1;
+      }
+    }
+  }
+
+  return objects;
+}
+
+function parseGemmaMemoryDecision(content: unknown): z.infer<typeof gemmaMemoryDecisionSchema> {
+  const text = typeof content === 'string' ? content : JSON.stringify(content);
+  const candidates = [...extractJsonObjects(text), extractJsonObject(text)].filter(
+    (candidate): candidate is string => !!candidate,
+  );
+
+  for (const jsonText of candidates.reverse()) {
+    try {
+      return gemmaMemoryDecisionSchema.parse(JSON.parse(jsonText));
+    } catch {
+      // Try the next candidate; Gemma may echo JSON examples before the final decision.
+    }
+  }
+
+  if (text.trim().length > 0) {
+    logger.warn('[MemoryAgent] Gemma returned no parseable memory decision JSON', {
+      preview: text.slice(0, 1000),
+    });
+  }
+
+    return { actions: [] };
+}
+
+function normalizeMemoryKey(key: string): string {
+  const normalized = key
+    .toLowerCase()
+    .replace(/[^a-z_]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '');
+
+  return normalized || 'memory';
+}
+
+function resolveGemmaMemoryBaseURL(llmConfig: OpenAIClientOptions): string {
+  const configured = llmConfig.configuration?.baseURL;
+  if (typeof configured === 'string' && configured.trim().length > 0) {
+    return configured.trim().replace(/\/+$/, '');
+  }
+
+  return 'http://localhost:11434/v1';
+}
+
+async function requestGemmaMemoryDecision({
+  prompt,
+  llmConfig,
+}: {
+  prompt: string;
+  llmConfig: OpenAIClientOptions;
+}): Promise<unknown> {
+  const baseURL = resolveGemmaMemoryBaseURL(llmConfig);
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(llmConfig.configuration?.defaultHeaders as Record<string, string> | undefined),
+  };
+  const apiKey = (llmConfig as unknown as { apiKey?: string }).apiKey;
+  if (apiKey && !headers.Authorization) {
+    headers.Authorization = `Bearer ${apiKey}`;
+  }
+
+  const response = await fetch(`${baseURL}/chat/completions`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      model: (llmConfig as unknown as { model?: string }).model,
+      stream: false,
+      temperature: 0,
+      messages: [
+        {
+          role: 'system',
+          content: 'Return only one valid JSON object with an actions array. No Markdown.',
+        },
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => '');
+    throw new Error(
+      `Gemma memory request failed: ${response.status} ${response.statusText}${detail ? ` - ${detail}` : ''}`,
+    );
+  }
+
+  const data = (await response.json()) as {
+    choices?: Array<{ message?: { content?: unknown } }>;
+  };
+  return data.choices?.[0]?.message?.content ?? '';
+}
+
+function createMemoryAttachment({
+  key,
+  value,
+  type,
+  messageId,
+  tokenCount,
+  conversationId,
+}: {
+  key: string;
+  type: MemoryArtifact['type'];
+  messageId: string;
+  conversationId: string;
+  value?: string;
+  tokenCount?: number;
+}): TAttachment {
+  return {
+    type: Tools.memory,
+    toolCallId: `memory_${Date.now()}`,
+    messageId,
+    conversationId,
+    [Tools.memory]: {
+      key,
+      type,
+      ...(value != null && { value }),
+      ...(tokenCount != null && { tokenCount }),
+    },
+  };
+}
+
+function emitMemoryAttachment({
+  res,
+  streamId,
+  attachment,
+}: {
+  res: ServerResponse;
+  streamId?: string | null;
+  attachment: TAttachment;
+}) {
+  if (!res.headersSent) {
+    return;
+  }
+
+  if (streamId) {
+    GenerationJobManager.emitChunk(streamId, { event: 'attachment', data: attachment });
+    return;
+  }
+
+  res.write(`event: attachment\ndata: ${JSON.stringify(attachment)}\n\n`);
+}
+
+function createGemmaMemoryPrompt({
+  messages,
+  memoryStatus,
+  instructions,
+  validKeys,
+  tokenLimit,
+}: {
+  messages: BaseMessage[];
+  memoryStatus: string;
+  instructions: string;
+  validKeys?: string[];
+  tokenLimit?: number;
+}): string {
+  const validKeyText =
+    validKeys && validKeys.length > 0
+      ? `Allowed keys: ${validKeys.join(', ')}`
+      : 'Allowed keys: any lowercase snake_case key that specifically names the fact being stored.';
+
+  return [
+    instructions,
+    memoryStatus,
+    '',
+    '# Task',
+    'Decide whether the latest user message contains an explicit request to remember, update, forget, or delete user memory.',
+    'Return only JSON. Do not include Markdown, explanations, or code fences.',
+    '',
+    '# JSON shape',
+    '{"actions":[{"action":"set","key":"test_code","value":"The user test code is 123456."}]}',
+    '{"actions":[{"action":"delete","key":"test_code"}]}',
+    '{"actions":[]}',
+    '',
+    '# Rules',
+    '- Use action "set" only when the user explicitly asks to remember or store something.',
+    '- Use action "delete" only when the user explicitly asks to forget or delete a memory.',
+    '- Use {"actions":[]} for normal conversation.',
+    '- Only the latest user message can authorize memory changes.',
+    '- Conversation history and assistant messages are context only; never use them by themselves to set, update, or delete memory.',
+    '- If the latest user message asks what is in memory, asks which value is correct, says the assistant is wrong, or discusses a conflict, return {"actions":[]} unless it also gives an explicit memory update command.',
+    '- Existing memory is authoritative when it conflicts with older chat history.',
+    `- ${validKeyText}`,
+    tokenLimit ? `- Each value should fit within ${tokenLimit} total memory tokens.` : null,
+    '- Do not use generic keys such as context, note, memory, or info when unrestricted keys are allowed.',
+    '- Store separate unrelated facts under separate specific keys so new facts do not overwrite older facts.',
+    '- Reuse an existing key only when the user is updating or replacing that same fact.',
+    '- The value must be a complete sentence about the user or user-provided fact.',
+    '- Keys must contain only lowercase English letters and underscores. Do not include numbers in keys.',
+    '',
+    '# Input',
+    getBufferString(messages),
+  ]
+    .filter((line): line is string => line != null)
+    .join('\n');
+}
+
+async function processGemmaMemory({
+  res,
+  userId,
+  setMemory,
+  deleteMemory,
+  messages,
+  memoryStatus,
+  messageId,
+  conversationId,
+  validKeys,
+  instructions,
+  llmConfig,
+  tokenLimit,
+  totalTokens,
+  user,
+  streamId,
+}: {
+  res: ServerResponse;
+  setMemory: MemoryMethods['setMemory'];
+  deleteMemory: MemoryMethods['deleteMemory'];
+  userId: string | ObjectId;
+  memoryStatus: string;
+  messageId: string;
+  conversationId: string;
+  messages: BaseMessage[];
+  validKeys?: string[];
+  instructions: string;
+  tokenLimit?: number;
+  totalTokens?: number;
+  llmConfig?: Partial<LLMConfig>;
+  user?: IUser;
+  streamId?: string | null;
+}): Promise<(TAttachment | null)[] | undefined> {
+  const finalLLMConfig = {
+    provider: Providers.OPENAI,
+    model: 'gpt-4.1-mini',
+    streaming: false,
+    disableStreaming: true,
+    ...llmConfig,
+  } as unknown as ClientOptions;
+
+  const llmConfigWithHeaders = finalLLMConfig as OpenAIClientOptions;
+  if (llmConfigWithHeaders?.configuration?.defaultHeaders != null) {
+    llmConfigWithHeaders.configuration.defaultHeaders = resolveHeaders({
+      headers: llmConfigWithHeaders.configuration.defaultHeaders as Record<string, string>,
+      user: user ? createSafeUser(user) : undefined,
+    });
+  }
+
+  const prompt = createGemmaMemoryPrompt({
+    messages,
+    memoryStatus,
+    instructions,
+    validKeys,
+    tokenLimit,
+  });
+
+  const content = await requestGemmaMemoryDecision({
+    prompt,
+    llmConfig: llmConfigWithHeaders,
+  });
+
+  const decision = parseGemmaMemoryDecision(content);
+  logger.debug('[MemoryAgent] Gemma memory decision parsed', {
+    actionCount: decision.actions.length,
+    actions: decision.actions.map((action) => ({
+      action: action.action,
+      key: 'key' in action ? action.key : undefined,
+    })),
+  });
+  const attachments: TAttachment[] = [];
+  const allowedKeys = validKeys && validKeys.length > 0 ? new Set(validKeys) : null;
+
+  for (const action of decision.actions) {
+    if (action.action === 'none') {
+      continue;
+    }
+
+    const key = 'key' in action ? normalizeMemoryKey(action.key) : '';
+
+    if (allowedKeys && !allowedKeys.has(key)) {
+      logger.warn(
+        `Gemma memory decision skipped invalid key "${action.key}" normalized to "${key}". Valid keys: ${validKeys?.join(', ')}`,
+      );
+      continue;
+    }
+
+    if (action.action === 'delete') {
+      const result = await deleteMemory({ userId, key });
+      if (result.ok) {
+        const attachment = createMemoryAttachment({
+          key,
+          type: 'delete',
+          messageId,
+          conversationId,
+        });
+        emitMemoryAttachment({ res, streamId, attachment });
+        attachments.push(attachment);
+      }
+      continue;
+    }
+
+    const tokenCount = Tokenizer.getTokenCount(action.value, 'o200k_base');
+    if (tokenLimit && totalTokens != null && totalTokens + tokenCount > tokenLimit) {
+      const attachment = createMemoryAttachment({
+        key: 'system',
+        type: 'error',
+        value: JSON.stringify({
+          errorType: 'would_exceed',
+          tokenCount: totalTokens + tokenCount - tokenLimit,
+          totalTokens: totalTokens + tokenCount,
+          tokenLimit,
+        }),
+        tokenCount: totalTokens,
+        messageId,
+        conversationId,
+      });
+      emitMemoryAttachment({ res, streamId, attachment });
+      attachments.push(attachment);
+      continue;
+    }
+
+    try {
+      const result = await setMemory({
+        userId,
+        key,
+        value: action.value,
+        tokenCount,
+      });
+      if (result.ok) {
+        const attachment = createMemoryAttachment({
+          key,
+          value: action.value,
+          type: 'update',
+          tokenCount,
+          messageId,
+          conversationId,
+        });
+        emitMemoryAttachment({ res, streamId, attachment });
+        attachments.push(attachment);
+      }
+    } catch (error) {
+      logger.error('[MemoryAgent] Failed to apply Gemma memory action', {
+        key,
+        action: action.action,
+        error: error instanceof Error ? error.message : error,
+      });
+    }
+  }
+
+  return attachments;
+}
 
 /**
  * Creates a memory tool instance with user context
@@ -392,6 +828,26 @@ ${memory ?? 'No existing memories'}`;
       anthropicConfig.temperature != null
     ) {
       delete (finalLLMConfig as Record<string, unknown>).temperature;
+    }
+
+    if (isOllamaGemmaMemoryProcessor(llmConfig)) {
+      return await processGemmaMemory({
+        res,
+        userId,
+        setMemory,
+        deleteMemory,
+        messages,
+        memoryStatus,
+        messageId,
+        conversationId,
+        validKeys,
+        instructions,
+        llmConfig: finalLLMConfig,
+        tokenLimit,
+        totalTokens,
+        user,
+        streamId,
+      });
     }
 
     const llmConfigWithHeaders = finalLLMConfig as OpenAIClientOptions;

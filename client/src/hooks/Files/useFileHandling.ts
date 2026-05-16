@@ -16,7 +16,15 @@ import debounce from 'lodash/debounce';
 import type { EModelEndpoint, TEndpointsConfig, TError } from 'librechat-data-provider';
 import type { ExtendedFile, FileSetter } from '~/common';
 import type { TConversation } from 'librechat-data-provider';
-import { logger, validateFiles, cachePreview, getCachedPreview, removePreviewEntry } from '~/utils';
+import {
+  logger,
+  validateFiles,
+  cachePreview,
+  getCachedPreview,
+  removePreviewEntry,
+  getAutoUploadToolResource,
+  AUTO_CONTEXT_UPLOAD_RESOURCE,
+} from '~/utils';
 import { useGetFileConfig, useUploadFileMutation } from '~/data-provider';
 import useLocalize, { TranslationKeys } from '~/hooks/useLocalize';
 import { useDelayedUploadToast } from './useDelayedUploadToast';
@@ -185,6 +193,7 @@ const useFileHandlingCore = (params: UseFileHandling | undefined, fileState: Fil
 
   const startUpload = async (extendedFile: ExtendedFile) => {
     const filename = extendedFile.file?.name ?? 'File';
+    const model = conversation?.model ?? '';
     startUploadTimer(extendedFile.file_id, filename, extendedFile.size);
 
     const formData = new FormData();
@@ -211,6 +220,11 @@ const useFileHandlingCore = (params: UseFileHandling | undefined, fileState: Fil
       }
     }
 
+    const convoModel = model;
+    if (convoModel && formData.get('model') == null) {
+      formData.append('model', convoModel);
+    }
+
     if (!isAssistantsEndpoint(endpointType ?? endpoint)) {
       if (!agent_id) {
         formData.append('message_file', 'true');
@@ -227,7 +241,6 @@ const useFileHandlingCore = (params: UseFileHandling | undefined, fileState: Fil
       return;
     }
 
-    const convoModel = conversation?.model ?? '';
     const convoAssistantId = conversation?.assistant_id ?? '';
 
     if (!assistant_id) {
@@ -275,6 +288,8 @@ const useFileHandlingCore = (params: UseFileHandling | undefined, fileState: Fil
   const handleFiles = async (_files: FileList | File[], _toolResource?: string) => {
     abortControllerRef.current = new AbortController();
     const fileList = Array.from(_files);
+    const getEffectiveToolResource = (file: File) =>
+      _toolResource === AUTO_CONTEXT_UPLOAD_RESOURCE ? getAutoUploadToolResource(file) : _toolResource;
     /* Validate files */
     let filesAreValid: boolean;
     try {
@@ -284,14 +299,33 @@ const useFileHandlingCore = (params: UseFileHandling | undefined, fileState: Fil
         endpointType,
       });
 
-      filesAreValid = validateFiles({
-        files,
-        fileList,
-        setError,
-        fileConfig,
-        endpointFileConfig,
-        toolResource: _toolResource,
-      });
+      if (_toolResource === AUTO_CONTEXT_UPLOAD_RESOURCE) {
+        const groupedFiles = new Map<string, File[]>();
+        for (const file of fileList) {
+          const toolResource = getEffectiveToolResource(file) ?? '';
+          groupedFiles.set(toolResource, [...(groupedFiles.get(toolResource) ?? []), file]);
+        }
+
+        filesAreValid = Array.from(groupedFiles.entries()).every(([toolResource, filesForMode]) =>
+          validateFiles({
+            files,
+            setError,
+            fileConfig,
+            endpointFileConfig,
+            fileList: filesForMode,
+            toolResource: toolResource || undefined,
+          }),
+        );
+      } else {
+        filesAreValid = validateFiles({
+          files,
+          fileList,
+          setError,
+          fileConfig,
+          endpointFileConfig,
+          toolResource: _toolResource,
+        });
+      }
     } catch (error) {
       console.error('file validation error', error);
       setError('com_error_files_validation');
@@ -321,7 +355,7 @@ const useFileHandlingCore = (params: UseFileHandling | undefined, fileState: Fil
         };
 
         if (_toolResource != null && _toolResource !== '') {
-          initialExtendedFile.tool_resource = _toolResource;
+          initialExtendedFile.tool_resource = getEffectiveToolResource(originalFile);
         }
 
         // Add file immediately to show in UI

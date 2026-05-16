@@ -40,12 +40,19 @@ describe('AdminChannelsPage', () => {
               baseURL: '',
               instanceName: 'az-coai',
               apiVersion: '2025-01-01-preview',
+              region: '',
               modelFetch: false,
               headers: [],
             },
             secrets: {
               apiKey: '',
               apiKeyRef: '',
+              accessKeyId: '',
+              accessKeyIdRef: '',
+              secretAccessKey: '',
+              secretAccessKeyRef: '',
+              sessionToken: '',
+              sessionTokenRef: '',
             },
             models: [
               {

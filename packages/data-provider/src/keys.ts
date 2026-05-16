@@ -53,6 +53,7 @@ export enum QueryKeys {
   adminManagerReviewBatchItems = 'adminManagerReviewBatchItems',
   adminRoles = 'adminRoles',
   adminRole = 'adminRole',
+  adminSystemSettings = 'adminSystemSettings',
   adminUsers = 'adminUsers',
   adminUser = 'adminUser',
   adminChannelInventory = 'adminChannelInventory',

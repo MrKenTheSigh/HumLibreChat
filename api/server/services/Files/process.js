@@ -10,6 +10,7 @@ const {
   imageExtRegex,
   EModelEndpoint,
   EToolResources,
+  inferMimeType,
   mergeFileConfig,
   AgentCapabilities,
   checkOpenAIStorage,
@@ -20,7 +21,12 @@ const {
 } = require('librechat-data-provider');
 const { EnvVar } = require('@librechat/agents');
 const { logger } = require('@librechat/data-schemas');
-const { sanitizeFilename, parseText, processAudioFile } = require('@librechat/api');
+const {
+  sanitizeFilename,
+  parseText,
+  processAudioFile,
+  uploadOllamaVisionOCR,
+} = require('@librechat/api');
 const {
   convertImage,
   resizeAndConvert,
@@ -35,6 +41,7 @@ const { getFileStrategy } = require('~/server/utils/getFileStrategy');
 const { checkCapability } = require('~/server/services/Config');
 const { LB_QueueAsyncCall } = require('~/server/utils/queue');
 const { getStrategyFunctions } = require('./strategies');
+const { emitFileProcessingEvent } = require('./events');
 const { determineFileType } = require('~/server/utils');
 const { STTService } = require('./Audio/STTService');
 
@@ -472,6 +479,8 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
   const appConfig = req.config;
   const { agent_id, tool_resource, file_id, temp_file_id = null } = metadata;
 
+  file.mimetype = inferMimeType(file.originalname, file.mimetype);
+
   let messageAttachment = !!metadata.message_file;
 
   if (agent_id && !tool_resource && !messageAttachment) {
@@ -590,6 +599,27 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
           `[processAgentFileUpload] Document parser failed for "${file.originalname}":`,
           err,
         );
+      }
+
+      if (shouldTryOllamaVisionOCR({ req, file })) {
+        try {
+          emitFileProcessingEvent({
+            userId: req.user.id,
+            event: {
+              file_id,
+              filename: file.originalname,
+              status: 'vision_ocr_processing',
+              messageKey: 'com_ui_upload_pdf_vision_ocr_processing',
+            },
+          });
+          return await uploadOllamaVisionOCR({ req, file });
+        } catch (err) {
+          logger.error(
+            `[processAgentFileUpload] Ollama vision OCR failed for "${file.originalname}":`,
+            err,
+          );
+          throw err;
+        }
       }
     };
 
@@ -924,6 +954,19 @@ function base64ToBuffer(base64String) {
     throw new Error(`Failed to convert base64 to buffer: ${error.message}`);
   }
 }
+
+const shouldTryOllamaVisionOCR = ({ req, file }) => {
+  if (file.mimetype !== 'application/pdf') {
+    return false;
+  }
+
+  const model = req.body?.model;
+  if (typeof model !== 'string') {
+    return false;
+  }
+
+  return model.toLowerCase().includes('gemma');
+};
 
 async function saveBase64Image(
   url,

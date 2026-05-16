@@ -875,6 +875,7 @@ export type AdminChannelHeader = {
 export type AdminChannelConnection = {
   runtimeEndpoint: string;
   baseURL: string;
+  ocrMaxPages?: number;
   instanceName: string;
   apiVersion: string;
   region: string;
@@ -938,6 +939,29 @@ export type AdminChannelUpdateRequest = AdminChannelUpsertRequest & {
 export type AdminChannelDeleteResponse = {
   id: string;
   deleted: true;
+};
+
+export type AdminMemorySystemSetting = {
+  enabled: boolean;
+  validKeys: string[];
+  tokenLimit: number | null;
+  messageWindowSize: number;
+  agent: {
+    provider: string;
+    model: string;
+    instructions: string;
+    model_parameters: Record<string, unknown>;
+  };
+};
+
+export type AdminSystemSettingsResponse = {
+  memory: AdminMemorySystemSetting;
+};
+
+export type AdminMemorySystemSettingUpdateRequest = AdminMemorySystemSetting;
+
+export type AdminMemorySystemSettingUpdateResponse = {
+  memory: AdminMemorySystemSetting;
 };
 
 export type AdminPlanModelEntitlement = {

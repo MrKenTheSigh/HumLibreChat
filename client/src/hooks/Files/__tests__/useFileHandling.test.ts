@@ -4,11 +4,22 @@ import { Constants, EModelEndpoint, getEndpointFileConfig } from 'librechat-data
 beforeAll(() => {
   global.URL.createObjectURL = jest.fn(() => 'blob:mock-url');
   global.URL.revokeObjectURL = jest.fn();
+  Object.defineProperty(global, 'Image', {
+    writable: true,
+    value: class {
+      onload: (() => void) | null = null;
+      set src(_value: string) {
+        this.onload?.();
+      }
+    },
+  });
 });
 
 const mockShowToast = jest.fn();
 const mockSetFilesLoading = jest.fn();
 const mockMutate = jest.fn();
+const mockStartUploadTimer = jest.fn();
+const mockClearUploadTimer = jest.fn();
 
 let mockConversation: Record<string, string | null | undefined> = {};
 
@@ -51,7 +62,7 @@ jest.mock('~/data-provider', () => ({
 }));
 
 jest.mock('~/hooks/useLocalize', () => {
-  const fn = jest.fn((key: string) => key) as jest.Mock & {
+  const fn = jest.fn(() => (key: string) => key) as jest.Mock & {
     TranslationKeys: Record<string, never>;
   };
   fn.TranslationKeys = {};
@@ -60,8 +71,8 @@ jest.mock('~/hooks/useLocalize', () => {
 
 jest.mock('../useDelayedUploadToast', () => ({
   useDelayedUploadToast: jest.fn(() => ({
-    startUploadTimer: jest.fn(),
-    clearUploadTimer: jest.fn(),
+    startUploadTimer: mockStartUploadTimer,
+    clearUploadTimer: mockClearUploadTimer,
   })),
 }));
 
@@ -91,9 +102,15 @@ jest.mock('~/utils', () => ({
   validateFiles: jest.fn(() => true),
   cachePreview: jest.fn(),
   getCachedPreview: jest.fn(() => undefined),
+  removePreviewEntry: jest.fn(),
+  AUTO_CONTEXT_UPLOAD_RESOURCE: '__auto_context_upload__',
+  getAutoUploadToolResource: jest.fn((file: File) =>
+    file.type.startsWith('image/') ? undefined : 'context',
+  ),
 }));
 
 const mockValidateFiles = jest.requireMock('~/utils').validateFiles;
+const mockGetAutoUploadToolResource = jest.requireMock('~/utils').getAutoUploadToolResource;
 
 describe('useFileHandling', () => {
   beforeEach(() => {
@@ -285,5 +302,57 @@ describe('useFileHandling', () => {
       const formData: FormData = mockMutate.mock.calls[0][0];
       expect(formData.get('endpoint')).toBe('default');
     });
+
+    it('routes auto uploads per file type before uploading', async () => {
+      mockConversation = {
+        conversationId: 'convo-1',
+        endpoint: 'ollama',
+        endpointType: 'custom',
+      };
+
+      const useFileHandling = await loadHook();
+      const { result } = renderHook(() => useFileHandling());
+
+      const imageFile = new File(['image'], 'test.png', { type: 'image/png' });
+      const pdfFile = new File(['pdf'], 'test.pdf', { type: 'application/pdf' });
+
+      await act(async () => {
+        await result.current.handleFiles([imageFile, pdfFile], '__auto_context_upload__');
+      });
+
+      expect(mockGetAutoUploadToolResource).toHaveBeenCalledWith(imageFile);
+      expect(mockGetAutoUploadToolResource).toHaveBeenCalledWith(pdfFile);
+      expect(mockValidateFiles).toHaveBeenCalledTimes(2);
+      expect(mockMutate).toHaveBeenCalledTimes(2);
+
+      const imageFormData: FormData = mockMutate.mock.calls[0][0];
+      const pdfFormData: FormData = mockMutate.mock.calls[1][0];
+      expect(imageFormData.get('tool_resource')).toBeNull();
+      expect(pdfFormData.get('tool_resource')).toBe('context');
+    });
+
+    it('keeps the normal delayed upload timer for PDF uploads', async () => {
+      mockConversation = {
+        conversationId: 'convo-1',
+        endpoint: 'ollama',
+        endpointType: 'custom',
+        model: 'gemma4:e4b',
+      };
+
+      const useFileHandling = await loadHook();
+      const { result } = renderHook(() => useFileHandling());
+      const pdfFile = new File(['pdf'], 'scanned.pdf', { type: 'application/pdf' });
+
+      await act(async () => {
+        await result.current.handleFiles([pdfFile], '__auto_context_upload__');
+      });
+
+      expect(mockStartUploadTimer).toHaveBeenCalledWith(
+        expect.any(String),
+        'scanned.pdf',
+        pdfFile.size,
+      );
+    });
+
   });
 });

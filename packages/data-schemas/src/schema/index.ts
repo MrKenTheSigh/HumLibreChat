@@ -1,5 +1,6 @@
 export { default as actionSchema } from './action';
 export { default as adminChannelSchema } from './adminChannel';
+export { default as adminSystemSettingSchema } from './adminSystemSetting';
 export { default as adminPlanSchema } from './adminPlan';
 export { default as activityLogSchema } from './activityLog';
 export { default as agentSchema } from './agent';

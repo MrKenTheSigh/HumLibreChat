@@ -9,6 +9,7 @@ export { default as AdminPlanForm } from './Plans/AdminPlanForm';
 export { default as AdminPlansPage } from './Plans/AdminPlansPage';
 export { default as AdminQuotasPage } from './Quotas/AdminQuotasPage';
 export { default as AdminRolesPage } from './Roles/AdminRolesPage';
+export { default as AdminSystemSettingsPage } from './SystemSettings/AdminSystemSettingsPage';
 export { default as AdminUsersPage } from './Users/AdminUsersPage';
 export { default as AdminUserDetail } from './Users/AdminUserDetail';
 export { default as AdminConversationsPage } from './Conversations/AdminConversationsPage';

@@ -25,6 +25,7 @@ import {
 } from '~/hooks';
 import { ephemeralAgentByConvoId } from '~/store';
 import { useDragDropContext } from '~/Providers';
+import { AUTO_CONTEXT_UPLOAD_RESOURCE, isOllamaGemmaUploadTarget } from '~/utils';
 
 interface DragDropModalProps {
   onOptionSelect: (option: EToolResources | undefined) => void;
@@ -48,7 +49,8 @@ const DragDropModal = ({ onOptionSelect, setShowModal, files, isVisible }: DragD
    * Use definition for agents endpoint for ephemeral agents
    * */
   const capabilities = useAgentCapabilities(agentsConfig?.capabilities ?? defaultAgentCapabilities);
-  const { conversationId, agentId, endpoint, endpointType, useResponsesApi } = useDragDropContext();
+  const { conversationId, agentId, endpoint, endpointType, model, useResponsesApi } =
+    useDragDropContext();
   const ephemeralAgent = useRecoilValue(ephemeralAgentByConvoId(conversationId ?? ''));
   const { fileSearchAllowedByAgent, codeAllowedByAgent, provider } = useAgentToolPermissions(
     agentId,
@@ -69,6 +71,21 @@ const DragDropModal = ({ onOptionSelect, setShowModal, files, isVisible }: DragD
 
     const isAzureWithResponsesApi =
       currentProvider === EModelEndpoint.azureOpenAI && useResponsesApi;
+    const usesAutoUpload = isOllamaGemmaUploadTarget({
+      endpoint,
+      endpointType,
+      provider: currentProvider,
+      model,
+    });
+
+    if (usesAutoUpload) {
+      _options.push({
+        label: localize('com_ui_upload_files'),
+        value: AUTO_CONTEXT_UPLOAD_RESOURCE as EToolResources,
+        icon: <FileImageIcon className="icon-md" />,
+      });
+      return _options;
+    }
 
     // Check if provider supports document upload
     if (
@@ -143,6 +160,7 @@ const DragDropModal = ({ onOptionSelect, setShowModal, files, isVisible }: DragD
     provider,
     endpoint,
     endpointType,
+    model,
     capabilities,
     useResponsesApi,
     codeAllowedByAgent,

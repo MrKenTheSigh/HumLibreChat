@@ -29,6 +29,7 @@ type ManagedRuntimeLoaders = {
 type ManagedCustomEndpoint = TEndpoint & {
   tokenConfig?: EndpointTokenConfig;
   configuredModelsOnly?: boolean;
+  ocrMaxPages?: number;
 };
 type ManagedAzureModelConfig = { deploymentName: string };
 
@@ -292,6 +293,7 @@ function buildManagedOllamaEndpoint(
     name: 'ollama',
     apiKey: OLLAMA_DEFAULT_API_KEY,
     baseURL,
+    ocrMaxPages: normalized.connection.ocrMaxPages,
     configuredModelsOnly: true,
     models: {
       default: models,

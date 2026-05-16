@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const multer = require('multer');
 const { sanitizeFilename } = require('@librechat/api');
 const {
+  inferMimeType,
   mergeFileConfig,
   getEndpointFileConfig,
   fileConfig: defaultFileConfig,
@@ -52,6 +53,8 @@ const createFileFilter = (customFileConfig) => {
       return cb(new Error('No file provided'), false);
     }
 
+    file.mimetype = inferMimeType(file.originalname, file.mimetype);
+
     if (req.originalUrl.endsWith('/speech/stt') && file.mimetype.startsWith('audio/')) {
       return cb(null, true);
     }
@@ -85,4 +88,4 @@ const createMulterInstance = async () => {
   });
 };
 
-module.exports = { createMulterInstance, storage, importFileFilter };
+module.exports = { createMulterInstance, createFileFilter, storage, importFileFilter };

@@ -35,6 +35,7 @@ export function loadCustomEndpointsConfig(
         iconURL,
         modelDisplayLabel,
         customParams,
+        ocrMaxPages,
       } = endpoint;
       const name = normalizeEndpointName(configName);
 
@@ -46,6 +47,7 @@ export function loadCustomEndpointsConfig(
         userProvide: isUserProvided(resolvedApiKey),
         userProvideURL: isUserProvided(resolvedBaseURL),
         customParams,
+        ocrMaxPages,
         modelDisplayLabel,
         iconURL,
       };

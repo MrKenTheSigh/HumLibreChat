@@ -186,6 +186,22 @@ export const useDeleteAdminRoleMutation = (): UseMutationResult<
   });
 };
 
+export const useUpdateAdminMemorySystemSettingMutation = (): UseMutationResult<
+  t.AdminMemorySystemSettingUpdateResponse,
+  t.TError | undefined,
+  t.AdminMemorySystemSettingUpdateRequest,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+
+  return useMutation((variables) => dataService.updateAdminMemorySystemSetting(variables), {
+    onSuccess: () => {
+      queryClient.invalidateQueries([QueryKeys.adminSystemSettings]);
+      queryClient.invalidateQueries([QueryKeys.startupConfig]);
+    },
+  });
+};
+
 export const useSetAdminUserBalanceMutation = (): UseMutationResult<
   t.AdminBalanceUpdateResponse,
   t.TError | undefined,

@@ -364,6 +364,8 @@ export const mimeTypeAliases: Readonly<Record<string, string>> = {
   'text/x-python-script': 'text/x-python',
 };
 
+const genericMimeTypes = new Set(['application/octet-stream']);
+
 /**
  * Infers the MIME type from a file's extension when the browser doesn't recognize it,
  * and normalizes known non-standard MIME type aliases to their canonical forms.
@@ -372,12 +374,13 @@ export const mimeTypeAliases: Readonly<Record<string, string>> = {
  * @returns The normalized or inferred MIME type; empty string if unresolvable
  */
 export function inferMimeType(fileName: string, currentType: string): string {
-  if (currentType) {
-    return mimeTypeAliases[currentType] ?? currentType;
+  const normalizedType = mimeTypeAliases[currentType] ?? currentType;
+  if (normalizedType && !genericMimeTypes.has(normalizedType)) {
+    return normalizedType;
   }
 
   const extension = fileName.split('.').pop()?.toLowerCase() ?? '';
-  return codeTypeMapping[extension] || imageTypeMapping[extension] || currentType;
+  return codeTypeMapping[extension] || imageTypeMapping[extension] || normalizedType;
 }
 
 export const retrievalMimeTypes = [

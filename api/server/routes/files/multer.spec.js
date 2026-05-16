@@ -4,7 +4,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
-const { createMulterInstance, storage, importFileFilter } = require('./multer');
+const { createMulterInstance, createFileFilter, storage, importFileFilter } = require('./multer');
 
 // Mock only the config service that requires external dependencies
 jest.mock('~/server/services/Config', () => ({
@@ -240,6 +240,24 @@ describe('Multer Configuration', () => {
   });
 
   describe('File Filter with Real defaultFileConfig', () => {
+    it('should infer ODT MIME type when browser reports octet-stream', (done) => {
+      const odtFile = {
+        ...mockFile,
+        originalname: 'document.odt',
+        mimetype: 'application/octet-stream',
+      };
+      const fileFilter = createFileFilter();
+
+      const cb = jest.fn((err, result) => {
+        expect(err).toBeNull();
+        expect(result).toBe(true);
+        expect(odtFile.mimetype).toBe('application/vnd.oasis.opendocument.text');
+        done();
+      });
+
+      fileFilter(mockReq, odtFile, cb);
+    });
+
     it('should use real fileConfig.checkType for validation', async () => {
       // Test with actual librechat-data-provider functions
       const {

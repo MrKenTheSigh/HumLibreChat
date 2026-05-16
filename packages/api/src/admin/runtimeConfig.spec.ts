@@ -75,6 +75,7 @@ describe('managed runtime config merge', () => {
           connection: {
             runtimeEndpoint: 'ollama',
             baseURL: 'http://localhost:11434',
+            ocrMaxPages: 8,
             modelFetch: true,
             headers: [],
           },
@@ -139,6 +140,7 @@ describe('managed runtime config merge', () => {
           name: 'ollama',
           apiKey: 'ollama',
           baseURL: 'http://localhost:11434/v1',
+          ocrMaxPages: 8,
           models: {
             default: ['llama3.2'],
             fetch: true,

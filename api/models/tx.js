@@ -121,6 +121,8 @@ const tokenValues = Object.assign(
     deepseek: { prompt: 0.28, completion: 0.42 },
     command: { prompt: 0.38, completion: 0.38 },
     gemma: { prompt: 0.02, completion: 0.04 }, // Base pattern (using gemma-3n-e4b pricing)
+    gemma3: { prompt: 0.02, completion: 0.04 },
+    gemma4: { prompt: 0.02, completion: 0.04 },
     gemini: { prompt: 0.5, completion: 1.5 },
     'gpt-oss': { prompt: 0.05, completion: 0.2 },
     // Specific model variants (check FIRST - more specific patterns at end)
@@ -179,6 +181,9 @@ const tokenValues = Object.assign(
     'gemma-2': { prompt: 0.01, completion: 0.03 }, // Base pattern (using gemma-2-9b pricing)
     'gemma-3': { prompt: 0.02, completion: 0.04 }, // Base pattern (using gemma-3n-e4b pricing)
     'gemma-3-27b': { prompt: 0.09, completion: 0.16 },
+    'gemma3:27b': { prompt: 0.09, completion: 0.16 },
+    'gemma4:26b': { prompt: 0.06, completion: 0.1 },
+    'gemma4:31b': { prompt: 0.08, completion: 0.14 },
     'gemini-1.5': { prompt: 2.5, completion: 10 },
     'gemini-1.5-flash': { prompt: 0.15, completion: 0.6 },
     'gemini-1.5-flash-8b': { prompt: 0.075, completion: 0.3 },

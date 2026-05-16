@@ -12,6 +12,7 @@ jest.mock('@librechat/api', () => ({
   sanitizeFilename: jest.fn((n) => n),
   parseText: jest.fn().mockResolvedValue({ text: '', bytes: 0 }),
   processAudioFile: jest.fn(),
+  uploadOllamaVisionOCR: jest.fn(),
 }));
 
 jest.mock('librechat-data-provider', () => ({
@@ -65,6 +66,10 @@ jest.mock('~/server/services/Files/strategies', () => ({
   getStrategyFunctions: jest.fn(),
 }));
 
+jest.mock('./events', () => ({
+  emitFileProcessingEvent: jest.fn(),
+}));
+
 jest.mock('~/server/utils', () => ({
   determineFileType: jest.fn(),
 }));
@@ -78,6 +83,8 @@ const { mergeFileConfig } = require('librechat-data-provider');
 const { checkCapability } = require('~/server/services/Config');
 const { getStrategyFunctions } = require('~/server/services/Files/strategies');
 const { processAgentFileUpload } = require('./process');
+const { uploadOllamaVisionOCR } = require('@librechat/api');
+const { emitFileProcessingEvent } = require('./events');
 
 const PDF_MIME = 'application/pdf';
 const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -88,11 +95,11 @@ const ODT_MIME = 'application/vnd.oasis.opendocument.text';
 const ODP_MIME = 'application/vnd.oasis.opendocument.presentation';
 const ODG_MIME = 'application/vnd.oasis.opendocument.graphics';
 
-const makeReq = ({ mimetype = PDF_MIME, ocrConfig = null } = {}) => ({
+const makeReq = ({ mimetype = PDF_MIME, ocrConfig = null, originalname = 'upload.bin' } = {}) => ({
   user: { id: 'user-123' },
   file: {
     path: '/tmp/upload.bin',
-    originalname: 'upload.bin',
+    originalname,
     filename: 'upload-uuid.bin',
     mimetype,
   },
@@ -134,6 +141,11 @@ describe('processAgentFileUpload', () => {
         .mockResolvedValue({ text: 'extracted text', bytes: 42, filepath: 'doc://result' }),
     });
     mergeFileConfig.mockReturnValue(makeFileConfig());
+    uploadOllamaVisionOCR.mockResolvedValue({
+      text: 'ollama extracted text',
+      bytes: 21,
+      filepath: 'ollama_vision_ocr',
+    });
   });
 
   describe('OCR strategy selection', () => {
@@ -151,6 +163,20 @@ describe('processAgentFileUpload', () => {
 
       await processAgentFileUpload({ req, res: mockRes, metadata: makeMetadata() });
 
+      expect(getStrategyFunctions).toHaveBeenCalledWith(FileSources.document_parser);
+    });
+
+    test('infers ODT MIME type before document parser selection', async () => {
+      mergeFileConfig.mockReturnValue(makeFileConfig());
+      const req = makeReq({
+        originalname: 'upload.odt',
+        mimetype: 'application/octet-stream',
+        ocrConfig: null,
+      });
+
+      await processAgentFileUpload({ req, res: mockRes, metadata: makeMetadata() });
+
+      expect(req.file.mimetype).toBe(ODT_MIME);
       expect(getStrategyFunctions).toHaveBeenCalledWith(FileSources.document_parser);
     });
 
@@ -265,6 +291,41 @@ describe('processAgentFileUpload', () => {
       ).rejects.toThrow(/image-based and requires an OCR service/);
 
       expect(parseText).not.toHaveBeenCalled();
+    });
+
+    test('falls back to Ollama vision OCR for Gemma PDF when document_parser finds no text', async () => {
+      getStrategyFunctions.mockReturnValue({
+        handleFileUpload: jest.fn().mockRejectedValue(new Error('No text found in document')),
+      });
+      const req = makeReq({ mimetype: PDF_MIME, ocrConfig: null });
+      req.body.model = 'gemma4:e4b';
+
+      await processAgentFileUpload({ req, res: mockRes, metadata: makeMetadata() });
+
+      expect(uploadOllamaVisionOCR).toHaveBeenCalledWith({ req, file: req.file });
+      expect(emitFileProcessingEvent).toHaveBeenCalledWith({
+        userId: 'user-123',
+        event: {
+          file_id: 'file-uuid-123',
+          filename: 'upload.bin',
+          status: 'vision_ocr_processing',
+          messageKey: 'com_ui_upload_pdf_vision_ocr_processing',
+        },
+      });
+      expect(mockRes.status).toHaveBeenCalledWith(200);
+    });
+
+    test('returns the Ollama vision OCR error when Gemma PDF fallback fails', async () => {
+      getStrategyFunctions.mockReturnValue({
+        handleFileUpload: jest.fn().mockRejectedValue(new Error('No text found in document')),
+      });
+      uploadOllamaVisionOCR.mockRejectedValue(new Error('Ollama vision OCR request failed'));
+      const req = makeReq({ mimetype: PDF_MIME, ocrConfig: null });
+      req.body.model = 'gemma4:e4b';
+
+      await expect(
+        processAgentFileUpload({ req, res: mockRes, metadata: makeMetadata() }),
+      ).rejects.toThrow('Ollama vision OCR request failed');
     });
 
     test('falls back to document_parser when configured OCR fails for a document MIME type', async () => {

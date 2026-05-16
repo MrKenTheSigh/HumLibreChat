@@ -57,6 +57,18 @@ const { loadAgent } = require('~/models/Agent');
 const { getMCPManager } = require('~/config');
 const db = require('~/models');
 
+const DEFAULT_AGENT_TITLE_PROMPT = `Generate one concise conversation title in the same language and writing system as the latest user message.
+- If the latest user message uses Traditional Chinese, answer in Traditional Chinese.
+- If the latest user message uses Simplified Chinese, answer in Simplified Chinese.
+- If the latest user message uses English, answer in English.
+- Do not translate Chinese to English.
+- Do not use title case unless the language is English.
+- Use 8 characters or fewer for Chinese, or 5 words or fewer for space-separated languages.
+- Return only the title text, with no punctuation, quotes, explanation, or prefix.
+
+Conversation:
+{convo}`;
+
 class AgentClient extends BaseClient {
   constructor(options = {}) {
     super(null, options);
@@ -317,7 +329,20 @@ class AgentClient extends BaseClient {
     /** Memory context (user preferences/memories) */
     const withoutKeys = await this.useMemory();
     if (withoutKeys) {
-      const memoryContext = `${memoryInstructions}\n\n# Existing memory about the user:\n${withoutKeys}`;
+      const memoryContext = `${memoryInstructions}
+
+# Memory authority rules
+- The existing memory below is the current stored memory state.
+- Older conversation messages may contain a different value for the same fact.
+- If the latest user message asks for a stored value and conversation history conflicts with stored memory, mention both values and clearly label which one is from stored memory and which one is from this conversation.
+- The conversation history shown here does not provide enough reliable timing information to compare whether a remembered value in this conversation is newer than stored memory.
+- Do not claim that a conversation-history memory change is newer than stored memory unless the latest user message explicitly updates it.
+- Do not silently choose a stale conversation value over stored memory.
+- A prior assistant acknowledgement in this conversation does not prove stored memory is still that value.
+- Only the latest user message can request a memory update. If the latest user message is asking for a value, do not update memory.
+
+# Existing memory about the user:
+${withoutKeys}`;
       sharedRunContextParts.push(memoryContext);
     }
 
@@ -335,6 +360,18 @@ class AgentClient extends BaseClient {
 
     for (let i = 0; i < messages.length; i++) {
       this.indexTokenCountMap[i] = messages[i].tokenCount;
+    }
+
+    if (withoutKeys && messages.length > 0) {
+      const latestMessageForMemory = messages[messages.length - 1];
+      if (
+        typeof latestMessageForMemory.content === 'string' &&
+        this.getMessageRole(latestMessageForMemory) === 'user'
+      ) {
+        latestMessageForMemory.content = `${latestMessageForMemory.content}
+
+[System memory reminder: If this asks for a stored fact and chat history conflicts with stored memory, answer with both values. Label the stored memory value separately from the conversation-history value. Do not claim either value is newer unless the latest user message explicitly updates it. Do not update memory unless this latest user message explicitly asks for an update.]`;
+      }
     }
 
     const result = {
@@ -393,7 +430,7 @@ class AgentClient extends BaseClient {
       return attachments;
     } catch (error) {
       if (error.message === 'Memory processing timeout') {
-        logger.warn('[AgentClient] Memory processing timed out after 3 seconds');
+        logger.warn(`[AgentClient] Memory processing timed out after ${timeoutMs}ms`);
       } else {
         logger.error('[AgentClient] Error processing memory:', error);
       }
@@ -565,6 +602,66 @@ class AgentClient extends BaseClient {
   }
 
   /**
+   * @param {import('@langchain/core/messages').BaseMessage} message
+   * @returns {string}
+   */
+  getMessageText(message) {
+    const { content } = message;
+    if (typeof content === 'string') {
+      return content;
+    }
+    if (Array.isArray(content)) {
+      return content
+        .map((part) => {
+          if (typeof part === 'string') {
+            return part;
+          }
+          if (part && typeof part === 'object' && 'text' in part) {
+            return part.text;
+          }
+          return '';
+        })
+        .filter(Boolean)
+        .join('\n');
+    }
+    return '';
+  }
+
+  /**
+   * @param {import('@langchain/core/messages').BaseMessage} message
+   * @returns {string}
+   */
+  getMessageRole(message) {
+    const normalizeRole = (role) => {
+      if (role === 'human') {
+        return 'user';
+      }
+      if (role === 'ai') {
+        return 'assistant';
+      }
+      return role;
+    };
+
+    if (typeof message?.role === 'string') {
+      return normalizeRole(message.role);
+    }
+    if (typeof message?._getType === 'function') {
+      return normalizeRole(message._getType());
+    }
+    const name = message?.constructor?.name?.toLowerCase?.() ?? '';
+    if (name.includes('human')) {
+      return 'user';
+    }
+    if (name.includes('ai')) {
+      return 'assistant';
+    }
+    if (name.includes('system')) {
+      return 'system';
+    }
+    return '';
+  }
+
+  /**
    * @param {BaseMessage[]} messages
    * @returns {Promise<void | (TAttachment | null)[]>}
    */
@@ -581,7 +678,7 @@ class AgentClient extends BaseClient {
       if (messages.length > messageWindowSize) {
         for (let i = messages.length - messageWindowSize; i >= 0; i--) {
           const potentialWindow = messages.slice(i, i + messageWindowSize);
-          if (potentialWindow[0]?.role === 'user') {
+          if (this.getMessageRole(potentialWindow[0]) === 'user') {
             messagesToProcess = [...potentialWindow];
             break;
           }
@@ -593,8 +690,16 @@ class AgentClient extends BaseClient {
       }
 
       const filteredMessages = messagesToProcess.map((msg) => this.filterImageUrls(msg));
+      const latestUserMessage = [...filteredMessages]
+        .reverse()
+        .find((msg) => this.getMessageRole(msg) === 'user');
+      const latestUserText = latestUserMessage ? this.getMessageText(latestUserMessage) : '';
+
       const bufferString = getBufferString(filteredMessages);
-      const bufferMessage = new HumanMessage(`# Current Chat:\n\n${bufferString}`);
+      const bufferMessage = new HumanMessage(`# Latest user message:\n${latestUserText}
+
+# Conversation history for context only:
+${bufferString}`);
       return await this.processMemory([bufferMessage]);
     } catch (error) {
       logger.error('Memory Agent failed to process memory', error);
@@ -924,7 +1029,14 @@ class AgentClient extends BaseClient {
       }
     } finally {
       try {
-        const attachments = await this.awaitMemoryWithTimeout(memoryPromise);
+        const memoryAgent = appConfig.memory?.agent;
+        const isGemmaMemoryAgent =
+          memoryAgent?.provider?.toLowerCase?.().includes('ollama') &&
+          memoryAgent?.model?.toLowerCase?.().includes('gemma');
+        const attachments = await this.awaitMemoryWithTimeout(
+          memoryPromise,
+          isGemmaMemoryAgent ? 30000 : 3000,
+        );
         if (attachments && attachments.length > 0) {
           this.artifactPromises.push(...attachments);
         }
@@ -1106,7 +1218,7 @@ class AgentClient extends BaseClient {
         inputText: text,
         contentParts: this.contentParts,
         titleMethod: endpointConfig?.titleMethod,
-        titlePrompt: endpointConfig?.titlePrompt,
+        titlePrompt: endpointConfig?.titlePrompt ?? DEFAULT_AGENT_TITLE_PROMPT,
         titlePromptTemplate: endpointConfig?.titlePromptTemplate,
         chainOptions: {
           signal: abortController.signal,

@@ -174,5 +174,67 @@ describe('createToolExecuteHandler', () => {
       expect(capturedConfigs[0].session_id).toBeUndefined();
       expect(capturedConfigs[0]._injected_files).toBeUndefined();
     });
+
+    it('normalizes duplicated namespace tool names before loading and executing tools', async () => {
+      const capturedConfigs: Record<string, unknown>[] = [];
+      const mockTool = createMockTool('web_search', capturedConfigs);
+      const loadTools = jest.fn(async () => ({
+        loadedTools: [mockTool] as never[],
+      }));
+      const handler = createToolExecuteHandler({ loadTools });
+
+      const results = await invokeHandler(handler, [
+        {
+          id: 'call_ws',
+          name: 'web_search:web_search',
+          args: { query: '台北市今天天氣' },
+        },
+      ]);
+
+      expect(loadTools).toHaveBeenCalledWith(['web_search'], undefined);
+      expect(mockTool.invoke).toHaveBeenCalledWith(
+        { query: '台北市今天天氣' },
+        expect.objectContaining({
+          toolCall: expect.objectContaining({
+            id: 'call_ws',
+          }),
+        }),
+      );
+      expect(results[0]).toMatchObject({
+        toolCallId: 'call_ws',
+        status: 'success',
+      });
+    });
+
+    it('normalizes Ollama-style web_search:search calls and queries args', async () => {
+      const capturedConfigs: Record<string, unknown>[] = [];
+      const mockTool = createMockTool('web_search', capturedConfigs);
+      const loadTools = jest.fn(async () => ({
+        loadedTools: [mockTool] as never[],
+      }));
+      const handler = createToolExecuteHandler({ loadTools });
+
+      const results = await invokeHandler(handler, [
+        {
+          id: 'call_ws',
+          name: 'web_search:search',
+          args: { queries: ['台北市今天天氣'] },
+        },
+      ]);
+
+      expect(loadTools).toHaveBeenCalledWith(['web_search'], undefined);
+      expect(mockTool.invoke).toHaveBeenCalledWith(
+        { queries: ['台北市今天天氣'], query: '台北市今天天氣' },
+        expect.objectContaining({
+          toolCall: expect.objectContaining({
+            id: 'call_ws',
+          }),
+        }),
+      );
+      expect(results[0]).toMatchObject({
+        toolCallId: 'call_ws',
+        status: 'success',
+      });
+    });
   });
 });

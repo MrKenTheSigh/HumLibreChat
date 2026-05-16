@@ -1,6 +1,9 @@
 const { CacheKeys } = require('librechat-data-provider');
 const { logger, AppService } = require('@librechat/data-schemas');
-const { loadManagedChannelsIntoConfig } = require('@librechat/api');
+const {
+  loadManagedChannelsIntoConfig,
+  loadManagedSystemSettingsIntoConfig,
+} = require('@librechat/api');
 const { loadAndFormatTools } = require('~/server/services/start/tools');
 const loadCustomConfig = require('./loadCustomConfig');
 const { setCachedTools } = require('./getCachedTools');
@@ -12,7 +15,8 @@ const BASE_CONFIG_KEY = '_BASE_';
 const loadBaseConfig = async () => {
   /** @type {TCustomConfig} */
   const bootstrapConfig = (await loadCustomConfig()) ?? {};
-  const config = await loadManagedChannelsIntoConfig(bootstrapConfig);
+  const channelConfig = await loadManagedChannelsIntoConfig(bootstrapConfig);
+  const config = await loadManagedSystemSettingsIntoConfig(channelConfig);
   /** @type {Record<string, FunctionTool>} */
   const systemTools = loadAndFormatTools({
     adminFilter: config.filteredTools,

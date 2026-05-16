@@ -376,6 +376,7 @@ export type TConfig = {
   disableBuilder?: boolean;
   retrievalModels?: string[];
   capabilities?: string[];
+  ocrMaxPages?: number;
   customParams?: {
     defaultParamsEndpoint?: string;
     paramDefinitions?: Partial<SettingDefinition>[];

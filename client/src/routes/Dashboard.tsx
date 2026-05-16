@@ -20,6 +20,7 @@ import {
   AdminPlansPage,
   AdminQuotasPage,
   AdminRolesPage,
+  AdminSystemSettingsPage,
   AdminUsagePage,
   AdminUserDetail,
   AdminUsersPage,
@@ -122,6 +123,10 @@ const dashboardRoutes = {
         {
           path: 'roles',
           element: <AdminRolesPage />,
+        },
+        {
+          path: 'system-settings',
+          element: <AdminSystemSettingsPage />,
         },
         {
           path: 'channels',
