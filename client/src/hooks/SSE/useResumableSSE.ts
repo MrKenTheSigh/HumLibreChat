@@ -34,6 +34,10 @@ type ChatHelpers = Pick<
 
 const MAX_RETRIES = 5;
 
+type StartGenerationResponse = {
+  streamId: string;
+};
+
 /**
  * Hook for resumable SSE streams.
  * Separates generation start (POST) from stream subscription (GET EventSource).
@@ -84,6 +88,7 @@ export default function useResumableSSE(
   const [streamId, setStreamId] = useState<string | null>(null);
   const setAbortScroll = useSetRecoilState(store.abortScrollFamily(runIndex));
   const setShowStopButton = useSetRecoilState(store.showStopButtonByIndex(runIndex));
+  const setSubmission = useSetRecoilState(store.submissionByIndex(runIndex));
 
   const sseRef = useRef<SSE | null>(null);
   const reconnectAttemptRef = useRef(0);
@@ -565,7 +570,7 @@ export default function useResumableSSE(
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
           // Use request.post which handles auth token refresh via axios interceptors
-          const data = (await request.post(url, payload)) as { streamId: string };
+          const data = (await request.post(url, payload)) as StartGenerationResponse;
           console.log('[ResumableSSE] Generation started:', { streamId: data.streamId });
           return data.streamId;
         } catch (error) {
@@ -604,10 +609,20 @@ export default function useResumableSSE(
       } else {
         errorHandler({ data: undefined, submission: currentSubmission as EventSubmission });
       }
+      setShowStopButton(false);
+      setAbortScroll(false);
       setIsSubmitting(false);
+      setSubmission(null);
       return null;
     },
-    [clearStepMaps, errorHandler, setIsSubmitting],
+    [
+      clearStepMaps,
+      errorHandler,
+      setAbortScroll,
+      setIsSubmitting,
+      setShowStopButton,
+      setSubmission,
+    ],
   );
 
   useEffect(() => {

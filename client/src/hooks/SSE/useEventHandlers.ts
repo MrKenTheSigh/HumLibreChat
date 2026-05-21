@@ -663,6 +663,7 @@ export default function useEventHandlers({
     ({ data, submission }: { data?: TResData; submission: EventSubmission }) => {
       const { messages, userMessage, initialResponse } = submission;
       setCompleted((prev) => new Set(prev.add(initialResponse.messageId)));
+      setShowStopButton(false);
 
       const conversationId =
         userMessage.conversationId ?? submission.conversation?.conversationId ?? '';
@@ -755,6 +756,7 @@ export default function useEventHandlers({
       paramId,
       newConversation,
       setIsSubmitting,
+      setShowStopButton,
       getMessages,
       queryClient,
     ],
