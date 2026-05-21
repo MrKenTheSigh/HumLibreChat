@@ -1,5 +1,4 @@
 require('events').EventEmitter.defaultMaxListeners = 100;
-const { createHash } = require('crypto');
 const { logger } = require('@librechat/data-schemas');
 const { getBufferString, HumanMessage } = require('@langchain/core/messages');
 const {
@@ -69,16 +68,6 @@ const DEFAULT_AGENT_TITLE_PROMPT = `Generate one concise conversation title in t
 
 Conversation:
 {convo}`;
-
-function summarizePrompt(text) {
-  const value = typeof text === 'string' ? text : '';
-  return {
-    hasValue: value.trim().length > 0,
-    length: value.length,
-    sha256: value.length ? createHash('sha256').update(value).digest('hex').slice(0, 16) : null,
-    preview: value.replace(/\s+/g, ' ').trim().slice(0, 160),
-  };
-}
 
 const ARTIFACT_TURN_INSTRUCTION = [
   'Artifact mode is active for this request.',
@@ -540,29 +529,6 @@ ${withoutKeys}`;
           ephemeralAgent: agentId === this.options.agent.id ? ephemeralAgent : undefined,
         }),
       ),
-    );
-
-    logger.info(
-      `[AgentRunDebug][AgentClient.buildMessages] ${JSON.stringify({
-        userId: this.options.req.user?.id,
-        conversationId: this.conversationId,
-        responseMessageId: this.responseMessageId,
-        parentMessageId,
-        primaryAgentId: this.options.agent.id,
-        sharedRunContext: summarizePrompt(sharedRunContext),
-        promptMessageCount: Array.isArray(payload) ? payload.length : 0,
-        retainedMessageCount: Array.isArray(messages) ? messages.length : 0,
-        agents: allAgents.map(({ agent, agentId }) => ({
-          agentId,
-          name: agent.name,
-          provider: agent.provider,
-          endpoint: agent.endpoint,
-          model: agent.model,
-          instructions: summarizePrompt(agent.instructions),
-          additionalInstructions: summarizePrompt(agent.additional_instructions),
-          toolsCount: agent.tools?.length ?? 0,
-        })),
-      })}`,
     );
 
     return result;
