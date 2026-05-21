@@ -325,15 +325,19 @@ export default function DataTable<TData, TValue>({ columns, data }: DataTablePro
           <span className="ml-2">{localize('com_sidepanel_manage_files')}</span>
         </Button>
 
-        <div className="flex items-center gap-2" role="navigation" aria-label="Pagination">
+        <div
+          className="flex items-center gap-2"
+          role="navigation"
+          aria-label={localize('com_ui_pagination')}
+        >
           <Button
             variant="outline"
             size="sm"
             onClick={() => table.previousPage()}
             disabled={!table.getCanPreviousPage()}
-            aria-label={localize('com_ui_prev')}
+            aria-label={localize('com_ui_previous_page')}
           >
-            {localize('com_ui_prev')}
+            {localize('com_ui_previous_page')}
           </Button>
           <div aria-live="polite" className="text-sm">
             {`${pageIndex + 1} / ${table.getPageCount()}`}
@@ -343,9 +347,9 @@ export default function DataTable<TData, TValue>({ columns, data }: DataTablePro
             size="sm"
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
-            aria-label={localize('com_ui_next')}
+            aria-label={localize('com_ui_next_page')}
           >
-            {localize('com_ui_next')}
+            {localize('com_ui_next_page')}
           </Button>
         </div>
       </div>

@@ -22,6 +22,22 @@ import store from '~/store';
 
 type KeyEvent = KeyboardEvent<HTMLTextAreaElement>;
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value != null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isSensitivePolicyBlockedMessage(message: unknown) {
+  if (!isRecord(message)) {
+    return false;
+  }
+
+  const policy = isRecord(message.metadata) ? message.metadata.sensitiveInformationPolicy : null;
+  return (
+    message.finish_reason === 'sensitive_information_policy_blocked' ||
+    (isRecord(policy) && policy.blocked === true)
+  );
+}
+
 export default function useTextarea({
   textAreaRef,
   submitButtonRef,
@@ -56,7 +72,10 @@ export default function useTextarea({
   });
   const entityName = entity?.name ?? '';
 
-  const isNotAppendable = latestMessage?.error === true && !isAssistant;
+  const isNotAppendable =
+    latestMessage?.error === true &&
+    !isAssistant &&
+    !isSensitivePolicyBlockedMessage(latestMessage);
   // && (conversationId?.length ?? 0) > 6; // also ensures that we don't show the wrong placeholder
 
   useEffect(() => {

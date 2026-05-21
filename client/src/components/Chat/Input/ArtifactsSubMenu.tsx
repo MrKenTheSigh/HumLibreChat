@@ -77,7 +77,7 @@ const ArtifactsSubMenu = React.forwardRef<HTMLDivElement, ArtifactsSubMenuProps>
                 'hover:bg-surface-tertiary hover:shadow-sm',
                 !isArtifactsPinned && 'text-text-secondary hover:text-text-primary',
               )}
-              aria-label={isArtifactsPinned ? 'Unpin' : 'Pin'}
+              aria-label={localize(isArtifactsPinned ? 'com_ui_unpin' : 'com_ui_pin')}
             >
               <div className="h-4 w-4">
                 <PinIcon unpin={isArtifactsPinned} />

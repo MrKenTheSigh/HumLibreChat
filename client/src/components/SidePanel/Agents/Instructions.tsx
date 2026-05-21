@@ -45,9 +45,9 @@ export default function Instructions() {
     <div className="mb-4">
       <div className="mb-2 flex items-center">
         <label className="text-token-text-primary flex-grow font-medium" htmlFor="instructions">
-          {localize('com_ui_instructions')}
+          {localize('com_ui_agent_system_instructions')}
         </label>
-        <div className="ml-auto" title="Add variables to instructions">
+        <div className="ml-auto" title={localize('com_ui_add_variables_to_agent_instructions')}>
           <DropdownPopup
             portal={true}
             mountByState={true}
@@ -58,7 +58,7 @@ export default function Instructions() {
             trigger={
               <Menu.MenuButton
                 id="variables-menu-button"
-                aria-label="Add variable to instructions"
+                aria-label={localize('com_ui_add_variables_to_agent_instructions')}
                 className="flex h-7 items-center gap-1 rounded-md border border-border-medium bg-surface-secondary px-2 py-0 text-sm text-text-primary transition-colors duration-200 hover:bg-surface-tertiary"
               >
                 <PlusCircle className="mr-1 h-3 w-3 text-text-secondary" aria-hidden={true} />
@@ -86,7 +86,7 @@ export default function Instructions() {
               id="instructions"
               placeholder={localize('com_agents_instructions_placeholder')}
               rows={3}
-              aria-label="Agent instructions"
+              aria-label={localize('com_ui_agent_system_instructions')}
               aria-required="true"
               aria-invalid={error ? 'true' : 'false'}
             />

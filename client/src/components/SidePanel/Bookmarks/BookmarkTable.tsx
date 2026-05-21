@@ -98,16 +98,16 @@ const BookmarkTable = () => {
           <div
             className="flex items-center justify-end gap-2"
             role="navigation"
-            aria-label="Pagination"
+            aria-label={localize('com_ui_pagination')}
           >
             <Button
               variant="outline"
               size="sm"
               onClick={() => setPageIndex((prev) => Math.max(prev - 1, 0))}
               disabled={pageIndex === 0}
-              aria-label={localize('com_ui_prev')}
+              aria-label={localize('com_ui_previous_page')}
             >
-              {localize('com_ui_prev')}
+              {localize('com_ui_previous_page')}
             </Button>
             <div className="whitespace-nowrap text-sm" aria-live="polite">
               {pageIndex + 1} / {totalPages}
@@ -117,9 +117,9 @@ const BookmarkTable = () => {
               size="sm"
               onClick={() => setPageIndex((prev) => (prev + 1 < totalPages ? prev + 1 : prev))}
               disabled={pageIndex + 1 >= totalPages}
-              aria-label={localize('com_ui_next')}
+              aria-label={localize('com_ui_next_page')}
             >
-              {localize('com_ui_next')}
+              {localize('com_ui_next_page')}
             </Button>
           </div>
         )}
