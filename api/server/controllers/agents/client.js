@@ -1,4 +1,5 @@
 require('events').EventEmitter.defaultMaxListeners = 100;
+const { createHash } = require('crypto');
 const { logger } = require('@librechat/data-schemas');
 const { getBufferString, HumanMessage } = require('@langchain/core/messages');
 const {
@@ -68,6 +69,81 @@ const DEFAULT_AGENT_TITLE_PROMPT = `Generate one concise conversation title in t
 
 Conversation:
 {convo}`;
+
+function summarizePrompt(text) {
+  const value = typeof text === 'string' ? text : '';
+  return {
+    hasValue: value.trim().length > 0,
+    length: value.length,
+    sha256: value.length ? createHash('sha256').update(value).digest('hex').slice(0, 16) : null,
+    preview: value.replace(/\s+/g, ' ').trim().slice(0, 160),
+  };
+}
+
+const ARTIFACT_TURN_INSTRUCTION = [
+  'Artifact mode is active for this request.',
+  'If your response creates, drafts, revises, or renders standalone content that this system can display as an artifact, output the complete result as a :::artifact block.',
+  'Supported artifact opening lines: Markdown/text uses :::artifact{identifier="descriptive-id" type="text/markdown" title="Descriptive Title"}; Mermaid uses :::artifact{identifier="descriptive-id" type="application/vnd.mermaid" title="Descriptive Title"}; HTML/SVG-in-HTML uses :::artifact{identifier="descriptive-id" type="text/html" title="Descriptive Title"}; HTML code artifacts may use :::artifact{identifier="descriptive-id" type="application/vnd.code-html" title="Descriptive Title"}; React TSX uses :::artifact{identifier="descriptive-id" type="application/vnd.react" title="Descriptive Title"}; Ant Design React TSX uses :::artifact{identifier="descriptive-id" type="application/vnd.ant.react" title="Descriptive Title"}.',
+  'Do not write artifact metadata as separate lines such as ::: artifact-type: html, ::: artifact-id: example, or ::: artifact-title: Example. All metadata must be inside the single opening :::artifact{...} line.',
+  'Use a fenced code block after the opening line: ```markdown, ```mermaid, ```html, or ```tsx to match the artifact type.',
+  'Do not put artifact-compatible standalone content only in normal chat text or a plain Markdown code block.',
+].join('\n');
+
+const getMessageTextContent = (message) => {
+  const content = message?.content;
+  if (typeof content === 'string') {
+    return content;
+  }
+  if (!Array.isArray(content)) {
+    return '';
+  }
+
+  return content
+    .map((part) => {
+      if (typeof part === 'string') {
+        return part;
+      }
+      if (part && typeof part.text === 'string') {
+        return part.text;
+      }
+      return '';
+    })
+    .filter(Boolean)
+    .join('\n');
+};
+
+const appendTextToMessage = (message, text) => {
+  if (!message || !text) {
+    return;
+  }
+
+  if (typeof message.content === 'string') {
+    message.content = `${message.content}\n\n${text}`;
+    return;
+  }
+
+  if (Array.isArray(message.content)) {
+    const textPart = message.content.find((part) => part?.type === ContentTypes.TEXT);
+    if (textPart && typeof textPart.text === 'string') {
+      textPart.text = `${textPart.text}\n\n${text}`;
+      return;
+    }
+    message.content.push({ type: ContentTypes.TEXT, text });
+  }
+};
+
+const shouldAddArtifactTurnInstruction = (agent, latestMessage) => {
+  if (typeof agent?.artifacts !== 'string' || agent.artifacts.trim() === '') {
+    return false;
+  }
+
+  const latestText = getMessageTextContent(latestMessage).trim();
+  if (!latestText) {
+    return false;
+  }
+
+  return true;
+};
 
 class AgentClient extends BaseClient {
   constructor(options = {}) {
@@ -306,6 +382,13 @@ class AgentClient extends BaseClient {
       return formattedMessage;
     });
 
+    const latestFormattedMessage = formattedMessages[formattedMessages.length - 1];
+    if (shouldAddArtifactTurnInstruction(this.options.agent, latestFormattedMessage)) {
+      appendTextToMessage(latestFormattedMessage, ARTIFACT_TURN_INSTRUCTION);
+      orderedMessages[orderedMessages.length - 1].tokenCount =
+        this.getTokenCountForMessage(latestFormattedMessage);
+    }
+
     /**
      * Build shared run context - applies to ALL agents in the run.
      * This includes: file context (latest message), augmented prompt (RAG), memory context.
@@ -356,6 +439,58 @@ ${withoutKeys}`;
         orderedMessages,
         formattedMessages,
       }));
+
+      if (this.contextStrategy === 'discard' && orderedMessages.length > payload.length) {
+        const latestMessageIndex = orderedMessages.length - 1;
+        const latestPayloadMessage = formattedMessages[latestMessageIndex];
+        const latestContent = latestPayloadMessage?.content;
+        let latestText = '';
+        if (typeof latestContent === 'string') {
+          latestText = latestContent;
+        } else if (Array.isArray(latestContent)) {
+          latestText = latestContent.find((part) => part?.type === 'text')?.text ?? '';
+        }
+        const payloadStartIndex = formattedMessages.length - payload.length;
+        const previousUserIndex = formattedMessages.findLastIndex(
+          (message, index) => index < latestMessageIndex && message.role === 'user',
+        );
+        const previousUserWasDiscarded =
+          previousUserIndex >= 0 && previousUserIndex < payloadStartIndex;
+        const latestLooksLikeFollowUp =
+          typeof latestText === 'string' &&
+          latestText.trim().length > 0 &&
+          latestText.trim().length <= 120;
+
+        if (previousUserIndex >= 0 && latestLooksLikeFollowUp) {
+          const previousAssistantIndex = formattedMessages.findLastIndex(
+            (message, index) =>
+              index > previousUserIndex &&
+              index < latestMessageIndex &&
+              message.role === 'assistant',
+          );
+          const restoreIndices = [previousUserIndex, previousAssistantIndex].filter(
+            (index) => index >= 0 && index < payloadStartIndex,
+          );
+
+          if (restoreIndices.length > 0) {
+            const restoredMessages = restoreIndices.map((index) => formattedMessages[index]);
+            payload = [...restoredMessages, ...payload];
+            promptTokens += restoreIndices.reduce(
+              (total, index) => total + (orderedMessages[index]?.tokenCount ?? 0),
+              0,
+            );
+          }
+
+          logger.debug('[AgentClient] Restored previous user message for short follow-up', {
+            previousUserIndex,
+            previousAssistantIndex,
+            restoredCount: restoreIndices.length,
+            previousUserWasDiscarded,
+            payloadStartIndex,
+            latestMessageLength: latestText.trim().length,
+          });
+        }
+      }
     }
 
     for (let i = 0; i < messages.length; i++) {
@@ -405,6 +540,29 @@ ${withoutKeys}`;
           ephemeralAgent: agentId === this.options.agent.id ? ephemeralAgent : undefined,
         }),
       ),
+    );
+
+    logger.info(
+      `[AgentRunDebug][AgentClient.buildMessages] ${JSON.stringify({
+        userId: this.options.req.user?.id,
+        conversationId: this.conversationId,
+        responseMessageId: this.responseMessageId,
+        parentMessageId,
+        primaryAgentId: this.options.agent.id,
+        sharedRunContext: summarizePrompt(sharedRunContext),
+        promptMessageCount: Array.isArray(payload) ? payload.length : 0,
+        retainedMessageCount: Array.isArray(messages) ? messages.length : 0,
+        agents: allAgents.map(({ agent, agentId }) => ({
+          agentId,
+          name: agent.name,
+          provider: agent.provider,
+          endpoint: agent.endpoint,
+          model: agent.model,
+          instructions: summarizePrompt(agent.instructions),
+          additionalInstructions: summarizePrompt(agent.additional_instructions),
+          toolsCount: agent.tools?.length ?? 0,
+        })),
+      })}`,
     );
 
     return result;

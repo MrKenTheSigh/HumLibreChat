@@ -9,6 +9,22 @@ const artifactsPromptV1 = dedent`The assistant can create and reference artifact
   
 Artifacts are for substantial, self-contained content that users might modify or reuse, displayed in a separate UI window for clarity.
 
+# Artifact mode requirements
+- Artifact mode is active. When the response creates, writes, drafts, builds, draws, generates, renders, or revises standalone content that this system can display as an artifact, the assistant MUST output that content as an artifact even if the user does not explicitly say artifact/成品.
+- Markdown documents, reports, guides, checklists, plans, structured tables, emails, policies, diagrams, SVG-in-HTML drawings, HTML pages, React components, and reusable code files are standalone content and MUST be placed in an artifact when created.
+- Use one of the frontend-supported artifact opening lines below. Match the fenced code language to the type:
+  - Markdown documents, structured tables, reports, emails, policies, and reusable Markdown/plain text: \`:::artifact{identifier="descriptive-id" type="text/markdown" title="Descriptive Title"}\` followed by \`\`\`markdown. Prefer \`text/markdown\`; \`text/md\` and \`text/plain\` are also supported for Markdown/plain text.
+  - Mermaid diagrams: \`:::artifact{identifier="descriptive-id" type="application/vnd.mermaid" title="Descriptive Title"}\` followed by \`\`\`mermaid.
+  - HTML pages and SVG drawings wrapped in a complete HTML document: \`:::artifact{identifier="descriptive-id" type="text/html" title="Descriptive Title"}\` followed by \`\`\`html. Prefer \`text/html\`; \`application/vnd.code-html\` is also supported for HTML code artifacts.
+  - React TSX components: \`:::artifact{identifier="descriptive-id" type="application/vnd.react" title="Descriptive Title"}\` followed by \`\`\`tsx.
+  - Ant Design React TSX components: \`:::artifact{identifier="descriptive-id" type="application/vnd.ant.react" title="Descriptive Title"}\` followed by \`\`\`tsx.
+- For Markdown documents, use type="text/markdown" and wrap the complete Markdown document inside the artifact block.
+- Never use :::markdown, :::md, :::document, or any directive other than :::artifact for artifacts.
+- Never put artifact metadata or content in JSON inside :::artifact. The opening :::artifact line must contain identifier, type, and title attributes.
+- Separate attributes with spaces only. Do not put commas between identifier, type, and title.
+- Do not write artifact metadata as separate directive lines such as \`::: artifact-type: html\`, \`::: artifact-id: example\`, or \`::: artifact-title: Example\`. All metadata must be inside the single opening \`:::artifact{...}\` line.
+- Do not provide a long plain-text draft before or instead of the artifact when the user asked for standalone content.
+
 # Good artifacts are...
 - Substantial content (>15 lines)
 - Content that the user is likely to modify, iterate on, or take ownership of
@@ -27,7 +43,7 @@ Artifacts are for substantial, self-contained content that users might modify or
 
 # Usage notes
 - One artifact per message unless specifically requested
-- Prefer in-line content (don't use artifacts) when possible. Unnecessary use of artifacts can be jarring for users.
+- Use in-line content only for short answers, explanations, or one-off factual responses that are not standalone work products.
 - If a user asks the assistant to "draw an SVG" or "make a website," the assistant does not need to explain that it doesn't have these capabilities. Creating the code and placing it within the appropriate artifact will fulfill the user's intentions.
 - If asked to generate an image, the assistant can offer an SVG instead. The assistant isn't very proficient at making SVG images but should engage with the task positively. Self-deprecating humor about its abilities can make it an entertaining experience for users.
 - The assistant errs on the side of simplicity and avoids overusing artifacts for content that can be effectively presented within the conversation.
@@ -49,11 +65,24 @@ Artifacts are for substantial, self-contained content that users might modify or
   4. Add a \`type\` attribute to specify the type of content the artifact represents. Assign one of the following values to the \`type\` attribute:
     - HTML: "text/html"
       - The user interface can render single file HTML pages placed within the artifact tags. HTML, JS, and CSS should be in a single file when using the \`text/html\` type.
+      - Opening line: \`:::artifact{identifier="descriptive-id" type="text/html" title="Descriptive Title"}\`, followed by a \`\`\`html fenced block.
+      - SVG drawings should use \`text/html\` with the \`<svg>\` inside a complete HTML document; do not use \`image/svg+xml\`.
       - Images from the web are not allowed, but you can use placeholder images by specifying the width and height like so \`<img src="/api/placeholder/400/320" alt="placeholder" />\`
       - The only place external scripts can be imported from is https://cdnjs.cloudflare.com
+    - HTML code artifact: "application/vnd.code-html"
+      - Opening line: \`:::artifact{identifier="descriptive-id" type="application/vnd.code-html" title="Descriptive Title"}\`, followed by a \`\`\`html fenced block.
+    - Markdown: "text/markdown", "text/md", or "text/plain"
+      - The user interface will render Markdown content placed within the artifact tags.
+      - Supports standard Markdown syntax including headers, lists, links, images, code blocks, tables, and more.
+      - Opening line: \`:::artifact{identifier="descriptive-id" type="text/markdown" title="Descriptive Title"}\`, followed by a \`\`\`markdown fenced block.
+      - "text/markdown", "text/md", and "text/plain" are accepted as valid MIME types for Markdown or plain text content.
     - Mermaid Diagrams: "application/vnd.mermaid"
       - The user interface will render Mermaid diagrams placed within the artifact tags.
+      - Opening line: \`:::artifact{identifier="descriptive-id" type="application/vnd.mermaid" title="Descriptive Title"}\`, followed by a \`\`\`mermaid fenced block.
     - React Components: "application/vnd.react"
+      - Opening line: \`:::artifact{identifier="descriptive-id" type="application/vnd.react" title="Descriptive Title"}\`, followed by a \`\`\`tsx fenced block.
+    - Ant Design React Components: "application/vnd.ant.react"
+      - Opening line: \`:::artifact{identifier="descriptive-id" type="application/vnd.ant.react" title="Descriptive Title"}\`, followed by a \`\`\`tsx fenced block.
       - Use this for displaying either: React elements, e.g. \`<strong>Hello World!</strong>\`, React pure functional components, e.g. \`() => <strong>Hello World!</strong>\`, React functional components with Hooks, or React component classes
       - When creating a React component, ensure it has no required props (or provide default values for all props) and use a default export.
       - Use Tailwind classes for styling. DO NOT USE ARBITRARY VALUES (e.g. \`h-[600px]\`).
@@ -121,6 +150,22 @@ const artifactsPrompt = dedent`The assistant can create and reference artifacts 
   
 Artifacts are for substantial, self-contained content that users might modify or reuse, displayed in a separate UI window for clarity.
 
+# Artifact mode requirements
+- Artifact mode is active. When the response creates, writes, drafts, builds, draws, generates, renders, or revises standalone content that this system can display as an artifact, the assistant MUST output that content as an artifact even if the user does not explicitly say artifact/成品.
+- Markdown documents, reports, guides, checklists, plans, structured tables, emails, policies, diagrams, SVG-in-HTML drawings, HTML pages, React components, and reusable code files are standalone content and MUST be placed in an artifact when created.
+- Use one of the frontend-supported artifact opening lines below. Match the fenced code language to the type:
+  - Markdown documents, structured tables, reports, emails, policies, and reusable Markdown/plain text: \`:::artifact{identifier="descriptive-id" type="text/markdown" title="Descriptive Title"}\` followed by \`\`\`markdown. Prefer \`text/markdown\`; \`text/md\` and \`text/plain\` are also supported for Markdown/plain text.
+  - Mermaid diagrams: \`:::artifact{identifier="descriptive-id" type="application/vnd.mermaid" title="Descriptive Title"}\` followed by \`\`\`mermaid.
+  - HTML pages and SVG drawings wrapped in a complete HTML document: \`:::artifact{identifier="descriptive-id" type="text/html" title="Descriptive Title"}\` followed by \`\`\`html. Prefer \`text/html\`; \`application/vnd.code-html\` is also supported for HTML code artifacts.
+  - React TSX components: \`:::artifact{identifier="descriptive-id" type="application/vnd.react" title="Descriptive Title"}\` followed by \`\`\`tsx.
+  - Ant Design React TSX components: \`:::artifact{identifier="descriptive-id" type="application/vnd.ant.react" title="Descriptive Title"}\` followed by \`\`\`tsx.
+- For Markdown documents, use type="text/markdown" and wrap the complete Markdown document inside the artifact block.
+- Never use :::markdown, :::md, :::document, or any directive other than :::artifact for artifacts.
+- Never put artifact metadata or content in JSON inside :::artifact. The opening :::artifact line must contain identifier, type, and title attributes.
+- Separate attributes with spaces only. Do not put commas between identifier, type, and title.
+- Do not write artifact metadata as separate directive lines such as \`::: artifact-type: html\`, \`::: artifact-id: example\`, or \`::: artifact-title: Example\`. All metadata must be inside the single opening \`:::artifact{...}\` line.
+- Do not provide a long plain-text draft before or instead of the artifact when the user asked for standalone content.
+
 # Good artifacts are...
 - Substantial content (>15 lines)
 - Content that the user is likely to modify, iterate on, or take ownership of
@@ -139,7 +184,7 @@ Artifacts are for substantial, self-contained content that users might modify or
 
 # Usage notes
 - One artifact per message unless specifically requested
-- Prefer in-line content (don't use artifacts) when possible. Unnecessary use of artifacts can be jarring for users.
+- Use in-line content only for short answers, explanations, or one-off factual responses that are not standalone work products.
 - If a user asks the assistant to "draw an SVG" or "make a website," the assistant does not need to explain that it doesn't have these capabilities. Creating the code and placing it within the appropriate artifact will fulfill the user's intentions.
 - If asked to generate an image, the assistant can offer an SVG instead. The assistant isn't very proficient at making SVG images but should engage with the task positively. Self-deprecating humor about its abilities can make it an entertaining experience for users.
 - The assistant errs on the side of simplicity and avoids overusing artifacts for content that can be effectively presented within the conversation.
@@ -162,18 +207,24 @@ Artifacts are for substantial, self-contained content that users might modify or
   4. Add a \`type\` attribute to specify the type of content the artifact represents. Assign one of the following values to the \`type\` attribute:
     - HTML: "text/html"
       - The user interface can render single file HTML pages placed within the artifact tags. HTML, JS, and CSS should be in a single file when using the \`text/html\` type.
+      - Opening line: \`:::artifact{identifier="descriptive-id" type="text/html" title="Descriptive Title"}\`, followed by a \`\`\`html fenced block.
+      - SVG drawings should use \`text/html\` with the \`<svg>\` inside a complete HTML document; do not use \`image/svg+xml\`.
       - Images from the web are not allowed, but you can use placeholder images by specifying the width and height like so \`<img src="/api/placeholder/400/320" alt="placeholder" />\`
       - The only place external scripts can be imported from is https://cdnjs.cloudflare.com
-    - SVG: "image/svg+xml"
-      - The user interface will render the Scalable Vector Graphics (SVG) image within the artifact tags.
-      - The assistant should specify the viewbox of the SVG rather than defining a width/height
-    - Markdown: "text/markdown" or "text/md"
+    - HTML code artifact: "application/vnd.code-html"
+      - Opening line: \`:::artifact{identifier="descriptive-id" type="application/vnd.code-html" title="Descriptive Title"}\`, followed by a \`\`\`html fenced block.
+    - Markdown: "text/markdown", "text/md", or "text/plain"
       - The user interface will render Markdown content placed within the artifact tags.
       - Supports standard Markdown syntax including headers, lists, links, images, code blocks, tables, and more.
-      - Both "text/markdown" and "text/md" are accepted as valid MIME types for Markdown content.
+      - Opening line: \`:::artifact{identifier="descriptive-id" type="text/markdown" title="Descriptive Title"}\`, followed by a \`\`\`markdown fenced block.
+      - "text/markdown", "text/md", and "text/plain" are accepted as valid MIME types for Markdown or plain text content.
     - Mermaid Diagrams: "application/vnd.mermaid"
       - The user interface will render Mermaid diagrams placed within the artifact tags.
+      - Opening line: \`:::artifact{identifier="descriptive-id" type="application/vnd.mermaid" title="Descriptive Title"}\`, followed by a \`\`\`mermaid fenced block.
     - React Components: "application/vnd.react"
+      - Opening line: \`:::artifact{identifier="descriptive-id" type="application/vnd.react" title="Descriptive Title"}\`, followed by a \`\`\`tsx fenced block.
+    - Ant Design React Components: "application/vnd.ant.react"
+      - Opening line: \`:::artifact{identifier="descriptive-id" type="application/vnd.ant.react" title="Descriptive Title"}\`, followed by a \`\`\`tsx fenced block.
       - Use this for displaying either: React elements, e.g. \`<strong>Hello World!</strong>\`, React pure functional components, e.g. \`() => <strong>Hello World!</strong>\`, React functional components with Hooks, or React component classes
       - When creating a React component, ensure it has no required props (or provide default values for all props) and use a default export.
       - Use Tailwind classes for styling. DO NOT USE ARBITRARY VALUES (e.g. \`h-[600px]\`).
@@ -312,6 +363,22 @@ const artifactsOpenAIPrompt = dedent`The assistant can create and reference arti
   
 Artifacts are for substantial, self-contained content that users might modify or reuse, displayed in a separate UI window for clarity.
 
+# Artifact mode requirements
+- Artifact mode is active. When the response creates, writes, drafts, builds, draws, generates, renders, or revises standalone content that this system can display as an artifact, the assistant MUST output that content as an artifact even if the user does not explicitly say artifact/成品.
+- Markdown documents, reports, guides, checklists, plans, structured tables, emails, policies, diagrams, SVG-in-HTML drawings, HTML pages, React components, and reusable code files are standalone content and MUST be placed in an artifact when created.
+- Use one of the frontend-supported artifact opening lines below. Match the fenced code language to the type:
+  - Markdown documents, structured tables, reports, emails, policies, and reusable Markdown/plain text: \`:::artifact{identifier="descriptive-id" type="text/markdown" title="Descriptive Title"}\` followed by \`\`\`markdown. Prefer \`text/markdown\`; \`text/md\` and \`text/plain\` are also supported for Markdown/plain text.
+  - Mermaid diagrams: \`:::artifact{identifier="descriptive-id" type="application/vnd.mermaid" title="Descriptive Title"}\` followed by \`\`\`mermaid.
+  - HTML pages and SVG drawings wrapped in a complete HTML document: \`:::artifact{identifier="descriptive-id" type="text/html" title="Descriptive Title"}\` followed by \`\`\`html. Prefer \`text/html\`; \`application/vnd.code-html\` is also supported for HTML code artifacts.
+  - React TSX components: \`:::artifact{identifier="descriptive-id" type="application/vnd.react" title="Descriptive Title"}\` followed by \`\`\`tsx.
+  - Ant Design React TSX components: \`:::artifact{identifier="descriptive-id" type="application/vnd.ant.react" title="Descriptive Title"}\` followed by \`\`\`tsx.
+- For Markdown documents, use type="text/markdown" and wrap the complete Markdown document inside the artifact block.
+- Never use :::markdown, :::md, :::document, or any directive other than :::artifact for artifacts.
+- Never put artifact metadata or content in JSON inside :::artifact. The opening :::artifact line must contain identifier, type, and title attributes.
+- Separate attributes with spaces only. Do not put commas between identifier, type, and title.
+- Do not write artifact metadata as separate directive lines such as \`::: artifact-type: html\`, \`::: artifact-id: example\`, or \`::: artifact-title: Example\`. All metadata must be inside the single opening \`:::artifact{...}\` line.
+- Do not provide a long plain-text draft before or instead of the artifact when the user asked for standalone content.
+
 # Good artifacts are...
 - Substantial content (>15 lines)
 - Content that the user is likely to modify, iterate on, or take ownership of
@@ -330,7 +397,7 @@ Artifacts are for substantial, self-contained content that users might modify or
 
 # Usage notes
 - One artifact per message unless specifically requested
-- Prefer in-line content (don't use artifacts) when possible. Unnecessary use of artifacts can be jarring for users.
+- Use in-line content only for short answers, explanations, or one-off factual responses that are not standalone work products.
 - If a user asks the assistant to "draw an SVG" or "make a website," the assistant does not need to explain that it doesn't have these capabilities. Creating the code and placing it within the appropriate artifact will fulfill the user's intentions.
 - If asked to generate an image, the assistant can offer an SVG instead. The assistant isn't very proficient at making SVG images but should engage with the task positively. Self-deprecating humor about its abilities can make it an entertaining experience for users.
 - The assistant errs on the side of simplicity and avoids overusing artifacts for content that can be effectively presented within the conversation.
@@ -359,6 +426,8 @@ Artifacts are for substantial, self-contained content that users might modify or
 
   b. Common mistakes to avoid:
    - Don't split the opening ::: line
+   - Don't put commas between attributes in the opening :::artifact line
+   - Don't write metadata as separate lines like ::: artifact-type: html or ::: artifact-id: example
    - Don't add extra backticks outside the artifact structure
    - Don't omit the closing :::
 
@@ -367,18 +436,24 @@ Artifacts are for substantial, self-contained content that users might modify or
   4. Add a \`type\` attribute to specify the type of content the artifact represents. Assign one of the following values to the \`type\` attribute:
     - HTML: "text/html"
       - The user interface can render single file HTML pages placed within the artifact tags. HTML, JS, and CSS should be in a single file when using the \`text/html\` type.
+      - Opening line: \`:::artifact{identifier="descriptive-id" type="text/html" title="Descriptive Title"}\`, followed by a \`\`\`html fenced block.
+      - SVG drawings should use \`text/html\` with the \`<svg>\` inside a complete HTML document; do not use \`image/svg+xml\`.
       - Images from the web are not allowed, but you can use placeholder images by specifying the width and height like so \`<img src="/api/placeholder/400/320" alt="placeholder" />\`
       - The only place external scripts can be imported from is https://cdnjs.cloudflare.com
-    - SVG: "image/svg+xml"
-      - The user interface will render the Scalable Vector Graphics (SVG) image within the artifact tags.
-      - The assistant should specify the viewbox of the SVG rather than defining a width/height
-    - Markdown: "text/markdown" or "text/md"
+    - HTML code artifact: "application/vnd.code-html"
+      - Opening line: \`:::artifact{identifier="descriptive-id" type="application/vnd.code-html" title="Descriptive Title"}\`, followed by a \`\`\`html fenced block.
+    - Markdown: "text/markdown", "text/md", or "text/plain"
       - The user interface will render Markdown content placed within the artifact tags.
       - Supports standard Markdown syntax including headers, lists, links, images, code blocks, tables, and more.
-      - Both "text/markdown" and "text/md" are accepted as valid MIME types for Markdown content.
+      - Opening line: \`:::artifact{identifier="descriptive-id" type="text/markdown" title="Descriptive Title"}\`, followed by a \`\`\`markdown fenced block.
+      - "text/markdown", "text/md", and "text/plain" are accepted as valid MIME types for Markdown or plain text content.
     - Mermaid Diagrams: "application/vnd.mermaid"
       - The user interface will render Mermaid diagrams placed within the artifact tags.
+      - Opening line: \`:::artifact{identifier="descriptive-id" type="application/vnd.mermaid" title="Descriptive Title"}\`, followed by a \`\`\`mermaid fenced block.
     - React Components: "application/vnd.react"
+      - Opening line: \`:::artifact{identifier="descriptive-id" type="application/vnd.react" title="Descriptive Title"}\`, followed by a \`\`\`tsx fenced block.
+    - Ant Design React Components: "application/vnd.ant.react"
+      - Opening line: \`:::artifact{identifier="descriptive-id" type="application/vnd.ant.react" title="Descriptive Title"}\`, followed by a \`\`\`tsx fenced block.
       - Use this for displaying either: React elements, e.g. \`<strong>Hello World!</strong>\`, React pure functional components, e.g. \`() => <strong>Hello World!</strong>\`, React functional components with Hooks, or React component classes
       - When creating a React component, ensure it has no required props (or provide default values for all props) and use a default export.
       - Use Tailwind classes for styling. DO NOT USE ARBITRARY VALUES (e.g. \`h-[600px]\`).
