@@ -48,6 +48,7 @@ const quotasRoot = `${BASE_URL}/api/quotas`;
 
 const adminRoot = `${BASE_URL}/api/admin`;
 const adminActivityLogsRoot = `${adminRoot}/activity-logs`;
+const adminSensitiveInformationRoot = `${adminRoot}/sensitive-information`;
 const adminUsersRoot = `${adminRoot}/users`;
 const adminConversationsRoot = `${adminRoot}/conversations`;
 const adminChannelInventoryRoot = `${adminRoot}/channel-inventory`;
@@ -76,9 +77,22 @@ export const adminSystemSettings = () => adminSystemSettingsRoot;
 
 export const adminMemorySystemSetting = () => `${adminSystemSettingsRoot}/memory`;
 
+export const adminWebSearchSystemSetting = () => `${adminSystemSettingsRoot}/web-search`;
+
+export const adminSensitiveInformationPolicySystemSetting = () =>
+  `${adminSystemSettingsRoot}/sensitive-information-policy`;
+
 export const adminActivityLogs = (params: q.AdminActivityLogsListParams) => {
   return `${adminActivityLogsRoot}${buildQuery(params)}`;
 };
+
+export const adminSensitiveInformationSummary = (
+  params: q.AdminSensitiveInformationSummaryParams,
+) => `${adminSensitiveInformationRoot}/summary${buildQuery(params)}`;
+
+export const adminSensitiveInformationMessages = (
+  params: q.AdminSensitiveInformationMessagesParams,
+) => `${adminSensitiveInformationRoot}/messages${buildQuery(params)}`;
 
 export const adminManagerReviewBatches = (params: q.AdminManagerReviewBatchesListParams) =>
   `${adminManagerReviewsRoot}/batches${buildQuery(params)}`;
@@ -120,8 +134,7 @@ export const managerReviewBatchItems = (
 export const managerReviewBatchResponse = (batchId: string, token: string) =>
   `${managerReviewsRoot}/batches/${encodeURIComponent(batchId)}/response${buildQuery({ token })}`;
 
-export const adminRole = (roleName: string) =>
-  `${adminRolesRoot}/${encodeURIComponent(roleName)}`;
+export const adminRole = (roleName: string) => `${adminRolesRoot}/${encodeURIComponent(roleName)}`;
 
 export const createAdminUser = () => adminUsersRoot;
 

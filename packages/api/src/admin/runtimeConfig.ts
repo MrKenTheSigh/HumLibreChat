@@ -17,7 +17,6 @@ import { normalizeAdminChannelDocument, type RawAdminChannelDocument } from './c
 const { AdminChannel } = createModels(mongoose);
 const OLLAMA_DEFAULT_API_KEY = 'ollama';
 
-
 type ManagedChannelRuntimeRecord = RawAdminChannelDocument & {
   _id: mongoose.Types.ObjectId | string;
 };
@@ -633,10 +632,12 @@ export function mergeManagedChannelsIntoConfig(
     endpoints[EModelEndpoint.bedrock] = endpointConfig as ManagedBedrockEndpoint;
   }
 
-  return {
+  const mergedConfig = {
     ...baseConfig,
     endpoints,
   };
+
+  return mergedConfig;
 }
 
 export function createLoadManagedChannelsIntoConfig(

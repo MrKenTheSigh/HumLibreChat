@@ -72,6 +72,19 @@ export function extractWebSearchEnvVars({
   return authFields;
 }
 
+function getDirectWebSearchValue(configValue: unknown): string | undefined {
+  if (typeof configValue !== 'string') {
+    return undefined;
+  }
+
+  const value = configValue.trim();
+  if (value.length === 0 || extractVariableName(value)) {
+    return undefined;
+  }
+
+  return value;
+}
+
 /**
  * Type for web search authentication result
  */
@@ -109,11 +122,13 @@ export async function loadWebSearchAuth({
   const authResult: Partial<TWebSearchConfig> = {};
 
   /** Type-safe iterator for the category-service combinations */
-  async function checkAuth<C extends TWebSearchCategories>(
-    category: C,
-  ): Promise<[boolean, boolean]> {
-    type ServiceType = keyof (typeof webSearchAuth)[C];
+  async function checkAuth(category: TWebSearchCategories): Promise<[boolean, boolean]> {
+    type ServiceType = string;
     let isUserProvided = false;
+    const categoryAuth = webSearchAuth[category] as Record<
+      string,
+      Partial<Record<TWebSearchKeys, 0 | 1>>
+    >;
 
     // Check if a specific service is specified in the config
     let specificService: ServiceType | undefined;
@@ -128,15 +143,15 @@ export async function loadWebSearchAuth({
     // If a specific service is specified, only check that one
     const services = specificService
       ? [specificService]
-      : (Object.keys(webSearchAuth[category]) as ServiceType[]);
+      : (Object.keys(categoryAuth) as ServiceType[]);
 
     for (const service of services) {
       // Skip if the service doesn't exist in the webSearchAuth config
-      if (!webSearchAuth[category][service]) {
+      if (!categoryAuth[service]) {
         continue;
       }
 
-      const serviceConfig = webSearchAuth[category][service];
+      const serviceConfig = categoryAuth[service];
 
       // Split keys into required and optional
       const requiredKeys: TWebSearchKeys[] = [];
@@ -153,45 +168,84 @@ export async function loadWebSearchAuth({
 
       if (requiredKeys.length === 0) continue;
 
-      const requiredAuthFields = extractWebSearchEnvVars({
-        keys: requiredKeys,
-        config: webSearchConfig,
-      });
-      const optionalAuthFields = extractWebSearchEnvVars({
-        keys: optionalKeys,
-        config: webSearchConfig,
-      });
-      if (requiredAuthFields.length !== requiredKeys.length) continue;
+      const directValues: Partial<Record<TWebSearchKeys, string>> = {};
+      const authFieldByKey = new Map<TWebSearchKeys, string>();
+      const requiredAuthFields: string[] = [];
+      const optionalAuthFields: string[] = [];
+
+      for (const key of requiredKeys) {
+        const directValue = getDirectWebSearchValue(webSearchConfig?.[key]);
+        if (directValue) {
+          directValues[key] = directValue;
+          continue;
+        }
+
+        const authFields = extractWebSearchEnvVars({ keys: [key], config: webSearchConfig });
+        if (authFields.length === 1) {
+          requiredAuthFields.push(authFields[0]);
+          authFieldByKey.set(key, authFields[0]);
+        }
+      }
+
+      for (const key of optionalKeys) {
+        const directValue = getDirectWebSearchValue(webSearchConfig?.[key]);
+        if (directValue) {
+          directValues[key] = directValue;
+          continue;
+        }
+
+        const authFields = extractWebSearchEnvVars({ keys: [key], config: webSearchConfig });
+        if (authFields.length === 1) {
+          optionalAuthFields.push(authFields[0]);
+          authFieldByKey.set(key, authFields[0]);
+        }
+      }
+
+      if (
+        requiredAuthFields.length +
+          Object.keys(directValues).filter((key) => requiredKeys.includes(key as TWebSearchKeys))
+            .length !==
+        requiredKeys.length
+      ) {
+        continue;
+      }
 
       const allKeys = [...requiredKeys, ...optionalKeys];
       const allAuthFields = [...requiredAuthFields, ...optionalAuthFields];
       const optionalSet = new Set(optionalAuthFields);
 
       try {
-        const authValues = await loadAuthValues({
-          userId,
-          authFields: allAuthFields,
-          optional: optionalSet,
-          throwError,
-        });
+        const authValues =
+          allAuthFields.length > 0
+            ? await loadAuthValues({
+                userId,
+                authFields: allAuthFields,
+                optional: optionalSet,
+                throwError,
+              })
+            : {};
 
         let allFieldsAuthenticated = true;
-        for (let j = 0; j < allAuthFields.length; j++) {
-          const field = allAuthFields[j];
-          const value = authValues[field];
-          const originalKey = allKeys[j];
+        for (const originalKey of allKeys) {
+          const directValue = directValues[originalKey];
+          const field = directValue ? undefined : authFieldByKey.get(originalKey);
+          const value = directValue ?? (field ? authValues[field] : undefined);
+          const isOptional = field ? optionalSet.has(field) : optionalKeys.includes(originalKey);
 
-          if (!optionalSet.has(field) && !value) {
+          if (!isOptional && !value) {
             allFieldsAuthenticated = false;
             break;
           }
+          if (isOptional && !value) {
+            continue;
+          }
 
-          const isFieldUserProvided = value != null && process.env[field] !== value;
+          const isFieldUserProvided = !!field && value != null && process.env[field] !== value;
           const isUrlKey = originalKey != null && WEB_SEARCH_URL_KEYS.has(originalKey);
           let contributed = false;
 
-          if (isUrlKey && isFieldUserProvided && (await isSSRFUrl(value))) {
-            if (!optionalSet.has(field)) {
+          if (isUrlKey && value && isFieldUserProvided && (await isSSRFUrl(value))) {
+            if (!isOptional) {
               allFieldsAuthenticated = false;
               break;
             }

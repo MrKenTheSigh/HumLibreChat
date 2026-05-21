@@ -153,6 +153,18 @@ export function getAdminActivityLogs(
   return request.get(endpoints.adminActivityLogs(params));
 }
 
+export function getAdminSensitiveInformationSummary(
+  params: q.AdminSensitiveInformationSummaryParams,
+): Promise<q.AdminSensitiveInformationSummaryResponse> {
+  return request.get(endpoints.adminSensitiveInformationSummary(params));
+}
+
+export function getAdminSensitiveInformationMessages(
+  params: q.AdminSensitiveInformationMessagesParams,
+): Promise<q.AdminSensitiveInformationMessagesResponse> {
+  return request.get(endpoints.adminSensitiveInformationMessages(params));
+}
+
 export function getAdminManagerReviewBatches(
   params: q.AdminManagerReviewBatchesListParams,
 ): Promise<q.AdminManagerReviewBatchesListResponse> {
@@ -241,6 +253,18 @@ export function updateAdminMemorySystemSetting(
   payload: q.AdminMemorySystemSettingUpdateRequest,
 ): Promise<q.AdminMemorySystemSettingUpdateResponse> {
   return request.patch(endpoints.adminMemorySystemSetting(), payload);
+}
+
+export function updateAdminWebSearchSystemSetting(
+  payload: q.AdminWebSearchSystemSettingUpdateRequest,
+): Promise<q.AdminWebSearchSystemSettingUpdateResponse> {
+  return request.patch(endpoints.adminWebSearchSystemSetting(), payload);
+}
+
+export function updateAdminSensitiveInformationPolicySystemSetting(
+  payload: q.AdminSensitiveInformationPolicySystemSettingUpdateRequest,
+): Promise<q.AdminSensitiveInformationPolicySystemSettingUpdateResponse> {
+  return request.patch(endpoints.adminSensitiveInformationPolicySystemSetting(), payload);
 }
 
 export function getAdminUsers(params: q.AdminUsersListParams): Promise<q.AdminUsersListResponse> {

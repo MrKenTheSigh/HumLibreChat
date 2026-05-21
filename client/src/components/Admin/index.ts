@@ -1,6 +1,7 @@
 export { default as AdminLayout } from './AdminLayout';
 export { default as AdminView } from './AdminView';
 export { default as AdminActivityLogsPage } from './ActivityLogs/AdminActivityLogsPage';
+export { default as AdminSensitiveInformationPage } from './SensitiveInformation/AdminSensitiveInformationPage';
 export { default as AdminChannelForm } from './Channels/AdminChannelForm';
 export { default as AdminChannelsPage } from './Channels/AdminChannelsPage';
 export { default as AdminDepartmentForm } from './Departments/AdminDepartmentForm';

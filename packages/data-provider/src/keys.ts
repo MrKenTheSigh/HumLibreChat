@@ -49,6 +49,8 @@ export enum QueryKeys {
   marketplaceAgents = 'marketplaceAgents',
   roles = 'roles',
   adminActivityLogs = 'adminActivityLogs',
+  adminSensitiveInformationSummary = 'adminSensitiveInformationSummary',
+  adminSensitiveInformationMessages = 'adminSensitiveInformationMessages',
   adminManagerReviewBatches = 'adminManagerReviewBatches',
   adminManagerReviewBatchItems = 'adminManagerReviewBatchItems',
   adminRoles = 'adminRoles',

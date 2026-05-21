@@ -136,6 +136,18 @@ async function getEndpointsConfig(req) {
 
   const endpointsConfig = orderEndpointsConfig(mergedConfig);
 
+  // Managed channels are authoritative for provider endpoints. Agents is not a provider
+  // channel; it is the chat entry point for saved agent resources, gated by interface.agents.
+  if (endpointsConfig[EModelEndpoint.agents] == null && mergedConfig[EModelEndpoint.agents] != null) {
+    endpointsConfig[EModelEndpoint.agents] = {
+      ...mergedConfig[EModelEndpoint.agents],
+      order:
+        typeof mergedConfig[EModelEndpoint.agents].order === 'number'
+          ? mergedConfig[EModelEndpoint.agents].order
+          : Object.keys(endpointsConfig).length,
+    };
+  }
+
   const maxOrder = Object.values(endpointsConfig).reduce((highest, endpointConfig) => {
     if (endpointConfig == null || typeof endpointConfig.order !== 'number') {
       return highest;

@@ -12,6 +12,12 @@ async function loadDefaultEndpointsConfig(appConfig) {
   const { assistants, azureAssistants, azureOpenAI } = config;
 
   const enabledEndpoints = getEnabledEndpoints();
+  const agentsInterface = appConfig?.interface?.agents;
+  const shouldExposeAgentsEndpoint =
+    agentsInterface?.use !== false || agentsInterface?.create !== false;
+  const endpointOrder = shouldExposeAgentsEndpoint
+    ? Array.from(new Set([...enabledEndpoints, EModelEndpoint.agents]))
+    : enabledEndpoints.filter((endpoint) => endpoint !== EModelEndpoint.agents);
 
   const endpointConfig = {
     [EModelEndpoint.openAI]: config[EModelEndpoint.openAI],
@@ -24,7 +30,7 @@ async function loadDefaultEndpointsConfig(appConfig) {
     [EModelEndpoint.bedrock]: config[EModelEndpoint.bedrock],
   };
 
-  const orderedAndFilteredEndpoints = enabledEndpoints.reduce((config, key, index) => {
+  const orderedAndFilteredEndpoints = endpointOrder.reduce((config, key, index) => {
     if (endpointConfig[key]) {
       config[key] = { ...(endpointConfig[key] ?? {}), order: index };
     }

@@ -40,7 +40,7 @@ export function hasAdminDataAccessRole(role: string | null | undefined): boolean
 }
 
 export function hasFullAdminDataAccess(role: string | null | undefined): boolean {
-  return role === SystemRoles.ADMIN || role === SystemRoles.AUDITOR;
+  return role === SystemRoles.ADMIN;
 }
 
 function getRequestUser(req: Request): RequestUser | undefined {
@@ -64,13 +64,13 @@ export async function resolveAdminDataScope(req: Request): Promise<AdminDataScop
     return { type: 'all' };
   }
 
-  if (role !== SystemRoles.MANAGER) {
+  if (!hasAdminDataAccessRole(role)) {
     throw createStatusError(403, 'Admin data access role required');
   }
 
   const userId = getRequestUserId(req);
   if (!userId) {
-    throw createStatusError(403, 'Manager department scope is unavailable');
+    throw createStatusError(403, 'Department scope is unavailable');
   }
 
   const manager = await User.findById(parseObjectId(userId, 'userId'))
@@ -78,7 +78,7 @@ export async function resolveAdminDataScope(req: Request): Promise<AdminDataScop
     .lean<ManagerUserRecord | null>();
 
   if (manager?.departmentId == null) {
-    throw createStatusError(403, 'Manager department scope is unavailable');
+    throw createStatusError(403, 'Department scope is unavailable');
   }
 
   return {

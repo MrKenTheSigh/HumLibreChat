@@ -152,6 +152,82 @@ export type AdminActivityLogsListResponse = {
   nextCursor: string | null;
 };
 
+export type AdminSensitiveInformationSummaryParams = {
+  limit?: number;
+  cursor?: string;
+  userId?: string;
+  ruleCode?: string;
+  createdAfter?: string;
+  createdBefore?: string;
+};
+
+export type AdminSensitiveInformationMessagesParams = AdminSensitiveInformationSummaryParams & {
+  outcome?: 'submitted' | 'blocked' | 'all';
+};
+
+export type AdminSensitiveInformationRuleSummary = {
+  ruleCode: string;
+  label: string;
+  count: number;
+  submittedCount: number;
+  blockedCount: number;
+  messageCount: number;
+  submittedMessageCount: number;
+  blockedMessageCount: number;
+};
+
+export type AdminSensitiveInformationSummaryItem = {
+  userId: string;
+  userEmail: string | null;
+  userName: string | null;
+  username: string | null;
+  totalCount: number;
+  submittedCount: number;
+  blockedCount: number;
+  messageCount: number;
+  submittedMessageCount: number;
+  blockedMessageCount: number;
+  ruleSummaries: AdminSensitiveInformationRuleSummary[];
+};
+
+export type AdminSensitiveInformationSummaryResponse = {
+  startAt: string;
+  endAt: string;
+  items: AdminSensitiveInformationSummaryItem[];
+  nextCursor: string | null;
+};
+
+export type AdminSensitiveInformationMessageRuleMatch = {
+  ruleCode: string;
+  label: string;
+  count: number;
+};
+
+export type AdminSensitiveInformationMessage = {
+  messageId: string;
+  conversationId: string;
+  conversationTitle: string | null;
+  endpoint: string | null;
+  model: string | null;
+  userId: string;
+  userEmail: string | null;
+  userName: string | null;
+  username: string | null;
+  sender: string | null;
+  text: string | null;
+  outcome: 'submitted' | 'blocked';
+  totalCount: number;
+  ruleMatches: AdminSensitiveInformationMessageRuleMatch[];
+  detectedAt: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+export type AdminSensitiveInformationMessagesResponse = {
+  messages: AdminSensitiveInformationMessage[];
+  nextCursor: string | null;
+};
+
 export type AdminManagerReviewCadence = 'daily' | 'weekly';
 export type AdminManagerReviewBatchStatus =
   | 'generated'
@@ -954,14 +1030,65 @@ export type AdminMemorySystemSetting = {
   };
 };
 
+export type AdminSensitivePolicyAction = 'none' | 'record' | 'warn' | 'block';
+
+export type AdminSensitiveRulePolicy = {
+  ruleCode: string;
+  thresholds: Array<{
+    minCount: number;
+    action: AdminSensitivePolicyAction;
+  }>;
+};
+
+export type AdminSensitiveInformationPolicySystemSetting = {
+  enabled: boolean;
+  window: {
+    type: 'daily';
+    durationDays: number;
+  };
+  rules: AdminSensitiveRulePolicy[];
+};
+
+export type AdminWebSearchSystemSetting = {
+  searchProvider: 'serper' | 'searxng';
+  scraperProvider: 'firecrawl' | 'serper';
+  rerankerType: 'jina' | 'cohere';
+  serperApiKey: string;
+  searxngInstanceUrl: string;
+  searxngApiKey: string;
+  firecrawlApiKey: string;
+  firecrawlApiUrl: string;
+  firecrawlVersion: string;
+  jinaApiKey: string;
+  jinaApiUrl: string;
+  cohereApiKey: string;
+  scraperTimeout: number;
+  safeSearch: 0 | 1 | 2;
+};
+
 export type AdminSystemSettingsResponse = {
   memory: AdminMemorySystemSetting;
+  webSearch: AdminWebSearchSystemSetting;
+  sensitiveInformationPolicy: AdminSensitiveInformationPolicySystemSetting;
 };
 
 export type AdminMemorySystemSettingUpdateRequest = AdminMemorySystemSetting;
 
 export type AdminMemorySystemSettingUpdateResponse = {
   memory: AdminMemorySystemSetting;
+};
+
+export type AdminWebSearchSystemSettingUpdateRequest = AdminWebSearchSystemSetting;
+
+export type AdminWebSearchSystemSettingUpdateResponse = {
+  webSearch: AdminWebSearchSystemSetting;
+};
+
+export type AdminSensitiveInformationPolicySystemSettingUpdateRequest =
+  AdminSensitiveInformationPolicySystemSetting;
+
+export type AdminSensitiveInformationPolicySystemSettingUpdateResponse = {
+  sensitiveInformationPolicy: AdminSensitiveInformationPolicySystemSetting;
 };
 
 export type AdminPlanModelEntitlement = {

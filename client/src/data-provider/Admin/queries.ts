@@ -79,6 +79,44 @@ export const useGetAdminActivityLogsQuery = (
   );
 };
 
+export const useGetAdminSensitiveInformationSummaryQuery = (
+  params: t.AdminSensitiveInformationSummaryParams,
+  config?: UseQueryOptions<t.AdminSensitiveInformationSummaryResponse>,
+): QueryObserverResult<t.AdminSensitiveInformationSummaryResponse> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+
+  return useQuery<t.AdminSensitiveInformationSummaryResponse>(
+    [QueryKeys.adminSensitiveInformationSummary, params],
+    () => dataService.getAdminSensitiveInformationSummary(params),
+    {
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      refetchOnMount: true,
+      ...config,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled,
+    },
+  );
+};
+
+export const useGetAdminSensitiveInformationMessagesQuery = (
+  params: t.AdminSensitiveInformationMessagesParams,
+  config?: UseQueryOptions<t.AdminSensitiveInformationMessagesResponse>,
+): QueryObserverResult<t.AdminSensitiveInformationMessagesResponse> => {
+  const queriesEnabled = useRecoilValue<boolean>(store.queriesEnabled);
+
+  return useQuery<t.AdminSensitiveInformationMessagesResponse>(
+    [QueryKeys.adminSensitiveInformationMessages, params],
+    () => dataService.getAdminSensitiveInformationMessages(params),
+    {
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      refetchOnMount: true,
+      ...config,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled,
+    },
+  );
+};
+
 export const useGetAdminManagerReviewBatchesQuery = (
   params: t.AdminManagerReviewBatchesListParams,
   config?: UseQueryOptions<t.AdminManagerReviewBatchesListResponse>,
@@ -113,8 +151,7 @@ export const useGetAdminManagerReviewBatchItemsQuery = (
       refetchOnReconnect: false,
       refetchOnMount: true,
       ...config,
-      enabled:
-        (config?.enabled ?? true) === true && queriesEnabled && batchId.length > 0,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled && batchId.length > 0,
     },
   );
 };
@@ -229,8 +266,7 @@ export const useGetAdminDepartmentQuery = (
       refetchOnMount: true,
       retry: false,
       ...config,
-      enabled:
-        (config?.enabled ?? true) === true && queriesEnabled && departmentId.length > 0,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled && departmentId.length > 0,
     },
   );
 };
@@ -396,8 +432,7 @@ export const useGetAdminConversationQuery = (
       refetchOnMount: true,
       retry: false,
       ...config,
-      enabled:
-        (config?.enabled ?? true) === true && queriesEnabled && conversationId.length > 0,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled && conversationId.length > 0,
     },
   );
 };
@@ -417,8 +452,7 @@ export const useGetAdminConversationMessagesQuery = (
       refetchOnMount: true,
       retry: false,
       ...config,
-      enabled:
-        (config?.enabled ?? true) === true && queriesEnabled && conversationId.length > 0,
+      enabled: (config?.enabled ?? true) === true && queriesEnabled && conversationId.length > 0,
     },
   );
 };

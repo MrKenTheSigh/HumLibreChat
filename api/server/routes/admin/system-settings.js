@@ -13,5 +13,10 @@ const handlers = createAdminSystemSettingsHandlers({
 
 router.get('/', handlers.getAdminSystemSettings);
 router.patch('/memory', handlers.updateAdminMemorySystemSetting);
+router.patch('/web-search', handlers.updateAdminWebSearchSystemSetting);
+router.patch(
+  '/sensitive-information-policy',
+  handlers.updateAdminSensitiveInformationPolicySystemSetting,
+);
 
 module.exports = router;

@@ -202,6 +202,40 @@ export const useUpdateAdminMemorySystemSettingMutation = (): UseMutationResult<
   });
 };
 
+export const useUpdateAdminWebSearchSystemSettingMutation = (): UseMutationResult<
+  t.AdminWebSearchSystemSettingUpdateResponse,
+  t.TError | undefined,
+  t.AdminWebSearchSystemSettingUpdateRequest,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+
+  return useMutation((variables) => dataService.updateAdminWebSearchSystemSetting(variables), {
+    onSuccess: () => {
+      queryClient.invalidateQueries([QueryKeys.adminSystemSettings]);
+      queryClient.invalidateQueries([QueryKeys.startupConfig]);
+    },
+  });
+};
+
+export const useUpdateAdminSensitiveInformationPolicySystemSettingMutation = (): UseMutationResult<
+  t.AdminSensitiveInformationPolicySystemSettingUpdateResponse,
+  t.TError | undefined,
+  t.AdminSensitiveInformationPolicySystemSettingUpdateRequest,
+  unknown
+> => {
+  const queryClient = useQueryClient();
+
+  return useMutation(
+    (variables) => dataService.updateAdminSensitiveInformationPolicySystemSetting(variables),
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries([QueryKeys.adminSystemSettings]);
+      },
+    },
+  );
+};
+
 export const useSetAdminUserBalanceMutation = (): UseMutationResult<
   t.AdminBalanceUpdateResponse,
   t.TError | undefined,

@@ -11,6 +11,7 @@ const MANAGER_ADMIN_PATHS = [
   '/d/admin/quotas',
   '/d/admin/conversations',
   '/d/admin/usage',
+  '/d/admin/sensitive-information',
 ];
 
 const AUDITOR_ADMIN_PATHS = [
@@ -18,6 +19,7 @@ const AUDITOR_ADMIN_PATHS = [
   '/d/admin/conversations',
   '/d/admin/usage',
   '/d/admin/activity-logs',
+  '/d/admin/sensitive-information',
 ];
 
 const rolePaths: Partial<Record<SystemRoles, string[]>> = {

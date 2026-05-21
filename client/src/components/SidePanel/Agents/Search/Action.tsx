@@ -1,6 +1,4 @@
-import { KeyRoundIcon } from 'lucide-react';
-import { useRef } from 'react';
-import { AuthType, AgentCapabilities } from 'librechat-data-provider';
+import { AgentCapabilities } from 'librechat-data-provider';
 import { useFormContext, Controller, useWatch } from 'react-hook-form';
 import {
   CircleHelpIcon,
@@ -11,49 +9,27 @@ import {
   HoverCardTrigger,
 } from '@librechat/client';
 import type { AgentForm } from '~/common';
-import { useLocalize, useSearchApiKeyForm } from '~/hooks';
-import ApiKeyDialog from './ApiKeyDialog';
+import { useLocalize } from '~/hooks';
 import { ESide } from '~/common';
 import { cn } from '~/utils';
 
 export default function Action({
-  authTypes = [],
   isToolAuthenticated = false,
 }: {
-  authTypes?: [string, AuthType][];
+  authTypes?: [string, string][];
   isToolAuthenticated?: boolean;
 }) {
   const localize = useLocalize();
   const methods = useFormContext<AgentForm>();
   const { control, setValue } = methods;
-  const apiKeyButtonRef = useRef<HTMLButtonElement>(null);
-  const {
-    onSubmit,
-    isDialogOpen,
-    setIsDialogOpen,
-    handleRevokeApiKey,
-    methods: keyFormMethods,
-  } = useSearchApiKeyForm({
-    onSubmit: () => {
-      setValue(AgentCapabilities.web_search, true, { shouldDirty: true });
-      setTimeout(() => apiKeyButtonRef.current?.focus(), 100);
-    },
-    onRevoke: () => {
-      setValue(AgentCapabilities.web_search, false, { shouldDirty: true });
-      setTimeout(() => apiKeyButtonRef.current?.focus(), 100);
-    },
-  });
 
   const webSearchIsEnabled = useWatch({ control, name: AgentCapabilities.web_search });
-  const isUserProvided = authTypes?.some(([, authType]) => authType === AuthType.USER_PROVIDED);
 
   const handleCheckboxChange = (checked: boolean) => {
     if (isToolAuthenticated) {
       setValue(AgentCapabilities.web_search, checked, { shouldDirty: true });
     } else if (webSearchIsEnabled) {
       setValue(AgentCapabilities.web_search, false, { shouldDirty: true });
-    } else {
-      setIsDialogOpen(true);
     }
   };
 
@@ -90,17 +66,6 @@ export default function Action({
             {localize('com_ui_web_search')}
           </label>
           <div className="ml-2 flex gap-2">
-            {isUserProvided && (
-              <button
-                ref={apiKeyButtonRef}
-                type="button"
-                onClick={() => setIsDialogOpen(true)}
-                aria-label={localize('com_ui_add_web_search_api_keys')}
-                aria-haspopup="dialog"
-              >
-                <KeyRoundIcon className="h-5 w-5 text-text-primary" />
-              </button>
-            )}
             <HoverCardTrigger asChild>
               <button
                 type="button"
@@ -120,17 +85,6 @@ export default function Action({
           </HoverCardPortal>
         </div>
       </HoverCard>
-      <ApiKeyDialog
-        onSubmit={onSubmit}
-        authTypes={authTypes}
-        isOpen={isDialogOpen}
-        onRevoke={handleRevokeApiKey}
-        onOpenChange={setIsDialogOpen}
-        register={keyFormMethods.register}
-        isToolAuthenticated={isToolAuthenticated}
-        handleSubmit={keyFormMethods.handleSubmit}
-        triggerRef={apiKeyButtonRef}
-      />
     </>
   );
 }

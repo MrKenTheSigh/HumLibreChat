@@ -143,6 +143,7 @@ const startServer = async () => {
   app.use('/api/admin/plans', routes.adminPlans);
   app.use('/api/admin/quotas', routes.adminQuotas);
   app.use('/api/admin/roles', routes.adminRoles);
+  app.use('/api/admin/sensitive-information', routes.adminSensitiveInformation);
   app.use('/api/admin/system-settings', routes.adminSystemSettings);
   app.use('/api/admin/users', routes.adminUsers);
   app.use('/api/admin/departments', routes.adminDepartments);

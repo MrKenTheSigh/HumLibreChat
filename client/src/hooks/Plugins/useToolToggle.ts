@@ -80,8 +80,8 @@ export function useToolToggle({
 
   const handleChange = useCallback(
     ({ e, value }: { e?: React.ChangeEvent<HTMLInputElement>; value: ToolValue }) => {
-      if (isAuthenticated !== undefined && !isAuthenticated && setIsDialogOpen) {
-        setIsDialogOpen(true);
+      if (isAuthenticated !== undefined && !isAuthenticated) {
+        setIsDialogOpen?.(true);
         e?.preventDefault?.();
         setEphemeralAgent((prev) => ({
           ...(prev || {}),

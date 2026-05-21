@@ -8,6 +8,7 @@ import {
 import UserQuotaDashboard from '~/components/Quota/UserQuotaDashboard';
 import {
   AdminActivityLogsPage,
+  AdminSensitiveInformationPage,
   AdminManagerReviewsPage,
   AdminOrganizationGraphPage,
   AdminChannelForm,
@@ -181,6 +182,10 @@ const dashboardRoutes = {
         {
           path: 'activity-logs',
           element: <AdminActivityLogsPage />,
+        },
+        {
+          path: 'sensitive-information',
+          element: <AdminSensitiveInformationPage />,
         },
         {
           path: 'org-graph',

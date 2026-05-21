@@ -11,6 +11,7 @@ export * from './quotas';
 export * from './quotaUsage';
 export * from './roles';
 export * from './runtimeConfig';
+export * from './sensitiveInformation';
 export * from './systemSettings';
 export * from './usage';
 export * from './users';
