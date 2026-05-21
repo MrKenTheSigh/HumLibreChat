@@ -249,7 +249,8 @@ class BaseClient {
   }
 
   createUserMessage({ messageId, parentMessageId, conversationId, text }) {
-    return {
+    const sensitivePolicyWarning = this.options?.req?._sensitiveInformationPolicyWarning;
+    const message = {
       messageId,
       parentMessageId,
       conversationId,
@@ -257,6 +258,19 @@ class BaseClient {
       text,
       isCreatedByUser: true,
     };
+
+    if (sensitivePolicyWarning?.action === 'warn') {
+      message.metadata = {
+        sensitiveInformationPolicy: {
+          warned: true,
+          action: sensitivePolicyWarning.action,
+          evaluatedAt: new Date(),
+          decisions: sensitivePolicyWarning.decisions,
+        },
+      };
+    }
+
+    return message;
   }
 
   async handleStartMethods(message, opts) {

@@ -72,7 +72,8 @@ const file: Schema<IMongoFile> = new Schema(
     width: Number,
     height: Number,
     metadata: {
-      fileIdentifier: String,
+      type: mongoose.Schema.Types.Mixed,
+      default: undefined,
     },
     expiresAt: {
       type: Date,

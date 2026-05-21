@@ -14,6 +14,9 @@ const { handleAbortError } = require('~/server/middleware');
 const { saveMessageCreditUsage, syncMessageCreditUsage } = require('~/models/messageCreditUsage');
 const { logViolation } = require('~/cache');
 const { saveMessage } = require('~/models');
+const {
+  enforceSensitiveInformationPolicyPreflight,
+} = require('./sensitiveInformationPolicy');
 
 function createCloseHandler(abortController) {
   return function (manual) {
@@ -58,6 +61,17 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
   } = req.body;
 
   const userId = req.user.id;
+  const conversationId =
+    !reqConversationId || reqConversationId === 'new' ? crypto.randomUUID() : reqConversationId;
+  req.body.conversationId = conversationId;
+
+  const blockedBySensitiveInformationPolicy = await enforceSensitiveInformationPolicyPreflight(
+    req,
+    res,
+  );
+  if (blockedBySensitiveInformationPolicy) {
+    return;
+  }
 
   const { allowed, pendingRequests, limit } = await checkAndIncrementPendingRequest(userId);
   if (!allowed) {
@@ -66,10 +80,6 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
     return res.status(429).json(violationInfo);
   }
 
-  // Generate conversationId upfront if not provided - streamId === conversationId always
-  // Treat "new" as a placeholder that needs a real UUID (frontend may send "new" for new convos)
-  const conversationId =
-    !reqConversationId || reqConversationId === 'new' ? crypto.randomUUID() : reqConversationId;
   const streamId = conversationId;
 
   let client = null;
@@ -88,7 +98,12 @@ const ResumableAgentController = async (req, res, next, initializeClient, addTit
 
     // Send JSON response IMMEDIATELY so client can connect to SSE stream
     // This is critical: tool loading (MCP OAuth) may emit events that the client needs to receive
-    res.json({ streamId, conversationId, status: 'started' });
+    res.json({
+      streamId,
+      conversationId,
+      status: 'started',
+      sensitiveInformationPolicyWarning: req._sensitiveInformationPolicyWarning ?? null,
+    });
 
     // Note: We no longer use res.on('close') to abort since we send JSON immediately.
     // The response closes normally after res.json(), which is not an abort condition.

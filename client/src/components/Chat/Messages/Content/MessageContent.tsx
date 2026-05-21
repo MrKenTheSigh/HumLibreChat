@@ -57,6 +57,41 @@ const ErrorBox = ({
   </div>
 );
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value != null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isSensitivePolicyBlockedMessage(message?: TMessage) {
+  const policy = isRecord(message?.metadata)
+    ? message.metadata.sensitiveInformationPolicy
+    : undefined;
+  const blockedByMetadata = isRecord(policy) && policy.blocked === true;
+  return message?.finish_reason === 'sensitive_information_policy_blocked' || blockedByMetadata;
+}
+
+function isSensitivePolicyWarnedMessage(message?: TMessage) {
+  const policy = isRecord(message?.metadata)
+    ? message.metadata.sensitiveInformationPolicy
+    : undefined;
+  return isRecord(policy) && policy.warned === true;
+}
+
+function getSensitivePolicyRemainingToBlock(message?: TMessage) {
+  const policy = isRecord(message?.metadata)
+    ? message.metadata.sensitiveInformationPolicy
+    : undefined;
+  const decisions = isRecord(policy) && Array.isArray(policy.decisions) ? policy.decisions : [];
+  const remainingCounts = decisions
+    .map((decision) =>
+      isRecord(decision) && typeof decision.remainingToBlock === 'number'
+        ? decision.remainingToBlock
+        : null,
+    )
+    .filter((count): count is number => count != null && Number.isFinite(count) && count > 0);
+
+  return remainingCounts.length > 0 ? Math.min(...remainingCounts) : null;
+}
+
 const ConnectionError = ({ message }: { message?: TMessage }) => {
   const localize = useLocalize();
 
@@ -94,6 +129,10 @@ export const ErrorMessage = ({
 const DisplayMessage = ({ text, isCreatedByUser, message, showCursor }: TDisplayProps) => {
   const { isSubmitting = false, isLatestMessage = false } = useMessageContext();
   const enableUserMsgMarkdown = useRecoilValue(store.enableUserMsgMarkdown);
+  const localize = useLocalize();
+  const isSensitiveBlocked = isSensitivePolicyBlockedMessage(message);
+  const isSensitiveWarned = isSensitivePolicyWarnedMessage(message);
+  const sensitiveRemainingToBlock = getSensitivePolicyRemainingToBlock(message);
 
   const showCursorState = useMemo(
     () => showCursor === true && isSubmitting,
@@ -112,6 +151,20 @@ const DisplayMessage = ({ text, isCreatedByUser, message, showCursor }: TDisplay
 
   return (
     <Container message={message}>
+      {isSensitiveBlocked ? (
+        <div className="mb-2 inline-flex rounded-full border border-red-500/30 bg-red-500/10 px-3 py-1 text-xs font-medium text-red-700 dark:text-red-200">
+          {localize('com_error_sensitive_policy_blocked')}
+        </div>
+      ) : null}
+      {!isSensitiveBlocked && isSensitiveWarned ? (
+        <div className="mb-2 inline-flex rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-800 dark:text-amber-200">
+          {sensitiveRemainingToBlock != null
+            ? localize('com_error_sensitive_policy_warning_remaining', {
+                0: sensitiveRemainingToBlock,
+              })
+            : localize('com_error_sensitive_policy_warning')}
+        </div>
+      ) : null}
       <div
         className={cn(
           'markdown prose message-content dark:prose-invert light w-full break-words',
@@ -145,6 +198,7 @@ const MessageContent = ({
 }: TMessageContentProps) => {
   const { message } = props;
   const { messageId } = message;
+  const isSensitiveBlocked = isSensitivePolicyBlockedMessage(message);
 
   const { thinkingContent, regularContent } = useMemo(() => parseThinkingContent(text), [text]);
   const showRegularCursor = useMemo(() => isLast && isSubmitting, [isLast, isSubmitting]);
@@ -161,7 +215,7 @@ const MessageContent = ({
     [isSubmitting, unfinished, message],
   );
 
-  if (error) {
+  if (error && !isSensitiveBlocked) {
     return <ErrorMessage message={message} text={text} />;
   }
 

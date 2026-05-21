@@ -1,6 +1,20 @@
 import type { Document } from 'mongoose';
 import type { TFeedbackRating, TFeedbackTag } from 'librechat-data-provider';
 
+export type SensitiveDetectionRuleMatch = {
+  ruleCode: string;
+  label: string;
+  count: number;
+};
+
+export type SensitiveDetection = {
+  version: number;
+  totalCount: number;
+  ruleMatches: SensitiveDetectionRuleMatch[];
+  evaluatedAt: Date;
+  source?: string;
+};
+
 // @ts-ignore
 export interface IMessage extends Document {
   messageId: string;
@@ -10,6 +24,7 @@ export interface IMessage extends Document {
     spentCredits: number;
     status: 'final' | 'estimated' | 'unavailable';
   };
+  sensitiveDetection?: SensitiveDetection;
   model?: string;
   endpoint?: string;
   conversationSignature?: string;

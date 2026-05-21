@@ -32,6 +32,7 @@ import { createAclEntryModel } from './aclEntry';
 import { createGroupModel } from './group';
 import { createDepartmentModel } from './department';
 import { createActivityLogModel } from './activityLog';
+import { createSensitiveInformationDailySummaryModel } from './sensitiveInformation';
 import {
   createManagerReviewBatchModel,
   createManagerReviewItemModel,
@@ -84,6 +85,7 @@ export function createModels(mongoose: typeof import('mongoose')) {
     Group: createGroupModel(mongoose),
     Department: createDepartmentModel(mongoose),
     ActivityLog: createActivityLogModel(mongoose),
+    SensitiveInformationDailySummary: createSensitiveInformationDailySummaryModel(mongoose),
     ManagerReviewBatch: createManagerReviewBatchModel(mongoose),
     ManagerReviewItem: createManagerReviewItemModel(mongoose),
     QuotaPeriod: createQuotaPeriodModel(mongoose),

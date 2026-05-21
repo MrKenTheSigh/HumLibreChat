@@ -28,7 +28,11 @@ describe('Message Operations', () => {
   let mockMessageData;
 
   beforeAll(async () => {
-    mongoServer = await MongoMemoryServer.create();
+    mongoServer = await MongoMemoryServer.create({
+      instance: {
+        launchTimeout: 30000,
+      },
+    });
     const mongoUri = mongoServer.getUri();
     Message = mongoose.models.Message || mongoose.model('Message', messageSchema);
     ({ Transaction } = createModels(mongoose));
@@ -85,6 +89,68 @@ describe('Message Operations', () => {
       mockMessageData.conversationId = 'invalid-id';
       const result = await saveMessage(mockReq, mockMessageData);
       expect(result).toBeUndefined();
+    });
+
+    it('should attach sensitive detection counts for user-created messages', async () => {
+      const result = await saveMessage(mockReq, {
+        ...mockMessageData,
+        isCreatedByUser: true,
+        text: '姓名：王小明，手機 0912-345-678，email test@example.com',
+      });
+
+      expect(result.sensitiveDetection.totalCount).toBe(3);
+      expect(result.sensitiveDetection.ruleMatches).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ ruleCode: 'chinese_name', count: 1 }),
+          expect.objectContaining({ ruleCode: 'mobile_phone_number', count: 1 }),
+          expect.objectContaining({ ruleCode: 'email_address', count: 1 }),
+        ]),
+      );
+    });
+
+    it('should not attach sensitive detection counts for assistant messages', async () => {
+      const result = await saveMessage(mockReq, {
+        ...mockMessageData,
+        isCreatedByUser: false,
+        text: '姓名：王小明，手機 0912-345-678',
+      });
+
+      expect(result.sensitiveDetection).toBeUndefined();
+    });
+
+    it('should include encrypted file detections from file metadata in user messages', async () => {
+      const result = await saveMessage(mockReq, {
+        ...mockMessageData,
+        isCreatedByUser: true,
+        text: '請看附件',
+        files: [
+          {
+            file_id: 'file-1',
+            filename: 'locked.zip',
+            metadata: {
+              sensitiveDetection: {
+                version: 1,
+                totalCount: 1,
+                source: 'file_upload',
+                evaluatedAt: new Date(),
+                ruleMatches: [
+                  {
+                    ruleCode: 'encrypted_file',
+                    label: '加密檔案',
+                    count: 1,
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      });
+
+      expect(result.sensitiveDetection.totalCount).toBe(1);
+      expect(result.sensitiveDetection.source).toBe('chat_message');
+      expect(result.sensitiveDetection.ruleMatches).toEqual([
+        expect.objectContaining({ ruleCode: 'encrypted_file', count: 1 }),
+      ]);
     });
   });
 
@@ -159,6 +225,25 @@ describe('Message Operations', () => {
       // Verify in database
       const updatedMessage = await Message.findOne({ messageId: 'msg123', user: 'user123' });
       expect(updatedMessage.text).toBe('Updated text');
+    });
+
+    it('should recalculate sensitive detection counts when user messages are edited', async () => {
+      await saveMessage(mockReq, {
+        ...mockMessageData,
+        isCreatedByUser: true,
+        text: '一般內容',
+      });
+
+      await updateMessage(mockReq, {
+        messageId: 'msg123',
+        text: '身分證 A123456789',
+      });
+
+      const updatedMessage = await Message.findOne({ messageId: 'msg123', user: 'user123' });
+      expect(updatedMessage.sensitiveDetection.totalCount).toBe(1);
+      expect(updatedMessage.sensitiveDetection.ruleMatches).toEqual([
+        expect.objectContaining({ ruleCode: 'tw_national_id', count: 1 }),
+      ]);
     });
 
     it('should throw an error if message is not found', async () => {

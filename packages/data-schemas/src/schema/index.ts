@@ -23,6 +23,7 @@ export { default as promptSchema } from './prompt';
 export { default as promptGroupSchema } from './promptGroup';
 export { default as roleSchema } from './role';
 export { default as sessionSchema } from './session';
+export { default as sensitiveInformationDailySummarySchema } from './sensitiveInformation';
 export { default as shareSchema } from './share';
 export { default as tokenSchema } from './token';
 export { default as toolCallSchema } from './toolCall';

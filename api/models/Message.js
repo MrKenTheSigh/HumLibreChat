@@ -1,10 +1,238 @@
 const { z } = require('zod');
 const mongoose = require('mongoose');
 const { logger } = require('@librechat/data-schemas');
-const { createTempChatExpirationDate } = require('@librechat/api');
+const {
+  SENSITIVE_DETECTION_VERSION,
+  createTempChatExpirationDate,
+  detectSensitiveText,
+  evaluateSensitivePolicy,
+  getSensitiveInformationDailyRuleCounts,
+  getSensitiveInformationWindowStartDate,
+  getStoredSensitiveInformationPolicySystemSetting,
+  updateSensitiveInformationDailySummaryDelta,
+  writeActivityLog,
+} = require('@librechat/api');
 const { Message, Transaction } = require('~/db/models');
 
 const idSchema = z.string().uuid();
+
+function getTextFromContent(content) {
+  if (!Array.isArray(content)) {
+    return '';
+  }
+
+  return content
+    .map((part) => {
+      if (typeof part === 'string') {
+        return part;
+      }
+      if (typeof part?.text === 'string') {
+        return part.text;
+      }
+      return '';
+    })
+    .filter(Boolean)
+    .join('\n');
+}
+
+function getMessageTextForSensitiveDetection(message) {
+  const text = typeof message.text === 'string' ? message.text : '';
+  const contentText = getTextFromContent(message.content);
+  return [text, contentText].filter(Boolean).join('\n');
+}
+
+function addSensitiveRuleMatches(ruleMatchesByCode, matches) {
+  if (!Array.isArray(matches)) {
+    return;
+  }
+
+  for (const match of matches) {
+    if (!match?.ruleCode || !match?.label || typeof match?.count !== 'number') {
+      continue;
+    }
+
+    const existingMatch = ruleMatchesByCode.get(match.ruleCode);
+    if (existingMatch) {
+      existingMatch.count += match.count;
+      continue;
+    }
+
+    ruleMatchesByCode.set(match.ruleCode, {
+      ruleCode: match.ruleCode,
+      label: match.label,
+      count: match.count,
+    });
+  }
+}
+
+function getFileSensitiveDetection(file) {
+  return file?.metadata?.sensitiveDetection ?? file?.sensitiveDetection;
+}
+
+function getFilesSensitiveRuleMatches(message) {
+  const ruleMatchesByCode = new Map();
+  const files = Array.isArray(message.files) ? message.files : [];
+
+  for (const file of files) {
+    const sensitiveDetection = getFileSensitiveDetection(file);
+    if (!sensitiveDetection || sensitiveDetection.totalCount <= 0) {
+      continue;
+    }
+    addSensitiveRuleMatches(ruleMatchesByCode, sensitiveDetection.ruleMatches);
+  }
+
+  return Array.from(ruleMatchesByCode.values());
+}
+
+function buildMessageSensitiveDetection(message) {
+  const textDetection = detectSensitiveText(getMessageTextForSensitiveDetection(message));
+  const ruleMatchesByCode = new Map();
+
+  addSensitiveRuleMatches(ruleMatchesByCode, textDetection.ruleMatches);
+  addSensitiveRuleMatches(ruleMatchesByCode, getFilesSensitiveRuleMatches(message));
+
+  const ruleMatches = Array.from(ruleMatchesByCode.values());
+
+  return {
+    ruleMatches,
+    source: 'chat_message',
+    evaluatedAt: new Date(),
+    version: SENSITIVE_DETECTION_VERSION,
+    totalCount: ruleMatches.reduce((sum, match) => sum + match.count, 0),
+  };
+}
+
+function attachSensitiveDetection(update) {
+  if (update.isCreatedByUser !== true) {
+    return update;
+  }
+
+  return {
+    ...update,
+    sensitiveDetection: buildMessageSensitiveDetection(update),
+  };
+}
+
+function attachSensitivePolicyWarning(req, update) {
+  const warning = req?._sensitiveInformationPolicyWarning;
+  if (update.isCreatedByUser !== true || warning?.action !== 'warn') {
+    return update;
+  }
+
+  return {
+    ...update,
+    metadata: {
+      ...(update.metadata ?? {}),
+      sensitiveInformationPolicy: {
+        warned: true,
+        action: warning.action,
+        evaluatedAt: new Date(),
+        decisions: warning.decisions,
+      },
+    },
+  };
+}
+
+function getTriggeredSensitivePolicyDecisions(decisions) {
+  return decisions.filter((decision) => decision.action !== 'none');
+}
+
+function getHeaderValue(value) {
+  if (Array.isArray(value)) {
+    return value[0] ?? null;
+  }
+  return value ?? null;
+}
+
+async function evaluateSensitiveInformationPolicyForMessage(req, message) {
+  try {
+    if (req?._sensitiveInformationPolicyPreflightEvaluated === true) {
+      return;
+    }
+
+    if (message?.isCreatedByUser !== true || message?.sensitiveDetection?.totalCount <= 0) {
+      return;
+    }
+
+    const policy = await getStoredSensitiveInformationPolicySystemSetting();
+    if (!policy.enabled) {
+      return;
+    }
+
+    const userId = message.user?.toString();
+    if (!userId) {
+      return;
+    }
+
+    const endAt = new Date();
+    const startAt = getSensitiveInformationWindowStartDate(policy.window.durationDays, endAt);
+    const ruleCounts = await getSensitiveInformationDailyRuleCounts({ userId, startAt, endAt });
+    const evaluation = evaluateSensitivePolicy({
+      policies: policy.rules,
+      ruleCounts,
+    });
+    const triggeredDecisions = getTriggeredSensitivePolicyDecisions(evaluation.decisions);
+
+    if (triggeredDecisions.length === 0) {
+      return;
+    }
+
+    await writeActivityLog({
+      actorUserId: userId,
+      actorRole: req.user?.role ?? null,
+      actorDepartmentId: req.user?.departmentId ?? null,
+      requestIp: req.ip ?? req.socket?.remoteAddress ?? null,
+      userAgent: getHeaderValue(req.headers?.['user-agent']),
+      resourceType: 'message',
+      resourceId: message.messageId,
+      action: 'sensitive_information_policy.evaluate',
+      result: 'success',
+      message: `Sensitive information policy evaluated: ${evaluation.action}`,
+      metadata: {
+        action: evaluation.action,
+        durationDays: policy.window.durationDays,
+        totalCount: Object.values(ruleCounts).reduce((sum, count) => sum + count, 0),
+        triggeredRules: triggeredDecisions.length,
+        decisions: JSON.stringify(
+          triggeredDecisions.map((decision) => ({
+            ruleCode: decision.ruleCode,
+            count: decision.count,
+            action: decision.action,
+            minCount: decision.threshold?.minCount ?? null,
+          })),
+        ),
+      },
+    });
+  } catch (error) {
+    logger.error('[evaluateSensitiveInformationPolicyForMessage]', error);
+  }
+}
+
+async function updateSensitiveInformationSummaryForMessage(req, message, previousDetection = null) {
+  if (message?.isCreatedByUser !== true || message?.sensitiveDetection?.totalCount <= 0) {
+    if (!previousDetection?.totalCount) {
+      return;
+    }
+  }
+
+  if (message?.isCreatedByUser !== true) {
+    return;
+  }
+
+  const userId = message.user?.toString();
+  if (!userId) {
+    return;
+  }
+
+  await updateSensitiveInformationDailySummaryDelta({
+    userId,
+    departmentId: req.user?.departmentId ?? null,
+    previousDetection,
+    currentDetection: message.sensitiveDetection,
+    outcome: 'submitted',
+    occurredAt: message.createdAt ?? new Date(),
+  });
+}
 
 /**
  * Saves a message in the database.
@@ -49,11 +277,14 @@ async function saveMessage(req, params, metadata) {
   }
 
   try {
-    const update = {
-      ...params,
-      user: req.user.id,
-      messageId: params.newMessageId || params.messageId,
-    };
+    const update = attachSensitivePolicyWarning(
+      req,
+      attachSensitiveDetection({
+        ...params,
+        user: req.user.id,
+        messageId: params.newMessageId || params.messageId,
+      }),
+    );
 
     if (req?.body?.isTemporary) {
       try {
@@ -75,11 +306,21 @@ async function saveMessage(req, params, metadata) {
       logger.info(`---\`saveMessage\` context: ${metadata?.context}`);
       update.tokenCount = 0;
     }
+    const previousMessage = await Message.findOne({ messageId: params.messageId, user: req.user.id })
+      .select('sensitiveDetection')
+      .lean();
     const message = await Message.findOneAndUpdate(
       { messageId: params.messageId, user: req.user.id },
       update,
       { upsert: true, new: true },
     );
+
+    await updateSensitiveInformationSummaryForMessage(
+      req,
+      message,
+      previousMessage?.sensitiveDetection ?? null,
+    );
+    await evaluateSensitiveInformationPolicyForMessage(req, message);
 
     return message.toObject();
   } catch (err) {
@@ -239,7 +480,25 @@ async function updateMessageText(req, { messageId, text }) {
  */
 async function updateMessage(req, message, metadata) {
   try {
-    const { messageId, ...update } = message;
+    const { messageId, ...rawUpdate } = message;
+    let update = rawUpdate;
+    let existingMessage = null;
+    if (
+      rawUpdate.isCreatedByUser === true ||
+      rawUpdate.text != null ||
+      Array.isArray(rawUpdate.content)
+    ) {
+      existingMessage = await Message.findOne({ messageId, user: req.user.id })
+        .select('isCreatedByUser text content files sensitiveDetection')
+        .lean();
+      if (rawUpdate.isCreatedByUser === true || existingMessage?.isCreatedByUser === true) {
+        update = attachSensitiveDetection({
+          ...existingMessage,
+          ...rawUpdate,
+          isCreatedByUser: true,
+        });
+      }
+    }
     const updatedMessage = await Message.findOneAndUpdate(
       { messageId, user: req.user.id },
       update,
@@ -250,6 +509,14 @@ async function updateMessage(req, message, metadata) {
 
     if (!updatedMessage) {
       throw new Error('Message not found or user not authorized.');
+    }
+
+    if (update.sensitiveDetection || existingMessage?.sensitiveDetection) {
+      await updateSensitiveInformationSummaryForMessage(
+        req,
+        updatedMessage,
+        existingMessage?.sensitiveDetection ?? null,
+      );
     }
 
     return {

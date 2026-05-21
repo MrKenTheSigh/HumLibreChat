@@ -38,6 +38,48 @@ const messageSchema: Schema<IMessage> = new Schema(
       default: undefined,
       required: false,
     },
+    sensitiveDetection: {
+      type: {
+        version: {
+          type: Number,
+          required: true,
+        },
+        totalCount: {
+          type: Number,
+          required: true,
+          index: true,
+        },
+        source: {
+          type: String,
+        },
+        ruleMatches: {
+          type: [
+            {
+              ruleCode: {
+                type: String,
+                required: true,
+                index: true,
+              },
+              label: {
+                type: String,
+                required: true,
+              },
+              count: {
+                type: Number,
+                required: true,
+              },
+            },
+          ],
+          default: [],
+        },
+        evaluatedAt: {
+          type: Date,
+          required: true,
+        },
+      },
+      default: undefined,
+      required: false,
+    },
     model: {
       type: String,
       default: null,
@@ -166,6 +208,8 @@ const messageSchema: Schema<IMessage> = new Schema(
 messageSchema.index({ expiredAt: 1 }, { expireAfterSeconds: 0 });
 messageSchema.index({ createdAt: 1 });
 messageSchema.index({ messageId: 1, user: 1 }, { unique: true });
+messageSchema.index({ user: 1, createdAt: -1, 'sensitiveDetection.totalCount': 1 });
+messageSchema.index({ user: 1, 'sensitiveDetection.ruleMatches.ruleCode': 1, createdAt: -1 });
 
 // index for MeiliSearch sync operations
 messageSchema.index({ _meiliIndex: 1, expiredAt: 1 });

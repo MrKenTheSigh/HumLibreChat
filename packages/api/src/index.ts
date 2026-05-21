@@ -44,6 +44,8 @@ export * from './files';
 export * from './tools';
 /* web search */
 export * from './web';
+/* Sensitive information */
+export * from './sensitiveInformation';
 /* Cache */
 export * from './cache';
 /* Stream */

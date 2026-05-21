@@ -36,6 +36,68 @@ type TGenericError = {
   info: string;
 };
 
+type TSensitivePolicyDecision = {
+  ruleCode: string;
+  count: number;
+  action: string;
+  threshold?: {
+    minCount?: number;
+    action?: string;
+  };
+};
+
+type TSensitivePolicyError = {
+  type: 'sensitive_information_policy';
+  action: string;
+  decisions?: TSensitivePolicyDecision[];
+};
+
+const sensitiveRuleLabelKeys: Record<string, string> = {
+  address: 'com_ui_admin_sensitive_rule_address',
+  chinese_name: 'com_ui_admin_sensitive_rule_chinese_name',
+  credit_card_number: 'com_ui_admin_sensitive_rule_credit_card_number',
+  email_address: 'com_ui_admin_sensitive_rule_email_address',
+  encrypted_file: 'com_ui_admin_sensitive_rule_encrypted_file',
+  landline_phone_number: 'com_ui_admin_sensitive_rule_landline_phone_number',
+  mobile_phone_number: 'com_ui_admin_sensitive_rule_mobile_phone_number',
+  tw_national_id: 'com_ui_admin_sensitive_rule_tw_national_id',
+};
+
+function formatSensitivePolicyError(json: TSensitivePolicyError, localize: LocalizeFunction) {
+  const decisions = Array.isArray(json.decisions) ? json.decisions : [];
+  const blockingDecisions = decisions.filter((decision) => decision.action === 'block');
+  const visibleDecisions = blockingDecisions.length > 0 ? blockingDecisions : decisions;
+
+  return (
+    <div className="space-y-2">
+      <div>{localize('com_error_sensitive_policy_blocked')}</div>
+      {visibleDecisions.length > 0 ? (
+        <div className="space-y-1">
+          <div>{localize('com_error_sensitive_policy_triggered_rules')}</div>
+          <ul className="list-disc space-y-1 pl-5">
+            {visibleDecisions.map((decision) => {
+              const ruleLabelKey = sensitiveRuleLabelKeys[decision.ruleCode];
+              const ruleLabel = ruleLabelKey
+                ? localize(ruleLabelKey as Parameters<LocalizeFunction>[0])
+                : decision.ruleCode;
+              const threshold = decision.threshold?.minCount ?? 0;
+              return (
+                <li key={`${decision.ruleCode}-${decision.action}`}>
+                  {localize('com_error_sensitive_policy_rule_count', {
+                    0: ruleLabel,
+                    1: decision.count,
+                    2: threshold,
+                  })}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 const errorMessages = {
   [ErrorTypes.MODERATION]: 'com_error_moderation',
   [ErrorTypes.NO_USER_KEY]: 'com_error_no_user_key',
@@ -122,6 +184,7 @@ const errorMessages = {
       </>
     );
   },
+  sensitive_information_policy: formatSensitivePolicyError,
 };
 
 const Error = ({ text }: { text: string }) => {

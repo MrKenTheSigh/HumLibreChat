@@ -26,6 +26,7 @@ const {
   parseText,
   processAudioFile,
   uploadOllamaVisionOCR,
+  detectEncryptedFile,
 } = require('@librechat/api');
 const {
   convertImage,
@@ -67,6 +68,25 @@ const createSanitizedUploadWrapper = (uploadFunction) => {
     return uploadFunction({ req, file: sanitizedFile, file_id, ...restParams });
   };
 };
+
+function mergeFileMetadataWithSensitiveDetection(metadata, sensitiveDetection) {
+  if (!sensitiveDetection || sensitiveDetection.totalCount <= 0) {
+    return metadata;
+  }
+
+  return {
+    ...(metadata ?? {}),
+    sensitiveDetection,
+  };
+}
+
+function getUploadSensitiveDetection(file) {
+  return detectEncryptedFile({
+    filePath: file.path,
+    filename: file.originalname,
+    mimeType: file.mimetype,
+  });
+}
 
 /**
  * Enqueues the delete operation to the leaky bucket queue if necessary, or adds it directly to promises.
@@ -401,6 +421,7 @@ const processFileUpload = async ({ req, res, metadata }) => {
   }
 
   const { file } = req;
+  const sensitiveDetection = getUploadSensitiveDetection(file);
   const sanitizedUploadFn = createSanitizedUploadWrapper(handleFileUpload);
   const {
     id,
@@ -457,6 +478,7 @@ const processFileUpload = async ({ req, res, metadata }) => {
       source,
       height,
       width,
+      metadata: mergeFileMetadataWithSensitiveDetection(undefined, sensitiveDetection),
     },
     true,
   );
@@ -480,6 +502,7 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
   const { agent_id, tool_resource, file_id, temp_file_id = null } = metadata;
 
   file.mimetype = inferMimeType(file.originalname, file.mimetype);
+  const sensitiveDetection = getUploadSensitiveDetection(file);
 
   let messageAttachment = !!metadata.message_file;
 
@@ -551,6 +574,7 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
         filename: file.originalname,
         model: messageAttachment ? undefined : req.body.model,
         context: messageAttachment ? FileContext.message_attachment : FileContext.agents,
+        metadata: mergeFileMetadataWithSensitiveDetection(undefined, sensitiveDetection),
       });
 
       if (!messageAttachment && tool_resource) {
@@ -742,7 +766,7 @@ const processAgentFileUpload = async ({ req, res, metadata }) => {
     filename: filename ?? sanitizeFilename(file.originalname),
     context: messageAttachment ? FileContext.message_attachment : FileContext.agents,
     model: messageAttachment ? undefined : req.body.model,
-    metadata: fileInfoMetadata,
+    metadata: mergeFileMetadataWithSensitiveDetection(fileInfoMetadata, sensitiveDetection),
     type: file.mimetype,
     embedded,
     source,
