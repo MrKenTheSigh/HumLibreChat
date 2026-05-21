@@ -47,27 +47,32 @@ export default function useSelectAgent() {
 
   const onSelect = useCallback(
     async (value: string) => {
-      const agent = agentsMap?.[value];
-      if (!agent) {
+      if (!value) {
         return;
       }
+      const agent: Partial<Agent> = agentsMap?.[value] ?? { id: value };
 
       const template: Partial<TPreset | TConversation> = {
         endpoint: EModelEndpoint.agents,
-        agent_id: agent.id,
+        agent_id: value,
+        model: agent.model ?? '',
         conversationId: Constants.NEW_CONVO as string,
       };
 
-      await updateConversation({ id: agent.id }, template);
+      await updateConversation({ id: value }, template);
 
       try {
-        const fullAgent = await queryClient.fetchQuery([QueryKeys.agent, agent.id], () =>
+        const fullAgent = await queryClient.fetchQuery([QueryKeys.agent, value], () =>
           dataService.getAgentById({
-            agent_id: agent.id,
+            agent_id: value,
           }),
         );
         if (fullAgent) {
-          await updateConversation(fullAgent, { ...template, agent_id: fullAgent.id });
+          await updateConversation(fullAgent, {
+            ...template,
+            agent_id: fullAgent.id,
+            model: fullAgent.model ?? '',
+          });
         }
       } catch (error) {
         if ((error as { silent: boolean } | undefined)?.silent) {

@@ -85,12 +85,13 @@ export function ModelSelectorProvider({ children, startupConfig }: ModelSelector
   }, [startupConfig, agentsMap, entitlements]);
 
   const permissionLevel = useAgentDefaultPermissionLevel();
-  const { data: agents = null } = useListAgentsQuery(
+  const agentsQuery = useListAgentsQuery(
     { requiredPermission: permissionLevel },
     {
       select: (data) => data?.data,
     },
   );
+  const { data: agents = null } = agentsQuery;
 
   const { mappedEndpoints, endpointRequiresUserKey } = useEndpoints({
     agents,

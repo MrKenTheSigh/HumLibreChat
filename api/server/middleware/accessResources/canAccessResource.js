@@ -38,6 +38,7 @@ const canAccessResource = (options) => {
     requiredPermission,
     resourceIdParam = 'resourceId',
     idResolver = null,
+    allowAuthorFallback = false,
   } = options;
 
   if (!resourceType || typeof resourceType !== 'string') {
@@ -126,6 +127,27 @@ const canAccessResource = (options) => {
           resourceType,
           resourceId, // MongoDB ObjectId for ACL operations
           customResourceId: rawResourceId, // Original ID from route params
+          permission: requiredPermission,
+          userId,
+          ...(resourceInfo && { resourceInfo }),
+        };
+
+        return next();
+      }
+
+      if (
+        allowAuthorFallback &&
+        resourceInfo?.author &&
+        resourceInfo.author.toString() === userId.toString()
+      ) {
+        logger.debug(
+          `[canAccessResource] User ${userId} allowed as legacy author of ${resourceType} ${rawResourceId} (${resourceId})`,
+        );
+
+        req.resourceAccess = {
+          resourceType,
+          resourceId,
+          customResourceId: rawResourceId,
           permission: requiredPermission,
           userId,
           ...(resourceInfo && { resourceInfo }),

@@ -115,6 +115,10 @@ export function getAllowedEndpointSelection({
   entitlements,
 }: AllowedSelectionParams): { endpoint: string; models: string[] } | null {
   const getModelsForEndpoint = (endpoint: string): string[] => {
+    if (isAgentsEndpoint(endpoint) || isAssistantsEndpoint(endpoint)) {
+      return modelsConfig?.[endpoint] ?? [];
+    }
+
     if (entitlements?.isRestricted === true) {
       return filterEndpointModels(endpoint, modelsConfig?.[endpoint] ?? [], entitlements);
     }
@@ -123,6 +127,16 @@ export function getAllowedEndpointSelection({
   };
 
   if (preferredEndpoint != null && preferredEndpoint.length > 0) {
+    if (
+      (isAgentsEndpoint(preferredEndpoint) || isAssistantsEndpoint(preferredEndpoint)) &&
+      (entitlements?.isRestricted !== true || isEndpointVisible(preferredEndpoint, entitlements))
+    ) {
+      return {
+        endpoint: preferredEndpoint,
+        models: getModelsForEndpoint(preferredEndpoint),
+      };
+    }
+
     const preferredModels = getModelsForEndpoint(preferredEndpoint);
     if (
       preferredModels.length > 0 &&

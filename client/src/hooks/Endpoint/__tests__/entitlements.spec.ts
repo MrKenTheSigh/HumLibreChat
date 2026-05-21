@@ -128,6 +128,24 @@ describe('endpoint entitlements helpers', () => {
     });
   });
 
+  it('keeps agents as the preferred endpoint even though agents are not listed by models config', () => {
+    const modelsConfig: TModelsConfig = {
+      openAI: ['gpt-4.1-mini'],
+    };
+
+    expect(
+      getAllowedEndpointSelection({
+        preferredEndpoint: 'agents',
+        endpoints: ['agents', 'openAI'],
+        modelsConfig,
+        entitlements: undefined,
+      }),
+    ).toEqual({
+      endpoint: 'agents',
+      models: [],
+    });
+  });
+
   it('hides model specs that point to blocked endpoint/model pairs', () => {
     expect(
       filterModelSpecs(

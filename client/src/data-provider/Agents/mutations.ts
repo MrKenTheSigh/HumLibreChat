@@ -10,6 +10,10 @@ export const allAgentViewAndEditQueryKeys: t.AgentListParams[] = [
   { requiredPermission: PermissionBits.VIEW },
   { requiredPermission: PermissionBits.EDIT },
 ];
+
+const invalidateAgentListQueries = (queryClient: QueryClient) => {
+  queryClient.invalidateQueries([QueryKeys.agents]);
+};
 /**
  * Create a new agent
  */
@@ -25,7 +29,7 @@ export const useCreateAgentMutation = (
         keys.forEach((key) => {
           const listRes = queryClient.getQueryData<t.AgentListResponse>([QueryKeys.agents, key]);
           if (!listRes) {
-            return options?.onSuccess?.(newAgent, variables, context);
+            return;
           }
           const currentAgents = [newAgent, ...JSON.parse(JSON.stringify(listRes.data))];
 
@@ -35,6 +39,9 @@ export const useCreateAgentMutation = (
           });
         });
       })(allAgentViewAndEditQueryKeys);
+      queryClient.setQueryData<t.Agent>([QueryKeys.agent, newAgent.id], newAgent);
+      queryClient.setQueryData<t.Agent>([QueryKeys.agent, newAgent.id, 'expanded'], newAgent);
+      invalidateAgentListQueries(queryClient);
       invalidateAgentMarketplaceQueries(queryClient);
 
       return options?.onSuccess?.(newAgent, variables, context);
@@ -87,6 +94,7 @@ export const useUpdateAgentMutation = (
           [QueryKeys.agent, variables.agent_id, 'expanded'],
           updatedAgent,
         );
+        invalidateAgentListQueries(queryClient);
         invalidateAgentMarketplaceQueries(queryClient);
 
         return options?.onSuccess?.(updatedAgent, variables, context);
@@ -131,6 +139,7 @@ export const useDeleteAgentMutation = (
 
         queryClient.removeQueries([QueryKeys.agent, variables.agent_id]);
         queryClient.removeQueries([QueryKeys.agent, variables.agent_id, 'expanded']);
+        invalidateAgentListQueries(queryClient);
         invalidateAgentMarketplaceQueries(queryClient);
 
         return options?.onSuccess?.(_data, variables, data);
@@ -169,6 +178,9 @@ export const useDuplicateAgentMutation = (
         const existingActions = queryClient.getQueryData<t.Action[]>([QueryKeys.actions]) || [];
 
         queryClient.setQueryData<t.Action[]>([QueryKeys.actions], existingActions.concat(actions));
+        queryClient.setQueryData<t.Agent>([QueryKeys.agent, agent.id], agent);
+        queryClient.setQueryData<t.Agent>([QueryKeys.agent, agent.id, 'expanded'], agent);
+        invalidateAgentListQueries(queryClient);
         invalidateAgentMarketplaceQueries(queryClient);
 
         return options?.onSuccess?.({ agent, actions }, variables, context);
@@ -219,6 +231,7 @@ export const useUploadAgentAvatarMutation = (
         [QueryKeys.agent, variables.agent_id, 'expanded'],
         updatedAgent,
       );
+      invalidateAgentListQueries(queryClient);
       invalidateAgentMarketplaceQueries(queryClient);
 
       return options?.onSuccess?.(updatedAgent, variables, context);

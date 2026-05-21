@@ -8,7 +8,16 @@ const isGeneratedTitlePlaceholder = (title) => {
   if (!title) {
     return true;
   }
-  return ['New Chat', '新對話', '新的聊天'].includes(title);
+  return [
+    'New Chat',
+    'Untitled',
+    'Untitled Conversation',
+    '新對話',
+    '新的聊天',
+    '未命名',
+    '無標題',
+    '无标题',
+  ].includes(title);
 };
 
 /**
@@ -72,7 +81,7 @@ const addTitle = async (req, { text, response, client }) => {
       clearTimeout(timeoutId);
     }
 
-    if (!title) {
+    if (!title || isGeneratedTitlePlaceholder(title)) {
       logger.debug(`[${key}] No title generated`);
       return;
     }

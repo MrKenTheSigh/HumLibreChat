@@ -33,6 +33,7 @@ const {
   updateAgent,
   deleteAgent,
   getAgent,
+  getAgents,
 } = require('~/models/Agent');
 const {
   findPubliclyAccessibleResources,
@@ -236,6 +237,15 @@ const createAgentHandler = async (req, res) => {
         `[createAgent] Failed to grant owner permissions for agent ${agent.id}:`,
         permissionError,
       );
+      try {
+        await deleteAgent({ id: agent.id });
+      } catch (cleanupError) {
+        logger.error(
+          `[createAgent] Failed to clean up agent ${agent.id} after permission grant failure:`,
+          cleanupError,
+        );
+      }
+      return res.status(500).json({ error: 'Failed to grant owner permissions for agent' });
     }
 
     res.status(201).json(agent);
@@ -675,6 +685,12 @@ const getListAgentsHandler = async (req, res) => {
       resourceType: ResourceType.AGENT,
       requiredPermissions: requiredPermission,
     });
+    const legacyAuthoredAgents = await getAgents({ author: userId });
+    const accessibleIdSet = new Set(accessibleIds.map((id) => id.toString()));
+    for (const agent of legacyAuthoredAgents) {
+      accessibleIdSet.add(agent._id.toString());
+    }
+    const effectiveAccessibleIds = [...accessibleIdSet];
 
     const publiclyAccessibleIds = await findPubliclyAccessibleResources({
       resourceType: ResourceType.AGENT,
@@ -693,7 +709,7 @@ const getListAgentsHandler = async (req, res) => {
     if (!isValidCachedRefresh) {
       try {
         const fullList = await getListAgentsByAccess({
-          accessibleIds,
+          accessibleIds: effectiveAccessibleIds,
           otherParams: {},
           limit: MAX_AVATAR_REFRESH_AGENTS,
           after: null,
@@ -715,7 +731,7 @@ const getListAgentsHandler = async (req, res) => {
 
     // Use the new ACL-aware function
     const data = await getListAgentsByAccess({
-      accessibleIds,
+      accessibleIds: effectiveAccessibleIds,
       otherParams: filter,
       limit,
       after: cursor,

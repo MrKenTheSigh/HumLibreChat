@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { EModelEndpoint } from 'librechat-data-provider';
 import type { Endpoint, SelectedValues } from '~/common';
 import { EndpointModelItem } from '../EndpointModelItem';
 
@@ -81,5 +82,43 @@ describe('EndpointModelItem', () => {
 
     const menuItem = screen.getByRole('menuitem');
     expect(menuItem).not.toHaveAttribute('aria-selected');
+  });
+
+  it('renders agent display name for an agents endpoint model id', () => {
+    const agentEndpoint: Endpoint = {
+      value: EModelEndpoint.agents,
+      label: 'Agents',
+      hasModels: true,
+      models: [{ name: 'agent_created_by_builder' }],
+      agentNames: {
+        agent_created_by_builder: 'Builder Created Agent',
+      },
+      icon: null,
+    };
+
+    mockSelectedValues = { endpoint: EModelEndpoint.agents, model: '', modelSpec: '' };
+    render(<EndpointModelItem modelId="agent_created_by_builder" endpoint={agentEndpoint} />);
+
+    expect(screen.getByText('Builder Created Agent')).toBeInTheDocument();
+  });
+
+  it('selects agents by id while displaying their configured names', () => {
+    const agentEndpoint: Endpoint = {
+      value: EModelEndpoint.agents,
+      label: 'Agents',
+      hasModels: true,
+      models: [{ name: 'agent_created_by_builder' }],
+      agentNames: {
+        agent_created_by_builder: 'Builder Created Agent',
+      },
+      icon: null,
+    };
+
+    mockSelectedValues = { endpoint: EModelEndpoint.agents, model: '', modelSpec: '' };
+    render(<EndpointModelItem modelId="agent_created_by_builder" endpoint={agentEndpoint} />);
+
+    fireEvent.click(screen.getByRole('menuitem'));
+
+    expect(mockHandleSelectModel).toHaveBeenCalledWith(agentEndpoint, 'agent_created_by_builder');
   });
 });
