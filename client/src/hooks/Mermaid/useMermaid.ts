@@ -4,7 +4,7 @@ import { Md5 } from 'ts-md5';
 import DOMPurify from 'dompurify';
 import { ThemeContext, isDark } from '@librechat/client';
 import type { MermaidConfig } from 'mermaid';
-import { inlineFlowchartConfig } from '~/utils/mermaid';
+import { inlineFlowchartConfig, sanitizeMermaidContent } from '~/utils/mermaid';
 
 // Constants
 const MD5_LENGTH_THRESHOLD = 10_000;
@@ -58,17 +58,21 @@ export const useMermaid = ({
 
   // Store last valid SVG for fallback on errors
   const [validContent, setValidContent] = useState<string>('');
+  const sanitizedContent = useMemo(() => sanitizeMermaidContent(content), [content]);
 
   // Generate cache key based on content, theme, and ID
   const cacheKey = useMemo((): string => {
     // For large diagrams, use MD5 hash instead of full content
-    const contentHash = content.length < MD5_LENGTH_THRESHOLD ? content : Md5.hashStr(content);
+    const contentHash =
+      sanitizedContent.length < MD5_LENGTH_THRESHOLD
+        ? sanitizedContent
+        : Md5.hashStr(sanitizedContent);
 
     // Include theme mode in cache key to handle theme switches
     const themeKey = customTheme || (isDarkMode ? 'd' : 'l');
 
     return [id, themeKey, contentHash].filter(Boolean).join('-');
-  }, [content, id, isDarkMode, customTheme]);
+  }, [sanitizedContent, id, isDarkMode, customTheme]);
 
   // Generate unique diagram ID (mermaid requires unique IDs in the DOM)
   // Include cacheKey to regenerate when content/theme changes, preventing mermaid internal conflicts
@@ -112,7 +116,7 @@ export const useMermaid = ({
 
       // Validate syntax first and capture detailed error
       try {
-        await mermaidInstance.parse(content);
+        await mermaidInstance.parse(sanitizedContent);
       } catch (parseError) {
         // Extract meaningful error message from mermaid's parse error
         let errorMessage = 'Invalid mermaid syntax';
@@ -129,7 +133,7 @@ export const useMermaid = ({
       mermaidInstance.initialize(mermaidConfig);
 
       // Render to SVG
-      const { svg } = await mermaidInstance.render(diagramId, content);
+      const { svg } = await mermaidInstance.render(diagramId, sanitizedContent);
 
       // Sanitize SVG output with DOMPurify for additional security
       const purify = DOMPurify();

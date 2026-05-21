@@ -3,6 +3,7 @@ import {
   artifactFlowchartConfig,
   inlineFlowchartConfig,
   getMermaidFiles,
+  sanitizeMermaidContent,
 } from '~/utils/mermaid';
 
 const makeSvg = (clusters: string): Element => {
@@ -81,6 +82,36 @@ describe('mermaid config', () => {
     it('handles empty content', () => {
       const files = getMermaidFiles('', true);
       expect(files['diagram.mmd']).toBe('# No mermaid diagram content provided');
+    });
+
+    it('sanitizes Mermaid content before generating preview files', () => {
+      const files = getMermaidFiles('graph TD\n  A-->B;  % invalid inline comment\n  B-->C');
+      expect(files['diagram.mmd']).toBe('graph TD\n  A-->B;\n  B-->C');
+      expect(files['App.tsx']).toContain('"graph TD\\n  A-->B;\\n  B-->C"');
+    });
+  });
+
+  describe('sanitizeMermaidContent', () => {
+    it('removes single-percent Mermaid comments that break rendering', () => {
+      expect(
+        sanitizeMermaidContent('graph TD\n  A-->B;  % invalid inline comment\n  % invalid line'),
+      ).toBe('graph TD\n  A-->B;');
+    });
+
+    it('keeps valid double-percent Mermaid comments and percent text in labels', () => {
+      expect(sanitizeMermaidContent('graph TD\n  %% valid comment\n  A[成功率 90%]-->B')).toBe(
+        'graph TD\n  %% valid comment\n  A[成功率 90%]-->B',
+      );
+    });
+
+    it('quotes node labels with parentheses that break Mermaid parsing', () => {
+      expect(
+        sanitizeMermaidContent(
+          'graph TD\n  B --> C[前端清除客戶端Session資訊 (Tokens, Local Data)];\n  E -- 成功 --> F[強制無效化(Invalidate)使用者會話ID];',
+        ),
+      ).toBe(
+        'graph TD\n  B --> C["前端清除客戶端Session資訊 (Tokens, Local Data)"];\n  E -- 成功 --> F["強制無效化(Invalidate)使用者會話ID"];',
+      );
     });
   });
 

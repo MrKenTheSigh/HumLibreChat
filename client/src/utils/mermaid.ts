@@ -57,6 +57,35 @@ const inlineFlowchartConfig = {
 
 export { inlineFlowchartConfig, artifactFlowchartConfig };
 
+const quoteMermaidLabel = (label: string): string => {
+  const trimmed = label.trim();
+  if (trimmed.startsWith('"') || trimmed.startsWith("'") || !/[()]/.test(label)) {
+    return label;
+  }
+  return `"${label.replace(/"/g, '\\"')}"`;
+};
+
+const quoteMermaidLabelsWithParentheses = (line: string): string =>
+  line
+    .replace(/([A-Za-z_][\w-]*)\[([^\]\n]*\([^\]\n]*\)[^\]\n]*)\]/g, (_match, id, label) => {
+      return `${id}[${quoteMermaidLabel(label)}]`;
+    })
+    .replace(/([A-Za-z_][\w-]*)\{([^}\n]*\([^}\n]*\)[^}\n]*)\}/g, (_match, id, label) => {
+      return `${id}{${quoteMermaidLabel(label)}}`;
+    });
+
+export const sanitizeMermaidContent = (content: string): string =>
+  content
+    .split('\n')
+    .map((line) => {
+      if (/^\s*%(?!%)/.test(line)) {
+        return '';
+      }
+      return quoteMermaidLabelsWithParentheses(line.replace(/;\s+%(?!%).*$/, ';'));
+    })
+    .filter((line) => line.trim() !== '')
+    .join('\n');
+
 /** Perceived luminance (0 = black, 1 = white) via BT.601 luma coefficients */
 const hexLuminance = (hex: string): number => {
   let h = hex.replace('#', '');
@@ -452,12 +481,13 @@ const wrapMermaidDiagram = (content: string) => {
 import MermaidDiagram from '/components/ui/MermaidDiagram';
 
 export default App = () => (
-  <MermaidDiagram content={\`${content}\`} />
+  <MermaidDiagram content={${JSON.stringify(content)}} />
 );
 `);
 };
 
 export const getMermaidFiles = (content: string, isDarkMode = true) => {
+  const sanitizedContent = sanitizeMermaidContent(content);
   const mermaidTheme = isDarkMode ? 'dark' : 'neutral';
   const btnStyles = getButtonStyles(isDarkMode);
   const bgColor = isDarkMode ? '#212121' : '#FFFFFF';
@@ -468,8 +498,8 @@ body {
 `;
 
   return {
-    'diagram.mmd': content || '# No mermaid diagram content provided',
-    'App.tsx': wrapMermaidDiagram(content),
+    'diagram.mmd': sanitizedContent || '# No mermaid diagram content provided',
+    'App.tsx': wrapMermaidDiagram(sanitizedContent),
     'index.tsx': dedent(`import React, { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
