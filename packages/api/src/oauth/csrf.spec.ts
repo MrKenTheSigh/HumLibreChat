@@ -54,11 +54,14 @@ describe('shouldUseSecureCookie', () => {
       expect(shouldUseSecureCookie()).toBe(false);
     });
 
-    it('should return true for http://[::1]:3080 (IPv6 loopback — not detected due to URL bracket parsing)', () => {
-      // Known limitation: new URL('http://[::1]:3080').hostname returns '[::1]' (with brackets)
-      // but the check compares against '::1' (without brackets). IPv6 localhost is rare in practice.
+    it('should return false for http://[::1]:3080', () => {
       process.env.DOMAIN_SERVER = 'http://[::1]:3080';
-      expect(shouldUseSecureCookie()).toBe(true);
+      expect(shouldUseSecureCookie()).toBe(false);
+    });
+
+    it('should return false for a non-localhost HTTP domain', () => {
+      process.env.DOMAIN_SERVER = 'http://203.69.29.35';
+      expect(shouldUseSecureCookie()).toBe(false);
     });
 
     it('should return false for subdomain of localhost', () => {
@@ -89,6 +92,11 @@ describe('shouldUseSecureCookie', () => {
     it('should handle DOMAIN_SERVER without protocol prefix', () => {
       process.env.DOMAIN_SERVER = 'localhost:3080';
       expect(shouldUseSecureCookie()).toBe(false);
+    });
+
+    it('should conservatively secure non-localhost domains without protocol prefix', () => {
+      process.env.DOMAIN_SERVER = 'chat.example.com';
+      expect(shouldUseSecureCookie()).toBe(true);
     });
 
     it('should handle case-insensitive hostnames', () => {

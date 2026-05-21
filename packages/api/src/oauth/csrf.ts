@@ -10,22 +10,23 @@ export const OAUTH_SESSION_COOKIE_PATH = '/api';
 
 /**
  * Determines if secure cookies should be used.
- * Returns `true` in production unless the server is running on localhost (HTTP).
- * This allows cookies to work on `http://localhost` during local development
- * even when `NODE_ENV=production` (common in Docker Compose setups).
+ * Returns `true` in production only when the configured public server URL is
+ * HTTPS and is not localhost. Browsers ignore `Secure` cookies over plain HTTP,
+ * so HTTP deployments must opt out even when NODE_ENV is production.
  */
 export function shouldUseSecureCookie(): boolean {
   const isProduction = process.env.NODE_ENV === 'production';
   const domainServer = process.env.DOMAIN_SERVER || '';
 
   let hostname = '';
+  let protocol = '';
   if (domainServer) {
     try {
-      const normalized = /^https?:\/\//i.test(domainServer)
-        ? domainServer
-        : `http://${domainServer}`;
+      const hasProtocol = /^https?:\/\//i.test(domainServer);
+      const normalized = hasProtocol ? domainServer : `https://${domainServer}`;
       const url = new URL(normalized);
       hostname = (url.hostname || '').toLowerCase();
+      protocol = hasProtocol ? url.protocol.toLowerCase() : '';
     } catch {
       hostname = domainServer.toLowerCase();
     }
@@ -37,7 +38,7 @@ export function shouldUseSecureCookie(): boolean {
     hostname === '::1' ||
     hostname.endsWith('.localhost');
 
-  return isProduction && !isLocalhost;
+  return isProduction && !isLocalhost && protocol !== 'http:';
 }
 
 /** Generates an HMAC-based token for OAuth CSRF protection */
