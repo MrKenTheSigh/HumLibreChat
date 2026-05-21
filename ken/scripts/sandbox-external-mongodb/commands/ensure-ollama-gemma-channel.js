@@ -8,7 +8,7 @@ require('module-alias')({
 
 const connect = require('../../../../config/connect');
 
-const recommendedModel = 'gemma4:e4b';
+const recommendedModels = ['gemma4:e4b', 'gemma4:26b'];
 const fallbackBaseURL = 'http://localhost:11434/v1';
 
 function normalizeBaseURL(value) {
@@ -24,28 +24,45 @@ function normalizeBaseURL(value) {
 
 function normalizeModels(models) {
   const existingModels = Array.isArray(models) ? models : [];
-  const hasRecommendedModel = existingModels.some((model) => model?.model === recommendedModel);
+  const normalizedModels = [];
+  const seenModelNames = new Set();
 
-  if (hasRecommendedModel) {
-    return existingModels.map((model) =>
-      model?.model === recommendedModel
+  for (const model of existingModels) {
+    const modelName = typeof model?.model === 'string' ? model.model.trim() : '';
+    if (modelName.length === 0 || seenModelNames.has(modelName)) {
+      continue;
+    }
+
+    seenModelNames.add(modelName);
+    normalizedModels.push(
+      recommendedModels.includes(modelName)
         ? {
             ...model,
+            model: modelName,
             enabled: true,
           }
-        : model,
+        : {
+            ...model,
+            model: modelName,
+          },
     );
   }
 
-  return [
-    ...existingModels,
-    {
+  const existingModelNames = new Set(normalizedModels.map((model) => model?.model));
+  for (const recommendedModel of recommendedModels) {
+    if (existingModelNames.has(recommendedModel)) {
+      continue;
+    }
+
+    normalizedModels.push({
       model: recommendedModel,
       enabled: true,
       deploymentName: '',
       pricingOverride: null,
-    },
-  ];
+    });
+  }
+
+  return normalizedModels;
 }
 
 async function run() {
@@ -85,12 +102,12 @@ async function run() {
           sessionTokenRef: '',
         },
         models: [
-          {
-            model: recommendedModel,
+          ...recommendedModels.map((model) => ({
+            model,
             enabled: true,
             deploymentName: '',
             pricingOverride: null,
-          },
+          })),
         ],
       });
 
@@ -99,7 +116,7 @@ async function run() {
           {
             action: 'created',
             channelId: created._id.toString(),
-            model: recommendedModel,
+            models: recommendedModels,
           },
           null,
           2,
@@ -141,7 +158,7 @@ async function run() {
         {
           action: 'updated',
           channelId: existingChannel._id.toString(),
-          model: recommendedModel,
+          modelsEnsured: recommendedModels,
           models: existingChannel.models.map((model) => ({
             model: model.model,
             enabled: model.enabled,

@@ -2,6 +2,8 @@
 
 const commands = {
   'clear-quotas': () => require('./commands/clear-quotas'),
+  'clear-old-web-search-plugin-auth': () =>
+    require('./commands/clear-old-web-search-plugin-auth'),
   'ensure-ollama-gemma-channel': () => require('./commands/ensure-ollama-gemma-channel'),
   'enable-gemma-memory-setting': () => require('./commands/enable-gemma-memory-setting'),
   'inspect-org-users': () => require('./commands/inspect-org-users'),
@@ -10,6 +12,9 @@ const commands = {
   'inspect-user-quota': () => require('./commands/inspect-user-quota'),
   'inspect-recent-files': () => require('./commands/inspect-recent-files'),
   'inspect-user-memories': () => require('./commands/inspect-user-memories'),
+  'inspect-sensitive-information': () => require('./commands/inspect-sensitive-information'),
+  'migrate-web-search-system-setting': () =>
+    require('./commands/migrate-web-search-system-setting'),
 };
 
 async function main() {
