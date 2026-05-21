@@ -1,13 +1,7 @@
 import React, { useMemo } from 'react';
 import { useRecoilValue } from 'recoil';
 import { OGDialog, OGDialogTemplate } from '@librechat/client';
-import {
-  ImageUpIcon,
-  FileSearch,
-  FileType2Icon,
-  FileImageIcon,
-  TerminalSquareIcon,
-} from 'lucide-react';
+import { ImageUpIcon, FileSearch, FileType2Icon, FileImageIcon } from 'lucide-react';
 import {
   Providers,
   inferMimeType,
@@ -52,10 +46,7 @@ const DragDropModal = ({ onOptionSelect, setShowModal, files, isVisible }: DragD
   const { conversationId, agentId, endpoint, endpointType, model, useResponsesApi } =
     useDragDropContext();
   const ephemeralAgent = useRecoilValue(ephemeralAgentByConvoId(conversationId ?? ''));
-  const { fileSearchAllowedByAgent, codeAllowedByAgent, provider } = useAgentToolPermissions(
-    agentId,
-    ephemeralAgent,
-  );
+  const { fileSearchAllowedByAgent, provider } = useAgentToolPermissions(agentId, ephemeralAgent);
 
   const options = useMemo(() => {
     const _options: FileOption[] = [];
@@ -138,13 +129,6 @@ const DragDropModal = ({ onOptionSelect, setShowModal, files, isVisible }: DragD
         icon: <FileSearch className="icon-md" />,
       });
     }
-    if (capabilities.codeEnabled && codeAllowedByAgent) {
-      _options.push({
-        label: localize('com_ui_upload_code_files'),
-        value: EToolResources.execute_code,
-        icon: <TerminalSquareIcon className="icon-md" />,
-      });
-    }
     if (capabilities.contextEnabled) {
       _options.push({
         label: localize('com_ui_upload_ocr_text'),
@@ -163,7 +147,6 @@ const DragDropModal = ({ onOptionSelect, setShowModal, files, isVisible }: DragD
     model,
     capabilities,
     useResponsesApi,
-    codeAllowedByAgent,
     fileSearchAllowedByAgent,
   ]);
 

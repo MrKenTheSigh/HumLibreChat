@@ -1,13 +1,7 @@
 import React, { useRef, useState, useMemo } from 'react';
 import { useRecoilState } from 'recoil';
 import * as Ariakit from '@ariakit/react';
-import {
-  FileSearch,
-  ImageUpIcon,
-  FileType2Icon,
-  FileImageIcon,
-  TerminalSquareIcon,
-} from 'lucide-react';
+import { FileSearch, ImageUpIcon, FileType2Icon, FileImageIcon } from 'lucide-react';
 import {
   FileUpload,
   TooltipAnchor,
@@ -98,10 +92,7 @@ const AttachFileMenu = ({
    * */
   const capabilities = useAgentCapabilities(agentsConfig?.capabilities ?? defaultAgentCapabilities);
 
-  const { fileSearchAllowedByAgent, codeAllowedByAgent, provider } = useAgentToolPermissions(
-    agentId,
-    ephemeralAgent,
-  );
+  const { fileSearchAllowedByAgent, provider } = useAgentToolPermissions(agentId, ephemeralAgent);
 
   const handleUploadClick = (fileType?: FileUploadType) => {
     if (!inputRef.current) {
@@ -216,21 +207,6 @@ const AttachFileMenu = ({
         });
       }
 
-      if (capabilities.codeEnabled && codeAllowedByAgent) {
-        items.push({
-          label: localize('com_ui_upload_code_files'),
-          onClick: () => {
-            setToolResource(EToolResources.execute_code);
-            setEphemeralAgent((prev) => ({
-              ...prev,
-              [EToolResources.execute_code]: true,
-            }));
-            onAction();
-          },
-          icon: <TerminalSquareIcon className="icon-md" />,
-        });
-      }
-
       return items;
     };
 
@@ -262,7 +238,6 @@ const AttachFileMenu = ({
     setToolResource,
     setEphemeralAgent,
     sharePointEnabled,
-    codeAllowedByAgent,
     fileSearchAllowedByAgent,
     setIsSharePointDialogOpen,
   ]);
@@ -273,7 +248,7 @@ const AttachFileMenu = ({
         <Ariakit.MenuButton
           disabled={isUploadDisabled}
           id="attach-file-menu-button"
-          aria-label="Attach File Options"
+          aria-label={localize('com_sidepanel_attach_files')}
           className={cn(
             'flex size-9 items-center justify-center rounded-full p-1 hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-opacity-50',
             isPopoverActive && 'bg-surface-hover',

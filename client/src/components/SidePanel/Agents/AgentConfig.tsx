@@ -27,7 +27,6 @@ import SearchForm from './Search/Form';
 import FileSearch from './FileSearch';
 import Artifacts from './Artifacts';
 import AgentTool from './AgentTool';
-import CodeForm from './Code/Form';
 import MCPTools from './MCPTools';
 
 const labelClass = 'mb-2 text-token-text-primary block font-medium';
@@ -78,7 +77,6 @@ export default function AgentConfig() {
   }, [fileMap, agentFiles]);
 
   const {
-    codeEnabled,
     toolsEnabled,
     contextEnabled,
     actionsEnabled,
@@ -125,26 +123,6 @@ export default function AgentConfig() {
       fileMap: mergedFileMap,
     });
     return _agent.knowledge_files ?? [];
-  }, [agent, agent_id, mergedFileMap]);
-
-  const code_files = useMemo(() => {
-    if (typeof agent === 'string') {
-      return [];
-    }
-
-    if (agent?.id !== agent_id) {
-      return [];
-    }
-
-    if (agent.code_files) {
-      return agent.code_files;
-    }
-
-    const _agent = processAgentOption({
-      agent,
-      fileMap: mergedFileMap,
-    });
-    return _agent.code_files ?? [];
   }, [agent, agent_id, mergedFileMap]);
 
   const handleAddActions = useCallback(() => {
@@ -284,17 +262,11 @@ export default function AgentConfig() {
             </div>
           </button>
         </div>
-        {(codeEnabled ||
-          fileSearchEnabled ||
-          artifactsEnabled ||
-          contextEnabled ||
-          webSearchEnabled) && (
+        {(fileSearchEnabled || artifactsEnabled || contextEnabled || webSearchEnabled) && (
           <div className="mb-4 flex w-full flex-col items-start gap-3">
             <label className="text-token-text-primary block font-medium">
               {localize('com_assistants_capabilities')}
             </label>
-            {/* Code Execution */}
-            {codeEnabled && <CodeForm agent_id={agent_id} files={code_files} />}
             {/* Web Search */}
             {webSearchEnabled && <SearchForm />}
             {/* File Context */}
